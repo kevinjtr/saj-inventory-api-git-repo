@@ -1,0 +1,27 @@
+{
+	"name": "myapp",
+	"version": "1.0.0",
+	"description": "Example of simple CRUD API using express and mysql",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "nodemon server.js"
+	},
+	"author": "Irsyad Kamil",
+	"license": "ISC",
+	"dependencies": {
+		"bcryptjs": "^2.4.3",
+		"body-parser": "^1.19.0",
+		"cors": "^2.8.5",
+		"dotenv": "^8.1.0",
+		"express": "^4.17.1",
+		"jsonwebtoken": "^8.5.1",
+		"morgan": "^1.9.1",
+		"mysql": "^2.17.1",
+		"mysql2": "^1.7.0",
+		"oracledb": "^5.0.0",
+		"sequelize": "^5.17.0"
+	},
+	"devDependencies": {},
+	"keywords": []
+}
