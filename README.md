@@ -30,6 +30,6 @@ run
 
   ```bash
 
-  node app.js
+  node server.js
 
   ```
