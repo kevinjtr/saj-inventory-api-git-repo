@@ -12,7 +12,7 @@ const dbSelectOptions = {
     // prefetchRows:     100,                // internal buffer allocation size for tuning
     // fetchArraySize:   100                 // internal buffer allocation size for tuning
 	};
-	
+
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
 
@@ -104,6 +104,16 @@ exports.search = async function(req, res) {
 	const bartagNum = req.body.bartagNum;
 	const searchObject = {}
 
+	const PropertyNamesToLowerCase = (data) => {
+		data.map(function(r){
+			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+			return r;
+		})
+
+		return data
+	}
+
+
 	if(hraId != ''){
 		searchObject['hraId'] = hraId
 	}
@@ -120,27 +130,79 @@ exports.search = async function(req, res) {
 		let andCause = hraFind  != '' & bartagNum != '' ? 'AND ' : ''
 
 		let query = 'SELECT * FROM equipment ' + where + hraFind + andCause + bartagFind
-		console.log(query)
-		let result =  await connection.execute(`${query}`,searchObject,dbSelectOptions)
-
-		console.log(result)
-		if (result.rows.length > 0) {
-			result.rows = result.rows.map(function(r){
+		let resultEquipment =  await connection.execute(`${query}`,searchObject,dbSelectOptions)
+		
+		if (resultEquipment.rows.length > 0) {
+			resultEquipment.rows = resultEquipment.rows.map(function(r){
 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+
 				return r;
 			})
+			
+			for(let i=0;i<resultEquipment.rows.length;i++){
+
+				// SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
+				// FROM HRA h 
+				// INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
+				// WHERE LOWER(e.first_name || ' ' || e.last_name) LIKE '%da%';
+
+				if(resultEquipment.rows[i].hra_num != null && resultEquipment.rows[i].hra_num != ''){
+					let resultHra =  await connection.execute(`SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
+																FROM HRA h 
+																INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
+																WHERE h.hra_num = :0`,[resultEquipment.rows[i].hra_num],dbSelectOptions)
+
+					//console.log(resultHra)
+
+					if(resultHra.rows.length > 0){
+						const hraFound = resultHra.rows.map(function(r){
+							r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+							return r;
+						})[0]
+						resultEquipment.rows[i].hra_full_name = hraFound.hra_full_name
+
+					}else{
+							resultEquipment.rows[i].hra_full_name = 'not found'
+					}
+				}else{
+					resultEquipment.rows[i].hra_full_name = 'not found'
+				}
+
+				if(resultEquipment.rows[i].user_employee_id != null && resultEquipment.rows[i].user_employee_id != ''){
+					let resultEmployee =  await connection.execute(`SELECT * FROM EMPLOYEE WHERE ID = :0`,[resultEquipment.rows[i].user_employee_id],dbSelectOptions);
+					
+					if(resultEmployee.rows.length > 0){
+						resultEmployee.rows = resultEmployee.rows.map(function(r){
+							r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+							return r;
+						})
+
+						//console.log(resultEmployee.rows[0]['first_name'])
+						resultEquipment.rows[i].employee_full_name = resultEmployee.rows[0]['first_name'] + " " + resultEmployee.rows[0]['last_name']
+					}else{
+						resultEquipment.rows[i].employee_full_name = 'not found';
+					}
+				}else{
+					resultEquipment.rows[i].employee_full_name = 'not found';
+				}
+
+				
+			}
+
+
+			console.log(resultEquipment.rows)
 			res.status(200).json({
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: result.rows
+				data: resultEquipment.rows
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: result.rows
+				data: resultEquipment.rows
 			});
 		}
 	}catch(err){
