@@ -15,20 +15,25 @@ const dbSelectOptions = {
     // extendedMetaData: true,               // get extra metadata
     // prefetchRows:     100,                // internal buffer allocation size for tuning
     // fetchArraySize:   100                 // internal buffer allocation size for tuning
-    };
+};
     
     //this will generate a new field in the database if employee not found.
 
 const blacklsitedEmployeesHRA = ["Pending","Barcode"]
 
+const enDgHras = [941, 982, 979, 907, 802, 935, 981]
+
 async function GetEmployeeWithID(employee,col1Name,col2Name) {
 
-	const connection =  await oracledb.getConnection(dbConfig);
+    const connection =  await oracledb.getConnection(dbConfig);
+    //const result = {rows:[]}
 
 	try{
         const col1LowerCase = employee[col1Name] ? employee[col1Name].toLowerCase() : null
         const col2LowerCase = employee[col2Name] ? employee[col2Name].toLowerCase() : null
-		let result =  await connection.execute('SELECT * FROM employee where LOWER(first_name) = :0 and LOWER(last_name) = :1 ',[col1LowerCase,col2LowerCase],dbSelectOptions)
+
+        const query = `SELECT * FROM employee where LOWER(first_name) ${col1LowerCase ? '=' : 'is'} ${col1LowerCase ? `'${col1LowerCase.replace(/'/,"''")}'`: col1LowerCase} and LOWER(last_name) ${col2LowerCase ? '=' : 'is'} ${col2LowerCase ? `'${col2LowerCase.replace(/'/,"''")}'`: col2LowerCase} `
+		let result =  await connection.execute(query,{},dbSelectOptions)
         
         if(result.rows.length == 0){
             result =  await connection.execute(`INSERT INTO employee (first_name,last_name) values (:0,:1)`,[employee[col1Name],employee[col2Name]],{autoCommit:true})
@@ -57,7 +62,7 @@ async function GetEmployeeWithID(employee,col1Name,col2Name) {
 
 const non_bartag_cols = ['Last Name','First Name','HRA','Email']
 
- const EquipmentConvert = async () =>  {
+const EquipmentConvert = async () =>  {
         const csvFilePath = `./tools/csv-files/equipments.csv`
     
         if(fs.existsSync(csvFilePath)){
@@ -95,11 +100,11 @@ const EmployeesConvert = async () => {
                 let btArray = []
 
                 for(const bt_name of btNamesArray){
-                    btArray.push(jsonArray[i][bt_name])
+                    btArray.push({'bartag':jsonArray[i][bt_name],'item_type':bt_name.replace(/\s\d/,'')})
                     delete jsonArray[i][bt_name];
                 }
 
-                jsonArray[i]['bartags'] = btArray
+                jsonArray[i]['equipments'] = btArray
             }
 
             await fs.promises.writeFile(path.join(__dirname, 'employees.json'), JSON.stringify(jsonArray,null,2))
@@ -126,7 +131,7 @@ const loadJSON = async (filepath) => {
         }
       })
     });
-  }
+}
 
 const AddEmployees = async () => {
         const employees = await loadJSON('./tools/employees.json')
@@ -137,16 +142,53 @@ const AddEmployees = async () => {
                 const employee = await GetEmployeeWithID(emp,"First Name","Last Name")
                 //console.log(employee)
     
-                if(emp.bartags.length != 0){
-                    for(let i=0;i<emp.bartags.length;i++){
-                    const empBartag = emp.bartags[i]
-                    const empHra = emp.HRA
+                if(emp.equipments.length != 0){
+                    for(let i=0;i<emp.equipments.length;i++){
+                    //console.log(`equipment ${i+1} of ${emp.equipments.length}`)
+                    const empBartag = emp.equipments[i].bartag
     
                     try{        
-                        const eqIdx = findIndex(equipments,function(e){ return (Number(e.PROP_ID) == Number(empBartag) && Number(e.HRA_ID) == Number(empHra)) })
+                        const eqIdx = findIndex(equipments,function(e){ return (Number(e.PROP_ID) == Number(empBartag)) })
     
                         if(eqIdx != -1){
                             equipments[eqIdx].USER_EMPLOYEE_ID = employee.id
+                            if(employee.HRA != null && employee.HRA != undefined && employee.HRA != ''){
+                                equipments[eqIdx].HRA_ID = Number(employee.HRA)
+                            }
+                            
+                        }else{
+                            if(empBartag != null && empBartag != undefined){
+                                const item_type = emp.equipments[i].item_type ? emp.equipments[i].item_type : null
+
+                                equipments.push({
+                                    "ORG_NAME": null,
+                                    "FOA_CODE": null,
+                                    "CATALOG_ID": null,
+                                    "CATALOG_NOUN": null,
+                                    "CATALOG_NOMINCLATURE": item_type,
+                                    "CATALOG_UPDATE_DATE": null,
+                                    "HRA_ID": emp.HRA ? Number(emp.HRA) : null,
+                                    "HRA_NAME": null,
+                                    "PROP_ID": Number(empBartag),
+                                    "PROP_ACQUISITION_DATE": null,
+                                    "PROP_ACQUISITION_COST": null,
+                                    "PROP_TOT_ACCS_COST": null,
+                                    "PROP_EXTENDED_COST": null,
+                                    "AUTH_ID": null,
+                                    "PROP_FUND_CODE": null,
+                                    "PROP_LOC": null,
+                                    "PROP_ROOM_NO": null,
+                                    "PROP_MFGR": null,
+                                    "PROP_MODEL_NO": null,
+                                    "PROP_INV_DATE": null,
+                                    "TRANS_ID": null,
+                                    "TRANS_DATE": null,
+                                    "MAINT_REQ": null,
+                                    "PROP_ORG_CODE": null,
+                                    "PBIC_CODE": null,
+                                    "USER_EMPLOYEE_ID": Number(employee.id)
+                                })
+                            }
                         }
     
                         }catch(err){
@@ -157,12 +199,12 @@ const AddEmployees = async () => {
             }          
         }
 
-        await fs.promises.writeFile(path.join(__dirname, 'equipments-new.json'), JSON.stringify(equipments,null,2))
+        await fs.promises.writeFile(path.join(__dirname, 'equipments.json'), JSON.stringify(equipments,null,2))
                 .then(() => {
-                    console.log('equipments-new saved!');
+                    console.log('equipments saved!');
                 })
                 .catch(err => {
-                console.log('equipments-new: Some error occured - file either not saved or corrupted file saved.');
+                console.log('equipments: Some error occured - file either not saved or corrupted file saved.');
                 });
 }
 
@@ -317,99 +359,69 @@ const createHraList = async () => {
     // }
 }
 
-const AddEquipments = async (filterbyEmployeeAvailable) => {
+const AddEquipments = async (filterbyHraNumber) => {
     const connection =  await oracledb.getConnection(dbConfig);
-    let equipments = await loadJSON('./tools/equipments-new.json')
+    let equipments = await loadJSON('./tools/equipments.json')
 
-    if(filterbyEmployeeAvailable){
-        equipments = filter(equipments,function(e){ return e.USER_EMPLOYEE_ID != null; })
+    if(filterbyHraNumber){
+        equipments = filter(equipments,function(e){ return enDgHras.includes(e.HRA_ID); })
     }
 
-
 	try{
-        for(const equipment of equipments){
-            let result =  await connection.execute('SELECT * FROM equipment where bar_tag_num = :0 ',[equipment.PROP_ID],dbSelectOptions)
-        
-            const eq = { 
-                "PROP_ID": 48428,
-                "CATALOG_ID": "702501C082781",
-                //null
-                "PROP_MFGR": "DELL",
-                "PROP_MODEL_NO": "1800FP",
-                //null
-                "PROP_SERIAL_NO": "MX07R47748323G61W",
-                "PROP_ACQUISITION_DATE": "2004-02-06T05:00:00.000Z",
-                "PROP_ACQUISITION_COST": 300,
-                //null
-                //null
-                "CATALOG_NOMINCLATURE": "MONITOR, COLOR IMPE: 19 DELL",
-                "HRA_ID": 939,
-                "USER_EMPLOYEE_ID": null,
-                "ORG_NAME": "USAE JACKSONVILLE DISTRIC",
-            "FOA_CODE": "K3",
-            "CATALOG_NOUN": "MONITOR, COLOR",
-            "CATALOG_UPDATE_DATE": "1/14/2013  12:32:43 AM",
-            "HRA_NAME": "HANSLER BEALYER",
-            "PROP_TOT_ACCS_COST": "0.00",
-            "PROP_EXTENDED_COST": "300.00",
-            "AUTH_ID": "IMA MOD",
-            "PROP_DOC_REG_NO": "40149902",
-            "PROP_FUND_CODE": "R",
-            "PROP_LOC": "PROU",
-            "PROP_ROOM_NO": "DCESAJ",
-            "PROP_PURCHASE_REQ_NO": "DABL10-03-D-1008",
-            "PROP_REQ_NO": "W32CS540149902",
-            "PROP_PART_NO": "18.1\" SCREEN",
-            "PROP_INV_DATE": "11/28/2019  12:00:00 AM",
-            "TRANS_ID": "72280006",
-            "TRANS_DATE": "8/16/2017  12:00:00 AM",
-            "MAINT_REQ": "N",
-            "PBIC_CODE": "O",
-            }
+        for(let i=0;i<equipments.length;i++){
+            console.log(`equipment ${i+1} of ${equipments.length}`)
+            const equipment = equipments[i]
+            const bartag = equipment.PROP_ID ? Number(equipment.PROP_ID.toString().substr(0,5)) : null
 
-            if(result.rows.length == 0){
+            if(bartag != null){
+                let result =  await connection.execute('SELECT * FROM equipment where bar_tag_num = :0 ',[bartag],dbSelectOptions)
 
-                const options = [
-                    equipment.PROP_ID,
-                    equipment.CATALOG_ID,
-                    null,
-                    equipment.PROP_MFGR ? equipment.PROP_MFGR.replace(/\\/g, '') : null,
-                    equipment.PROP_MODEL_NO ? equipment.PROP_MODEL_NO.replace(/\\/g, '') : null,
-                    null,
-                    equipment.PROP_SERIAL_NO,
-                    new Date(equipment.PROP_ACQUISITION_DATE),
-                    equipment.PROP_ACQUISITION_COST,
-                    null,
-                    null,
-                    equipment.CATALOG_NOMINCLATURE ? equipment.CATALOG_NOMINCLATURE.replace(/\\/g, '') : null,
-                    equipment.HRA_ID,
-                    equipment.USER_EMPLOYEE_ID,
-                ]
+                if(result.rows.length == 0){
 
-                //console.log(options)
+                    const options = [
+                        bartag,
+                        equipment.CATALOG_ID,
+                        null,
+                        equipment.PROP_MFGR ? equipment.PROP_MFGR.replace(/\\/g, '') : null,
+                        equipment.PROP_MODEL_NO ? equipment.PROP_MODEL_NO.replace(/\\/g, '') : null,
+                        null,
+                        equipment.PROP_SERIAL_NO,
+                        new Date(equipment.PROP_ACQUISITION_DATE),
+                        equipment.PROP_ACQUISITION_COST,
+                        null,
+                        null,
+                        equipment.CATALOG_NOMINCLATURE ? equipment.CATALOG_NOMINCLATURE.replace(/\\/g, '') : null,
+                        equipment.HRA_ID,
+                        equipment.USER_EMPLOYEE_ID,
+                    ]
 
-                result =  await connection.execute(`INSERT INTO equipment (
-                    BAR_TAG_NUM, 
-                    CATALOG_NUM, 
-                    BAR_TAG_HISTORY_ID, 
-                    MANUFACTURER, 
-                    MODEL, 
-                    CONDITION, 
-                    SERIAL_NUM, 
-                    ACQUISITION_DATE, 
-                    ACQUISITION_PRICE, 
-                    DOCUMENT_NUM, 
-                    INDIVIDUAL_ROR_PROP, 
-                    ITEM_TYPE, 
-                    HRA_NUM, 
-                    USER_EMPLOYEE_ID
-                ) values (:0,:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13)`,options,{autoCommit:true})
+                    result =  await connection.execute(`INSERT INTO equipment (
+                        BAR_TAG_NUM, 
+                        CATALOG_NUM, 
+                        BAR_TAG_HISTORY_ID, 
+                        MANUFACTURER, 
+                        MODEL, 
+                        CONDITION, 
+                        SERIAL_NUM, 
+                        ACQUISITION_DATE, 
+                        ACQUISITION_PRICE, 
+                        DOCUMENT_NUM, 
+                        INDIVIDUAL_ROR_PROP, 
+                        ITEM_TYPE, 
+                        HRA_NUM, 
+                        USER_EMPLOYEE_ID
+                    ) values (:0,:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13)`,options,{autoCommit:true})
 
-                if(result.rowsAffected > 0){
-                    const rowid = result.lastRowid
-                    result =  await connection.execute('SELECT * FROM equipment where rowid = :0 ',[rowid],dbSelectOptions)
-                    console.log(`new equipment added: ${result.rows[0].MANUFACTURER} ${result.rows[0].ITEM_TYPE} bt{${result.rows[0].BAR_TAG_NUM}}`)
+                    if(result.rowsAffected > 0){
+                        const rowid = result.lastRowid
+                        result =  await connection.execute('SELECT * FROM equipment where rowid = :0 ',[rowid],dbSelectOptions)
+                        console.log(`new equipment added: ${result.rows[0].MANUFACTURER} ${result.rows[0].ITEM_TYPE} bt{${result.rows[0].BAR_TAG_NUM}}`)
+                    }
+                }else{
+                    console.log('bartag exists')
                 }
+            }else{
+                console.log('null bartag')
             }
         }
 	}catch(err){

@@ -3,8 +3,17 @@
 const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
+const filter = require('lodash/filter');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
+
+const dbText = {
+	'hraId':'TO_CHAR(hra_num)',
+	'bartagNum':'TO_CHAR(bar_tag_num)',
+	'hraName': "hra_full_name",
+	'itemType':'item_type',
+	'employeeName':"employee_full_name",
+}
 
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
@@ -100,38 +109,115 @@ exports.getById = async function(req, res) {
 
 //!SELECT EQUIPMENT BY FIELDS DATA
 exports.search = async function(req, res) {
-	const hraId = req.body.hraId;
-	const bartagNum = req.body.bartagNum;
-	const searchObject = {}
+	const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 
-	const PropertyNamesToLowerCase = (data) => {
-		data.map(function(r){
-			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			return r;
-		})
+	let query_search = '';
 
-		return data
-	}
-
-
-	if(hraId != ''){
-		searchObject['hraId'] = hraId
-	}
-
-	if(bartagNum != ''){
-		searchObject['bartagNum'] = bartagNum
-	}
-	
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let where = hraId != '' || bartagNum != '' ? 'WHERE ' : ''
-		let hraFind = hraId != '' ? 'hra_num = :hraId ' : ''
-		let bartagFind = bartagNum != '' ? 'bar_tag_num = :bartagNum ' : ''
-		let andCause = hraFind  != '' & bartagNum != '' ? 'AND ' : ''
 
-		let query = 'SELECT * FROM equipment ' + where + hraFind + andCause + bartagFind
-		let resultEquipment =  await connection.execute(`${query}`,searchObject,dbSelectOptions)
+		for(const parameter of searchCriteria){
+			const db_col_name = dbText[parameter]
+
+			if(db_col_name != undefined){
+				const db_col_value = req.body[parameter]
+
+				if(db_col_value.includes(';')){
+					const search_values = db_col_value.split(';')
+
+					for(const search_value of search_values){
+						const or_ = query_search != '' ? 'OR' : ''
+						query_search = query_search.concat(` ${or_} LOWER(${db_col_name}) LIKE LOWER('%${search_value.replace(/'/,"''")}%') `)
+						
+					}
+					
+
+				}else{
+					const and_ = query_search != '' ? 'AND' : ''
+					query_search = query_search.concat(` ${and_} LOWER(${db_col_name}) LIKE LOWER('%${db_col_value.replace(/'/,"''")}%') `)
+				}
+			}
+		}
+
+		// let employeeCols = `,e.first_name || ' ' || e.last_name as employee_full_name,
+		// e.TITLE as employee_title,
+		// e.OFFICE_SYMBOL as employee_office_symbol,
+		// e.WORK_PHONE as employee_work_phone`
+		// const employeeFrom = `,employee e`
+		// const employeeAnd = `AND eq.user_employee_id = e.id`
+
+		const hra_emp = `SELECT
+		h.hra_num,
+		e.id as hra_employee_id,
+		e.first_name || ' ' || e.last_name as hra_full_name,
+		e.TITLE as hra_title,
+		e.OFFICE_SYMBOL as hra_office_symbol,
+		e.WORK_PHONE as hra_work_phone
+		FROM hra h
+		LEFT JOIN employee e
+		on h.employee_id = e.id`
+
+		const eq_emp = `SELECT
+		eq.ID,
+		eq.BAR_TAG_NUM,
+		eq.CATALOG_NUM,
+		eq.BAR_TAG_HISTORY_ID,
+		eq.MANUFACTURER,
+		eq.MODEL,
+		eq.CONDITION,
+		eq.SERIAL_NUM,
+		eq.ACQUISITION_DATE,
+		eq.ACQUISITION_PRICE,
+		eq.DOCUMENT_NUM,
+		eq.INDIVIDUAL_ROR_PROP,
+		eq.ITEM_TYPE,
+		eq.HRA_NUM,
+		e.id as employee_id,
+		e.first_name || ' ' || e.last_name as employee_full_name,
+		e.TITLE as employee_title,
+		e.OFFICE_SYMBOL as employee_office_symbol,
+		e.WORK_PHONE as employee_work_phone
+		FROM equipment eq
+		LEFT JOIN employee e
+		on eq.user_employee_id = e.id`
+
+		let query = `
+		SELECT * from
+                        (${hra_emp}) hra_emp
+                        RIGHT JOIN (${eq_emp}) eq_emp
+						on eq_emp.hra_num = hra_emp.hra_num
+						${query_search != '' ? 'WHERE': ''} ${query_search}`
+
+		// let query = `
 		
+		// SELECT 
+		// 	eq.ID,
+		// 	eq.BAR_TAG_NUM,
+		// 	eq.CATALOG_NUM,
+		// 	eq.BAR_TAG_HISTORY_ID,
+		// 	eq.MANUFACTURER,
+		// 	eq.MODEL,
+		// 	eq.CONDITION,
+		// 	eq.SERIAL_NUM,
+		// 	eq.ACQUISITION_DATE,
+		// 	eq.ACQUISITION_PRICE,
+		// 	eq.DOCUMENT_NUM,
+		// 	eq.INDIVIDUAL_ROR_PROP,
+		// 	eq.ITEM_TYPE,
+		// 	eq.HRA_NUM,
+		// 	eq.USER_EMPLOYEE_ID,
+        //     eHra.first_name || ' ' || eHra.last_name as hra_full_name,
+		// 	eHra.TITLE as hra_title,
+		// 	eHra.OFFICE_SYMBOL as_hra_office_symbol,
+		// 	eHra.WORK_PHONE as hra_work_phone
+		// 	${employeeSearch ? employeeCols : ''}
+		// 	FROM equipment eq, hra h, employee eHra ${employeeSearch ? employeeFrom : ''}
+		// 	WHERE ${query_search}
+		// 	eq.hra_num = h.hra_num AND h.employee_id = eHra.id ${employeeSearch ? employeeAnd : ''}`
+
+		console.log(query)
+		let resultEquipment =  await connection.execute(`${query}`,{},dbSelectOptions)
+		//console.log(resultEquipment.rows.length)
 		if (resultEquipment.rows.length > 0) {
 			resultEquipment.rows = resultEquipment.rows.map(function(r){
 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
@@ -139,58 +225,58 @@ exports.search = async function(req, res) {
 				return r;
 			})
 			
-			for(let i=0;i<resultEquipment.rows.length;i++){
+			// for(let i=0;i<resultEquipment.rows.length;i++){
 
-				// SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
-				// FROM HRA h 
-				// INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
-				// WHERE LOWER(e.first_name || ' ' || e.last_name) LIKE '%da%';
+			// 	// SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
+			// 	// FROM HRA h 
+			// 	// INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
+			// 	// WHERE LOWER(e.first_name || ' ' || e.last_name) LIKE '%da%';
 
-				if(resultEquipment.rows[i].hra_num != null && resultEquipment.rows[i].hra_num != ''){
-					let resultHra =  await connection.execute(`SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
-																FROM HRA h 
-																INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
-																WHERE h.hra_num = :0`,[resultEquipment.rows[i].hra_num],dbSelectOptions)
+			// 	if(resultEquipment.rows[i].hra_num != null && resultEquipment.rows[i].hra_num != ''){
+			// 		let resultHra =  await connection.execute(`SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
+			// 													FROM HRA h 
+			// 													INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
+			// 													WHERE h.hra_num = :0`,[resultEquipment.rows[i].hra_num],dbSelectOptions)
 
-					//console.log(resultHra)
+			// 		//console.log(resultHra)
 
-					if(resultHra.rows.length > 0){
-						const hraFound = resultHra.rows.map(function(r){
-							r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-							return r;
-						})[0]
-						resultEquipment.rows[i].hra_full_name = hraFound.hra_full_name
+			// 		if(resultHra.rows.length > 0){
+			// 			const hraFound = resultHra.rows.map(function(r){
+			// 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+			// 				return r;
+			// 			})[0]
+			// 			resultEquipment.rows[i].hra_full_name = hraFound.hra_full_name
 
-					}else{
-							resultEquipment.rows[i].hra_full_name = 'not found'
-					}
-				}else{
-					resultEquipment.rows[i].hra_full_name = 'not found'
-				}
+			// 		}else{
+			// 				resultEquipment.rows[i].hra_full_name = 'not found'
+			// 		}
+			// 	}else{
+			// 		resultEquipment.rows[i].hra_full_name = 'not found'
+			// 	}
 
-				if(resultEquipment.rows[i].user_employee_id != null && resultEquipment.rows[i].user_employee_id != ''){
-					let resultEmployee =  await connection.execute(`SELECT * FROM EMPLOYEE WHERE ID = :0`,[resultEquipment.rows[i].user_employee_id],dbSelectOptions);
+			// 	if(resultEquipment.rows[i].user_employee_id != null && resultEquipment.rows[i].user_employee_id != ''){
+			// 		let resultEmployee =  await connection.execute(`SELECT * FROM EMPLOYEE WHERE ID = :0`,[resultEquipment.rows[i].user_employee_id],dbSelectOptions);
 					
-					if(resultEmployee.rows.length > 0){
-						resultEmployee.rows = resultEmployee.rows.map(function(r){
-							r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-							return r;
-						})
+			// 		if(resultEmployee.rows.length > 0){
+			// 			resultEmployee.rows = resultEmployee.rows.map(function(r){
+			// 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+			// 				return r;
+			// 			})
 
-						//console.log(resultEmployee.rows[0]['first_name'])
-						resultEquipment.rows[i].employee_full_name = resultEmployee.rows[0]['first_name'] + " " + resultEmployee.rows[0]['last_name']
-					}else{
-						resultEquipment.rows[i].employee_full_name = 'not found';
-					}
-				}else{
-					resultEquipment.rows[i].employee_full_name = 'not found';
-				}
+			// 			//console.log(resultEmployee.rows[0]['first_name'])
+			// 			resultEquipment.rows[i].employee_full_name = resultEmployee.rows[0]['first_name'] + " " + resultEmployee.rows[0]['last_name']
+			// 		}else{
+			// 			resultEquipment.rows[i].employee_full_name = 'not found';
+			// 		}
+			// 	}else{
+			// 		resultEquipment.rows[i].employee_full_name = 'not found';
+			// 	}
 
 				
-			}
+			// }
 
 
-			console.log(resultEquipment.rows)
+			//console.log(resultEquipment.rows)
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -207,6 +293,12 @@ exports.search = async function(req, res) {
 		}
 	}catch(err){
 		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: []
+		});
 		//logger.error(err)
 	}
 };

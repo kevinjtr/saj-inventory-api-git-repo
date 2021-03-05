@@ -103,6 +103,7 @@ exports.search = async function(req, res) {
 
         let result =  await connection.execute(query,{},dbSelectOptions)
 
+        console.log(result)
         if(result.rows.length > 0){
             const uniqFormIds = uniq(result.rows.map(x => x.FORM_ID))
             for(const form_id of uniqFormIds){
@@ -128,7 +129,13 @@ exports.search = async function(req, res) {
 			});
 		}
 	}catch(err){
-		console.log(err)
+        console.log('in error')
+		res.status(400).json({
+            status: 400,
+            error: true,
+            message: 'No data found!',
+            data: []
+        });
 		//logger.error(err)
 	}
 };
