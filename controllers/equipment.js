@@ -1,70 +1,80 @@
 'use strict';
-
-const response = require('../response');
+//const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
+const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
+const {equipment_employee,hra_employee} = require('../config/queries');
+const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 
-const dbText = {
-	'hraId':'TO_CHAR(hra_num)',
-	'bartagNum':'TO_CHAR(bar_tag_num)',
-	'hraName': "hra_full_name",
-	'itemType':'item_type',
-	'employeeName':"employee_full_name",
+const eqIncludes = {
+	'includes':'LIKE',
+	'excludes':'NOT LIKE',
+	'equals':'=',
+	'notEquals':'!='
 }
 
-const dbSelectOptions = {
-    outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
-    // extendedMetaData: true,               // get extra metadata
-    // prefetchRows:     100,                // internal buffer allocation size for tuning
-    // fetchArraySize:   100                 // internal buffer allocation size for tuning
-	};
+const eqBlanks = {
+	'includeBlanks':'',
+	'excludeBlanks':'!=',
+	'onlyBlanks':'='
+}
+
+const and_ = (q) => q != '' ? 'AND' : ''
+const or_ = (q) => q != '' ? 'OR' : ''
+
+const andOR = {
+	'includes':or_,
+	'excludes':and_,
+	'equals':or_,
+	'notEquals':and_
+}
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
-
-    console.log('here at index equipment')
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-        console.log('extract equipment')
-		let result =  await connection.execute('SELECT * FROM equipment',{},dbSelectOptions)
-		
-		result.rows = result.rows.map(function(r){
-			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			return r;
-		})
+		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
+												RIGHT JOIN (${equipment_employee}) eq_emp
+												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
+		if(result.rows.length > 0){
+			result.rows = propNamesToLowerCase(result.rows)
+		}
 
-        console.log('rows fetched: ',result.rows.length)
-		response.ok(result.rows, res);
+		connection.close()
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully get equipment data!',
+			data: result.rows
+		});
 	}catch(err){
+		connection.close()
 		console.log(err)
-		//logger.error(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: []
+		});
 	}
-
-	//connection.close()
-	// connection.query('SELECT * FROM equipment', function(error, rows, fields) {
-	// 	if (error) {
-	// 		console.log(error);
-	// 	} else {
-	// 		response.ok(rows, res);
-	// 	}
-	// });
 };
 
 //!SELECT EQUIPMENT BY ID
 exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let result =  await connection.execute(`SELECT * FROM equipment WHERE id = :0`,[req.params.id],dbSelectOptions)
+		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
+												RIGHT JOIN (${equipment_employee}) eq_emp
+												on eq_emp.hra_num = hra_emp.hra_num
+												WHERE id = :0`,[req.params.id],dbSelectOptions)
+
 		console.log('getid',result)
 		if (result.rows.length > 0) {
-			result.rows = result.rows.map(function(r){
-				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				return r;
-			})
+			result.rows = propNamesToLowerCase(result.rows)
+
+			connection.close()
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -72,6 +82,7 @@ exports.getById = async function(req, res) {
 				data: result.rows
 			});
 		} else {
+			connection.close()
 			res.status(400).json({
 				status: 400,
 				error: true,
@@ -80,203 +91,115 @@ exports.getById = async function(req, res) {
 			});
 		}
 	}catch(err){
+		connection.close()
 		console.log(err)
+		res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
 		//logger.error(err)
 	}
-
-	// connection.query('SELECT * FROM `equipment` WHERE `id` = ?', req.params.id, function(err, results, fields) {
-	// 	if (err) {
-	// 		console.log(err);
-	// 	} else {
-	// 		if (results.length > 0) {
-	// 			res.status(200).json({
-	// 				status: 200,
-	// 				error: false,
-	// 				message: 'Successfully get single data!',
-	// 				data: results
-	// 			});
-	// 		} else {
-	// 			res.status(400).json({
-	// 				status: 400,
-	// 				error: true,
-	// 				message: 'No data found!',
-	// 				data: results
-	// 			});
-	// 		}
-	// 	}
-	// });
 };
 
 //!SELECT EQUIPMENT BY FIELDS DATA
 exports.search = async function(req, res) {
-	const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
-
+	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
-	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-
+		const {fields,options} = req.body;
+		//console.log(options)
+		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
+//console.log(searchCriteria)
 		for(const parameter of searchCriteria){
-			const db_col_name = dbText[parameter]
+			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 
 			if(db_col_name != undefined){
-				const db_col_value = req.body[parameter]
+				const db_col_value = fields[parameter]
+				const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
+				const includesOperator = eqIncludes[options.includes[parameter]]
+				const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
 
 				if(db_col_value.includes(';')){
-					const search_values = db_col_value.split(';')
+					const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
 
-					for(const search_value of search_values){
-						const or_ = query_search != '' ? 'OR' : ''
-						query_search = query_search.concat(` ${or_} LOWER(${db_col_name}) LIKE LOWER('%${search_value.replace(/'/,"''")}%') `)
-						
+					for(let i=0; i<search_values.length;i++){
+						//const operator = isStringColumn ? 'LIKE' : '='
+						console.log('in'+i)
+						const op_chooser = (i == 0 ? and_ : andOR[options.includes[parameter]])
+						const operator = op_chooser(query_search)
+						const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
+
+						//query_search = query_search.concat(`${op_chooser(query_search)} ${db_col_name} ${includesOperator} ${val} `)
+
+						const condition = `${db_col_name} ${includesOperator} ${val} `
+
+						if(i == 0 && !query_search){
+							query_search = query_search + '(' + condition + ' '
+
+						}else if(i == 0 && query_search){
+							query_search = query_search + operator + ' ( ' + condition + ' '
+
+						}else if(i != 0 && i != search_values.length - 1){
+							query_search = query_search + operator + ' ' + condition + ' '
+
+						}else if(i == search_values.length - 1){
+							query_search = query_search  + operator + ' ' + condition + ') '
+						}
+
+						//query_search = query_search.concat(`${op_chooser(query_search)} ${db_col_name} ${includesOperator} ${val} `)
+
+						// if(i == search_values.length - 1){
+						// 	query_search = `(${query_search}) `
+						// }else{
+							
+						// }
 					}
 					
 
 				}else{
-					const and_ = query_search != '' ? 'AND' : ''
-					query_search = query_search.concat(` ${and_} LOWER(${db_col_name}) LIKE LOWER('%${db_col_value.replace(/'/,"''")}%') `)
+					//const operator = isStringColumn ? 'LIKE' : '='
+					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
+					query_search = query_search.concat(`${andOR[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+					//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
 				}
 			}
 		}
 
-		// let employeeCols = `,e.first_name || ' ' || e.last_name as employee_full_name,
-		// e.TITLE as employee_title,
-		// e.OFFICE_SYMBOL as employee_office_symbol,
-		// e.WORK_PHONE as employee_work_phone`
-		// const employeeFrom = `,employee e`
-		// const employeeAnd = `AND eq.user_employee_id = e.id`
+		// for(const parameter in options.includes){
+		// 	const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+		// 	const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 
-		const hra_emp = `SELECT
-		h.hra_num,
-		e.id as hra_employee_id,
-		e.first_name || ' ' || e.last_name as hra_full_name,
-		e.TITLE as hra_title,
-		e.OFFICE_SYMBOL as hra_office_symbol,
-		e.WORK_PHONE as hra_work_phone
-		FROM hra h
-		LEFT JOIN employee e
-		on h.employee_id = e.id`
 
-		const eq_emp = `SELECT
-		eq.ID,
-		eq.BAR_TAG_NUM,
-		eq.CATALOG_NUM,
-		eq.BAR_TAG_HISTORY_ID,
-		eq.MANUFACTURER,
-		eq.MODEL,
-		eq.CONDITION,
-		eq.SERIAL_NUM,
-		eq.ACQUISITION_DATE,
-		eq.ACQUISITION_PRICE,
-		eq.DOCUMENT_NUM,
-		eq.INDIVIDUAL_ROR_PROP,
-		eq.ITEM_TYPE,
-		eq.HRA_NUM,
-		e.id as employee_id,
-		e.first_name || ' ' || e.last_name as employee_full_name,
-		e.TITLE as employee_title,
-		e.OFFICE_SYMBOL as employee_office_symbol,
-		e.WORK_PHONE as employee_work_phone
-		FROM equipment eq
-		LEFT JOIN employee e
-		on eq.user_employee_id = e.id`
+		// 	const operator = eqOperator[options.includes[parameter]]
+		// 	console.log('eqOperator: '+operator)
+		// }
 
-		let query = `
-		SELECT * from
-                        (${hra_emp}) hra_emp
-                        RIGHT JOIN (${eq_emp}) eq_emp
-						on eq_emp.hra_num = hra_emp.hra_num
+		for(const parameter in options.blanks){
+			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
+			const blankOperator = eqBlanks[options.blanks[parameter]]
+			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankOperator} null OR ${db_col_name} ${blankOperator} '' OR ${db_col_name} ${blankOperator} ' ')` : query_search
+		}
+		//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
+
+
+		let query = `SELECT * from (${hra_employee}) hra_emp 
+						RIGHT JOIN (${equipment_employee}) eq_emp 
+						on eq_emp.hra_num = hra_emp.hra_num 
 						${query_search != '' ? 'WHERE': ''} ${query_search}`
 
-		// let query = `
-		
-		// SELECT 
-		// 	eq.ID,
-		// 	eq.BAR_TAG_NUM,
-		// 	eq.CATALOG_NUM,
-		// 	eq.BAR_TAG_HISTORY_ID,
-		// 	eq.MANUFACTURER,
-		// 	eq.MODEL,
-		// 	eq.CONDITION,
-		// 	eq.SERIAL_NUM,
-		// 	eq.ACQUISITION_DATE,
-		// 	eq.ACQUISITION_PRICE,
-		// 	eq.DOCUMENT_NUM,
-		// 	eq.INDIVIDUAL_ROR_PROP,
-		// 	eq.ITEM_TYPE,
-		// 	eq.HRA_NUM,
-		// 	eq.USER_EMPLOYEE_ID,
-        //     eHra.first_name || ' ' || eHra.last_name as hra_full_name,
-		// 	eHra.TITLE as hra_title,
-		// 	eHra.OFFICE_SYMBOL as_hra_office_symbol,
-		// 	eHra.WORK_PHONE as hra_work_phone
-		// 	${employeeSearch ? employeeCols : ''}
-		// 	FROM equipment eq, hra h, employee eHra ${employeeSearch ? employeeFrom : ''}
-		// 	WHERE ${query_search}
-		// 	eq.hra_num = h.hra_num AND h.employee_id = eHra.id ${employeeSearch ? employeeAnd : ''}`
 
 		console.log(query)
 		let resultEquipment =  await connection.execute(`${query}`,{},dbSelectOptions)
-		//console.log(resultEquipment.rows.length)
+		
 		if (resultEquipment.rows.length > 0) {
-			resultEquipment.rows = resultEquipment.rows.map(function(r){
-				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+			resultEquipment.rows = propNamesToLowerCase(resultEquipment.rows)
 
-				return r;
-			})
-			
-			// for(let i=0;i<resultEquipment.rows.length;i++){
-
-			// 	// SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
-			// 	// FROM HRA h 
-			// 	// INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
-			// 	// WHERE LOWER(e.first_name || ' ' || e.last_name) LIKE '%da%';
-
-			// 	if(resultEquipment.rows[i].hra_num != null && resultEquipment.rows[i].hra_num != ''){
-			// 		let resultHra =  await connection.execute(`SELECT h.HRA_NUM, h.EMPLOYEE_ID, e.first_name || ' ' || e.last_name as hra_full_name
-			// 													FROM HRA h 
-			// 													INNER JOIN EMPLOYEE e ON h.EMPLOYEE_ID = e.ID
-			// 													WHERE h.hra_num = :0`,[resultEquipment.rows[i].hra_num],dbSelectOptions)
-
-			// 		//console.log(resultHra)
-
-			// 		if(resultHra.rows.length > 0){
-			// 			const hraFound = resultHra.rows.map(function(r){
-			// 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			// 				return r;
-			// 			})[0]
-			// 			resultEquipment.rows[i].hra_full_name = hraFound.hra_full_name
-
-			// 		}else{
-			// 				resultEquipment.rows[i].hra_full_name = 'not found'
-			// 		}
-			// 	}else{
-			// 		resultEquipment.rows[i].hra_full_name = 'not found'
-			// 	}
-
-			// 	if(resultEquipment.rows[i].user_employee_id != null && resultEquipment.rows[i].user_employee_id != ''){
-			// 		let resultEmployee =  await connection.execute(`SELECT * FROM EMPLOYEE WHERE ID = :0`,[resultEquipment.rows[i].user_employee_id],dbSelectOptions);
-					
-			// 		if(resultEmployee.rows.length > 0){
-			// 			resultEmployee.rows = resultEmployee.rows.map(function(r){
-			// 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			// 				return r;
-			// 			})
-
-			// 			//console.log(resultEmployee.rows[0]['first_name'])
-			// 			resultEquipment.rows[i].employee_full_name = resultEmployee.rows[0]['first_name'] + " " + resultEmployee.rows[0]['last_name']
-			// 		}else{
-			// 			resultEquipment.rows[i].employee_full_name = 'not found';
-			// 		}
-			// 	}else{
-			// 		resultEquipment.rows[i].employee_full_name = 'not found';
-			// 	}
-
-				
-			// }
-
-
-			//console.log(resultEquipment.rows)
+			connection.close()
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -284,14 +207,16 @@ exports.search = async function(req, res) {
 				data: resultEquipment.rows
 			});
 		} else {
+			connection.close()
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: resultEquipment.rows
+				data: []
 			});
 		}
 	}catch(err){
+		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -306,143 +231,159 @@ exports.search = async function(req, res) {
 //!INSERT EQUIPMENT
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	// const item_type = req.body.item_type ? req.body.item_type : 'no data' || ternary operator
-	const { item_type } = req.body;
 
 	try{
-		result =  await connection.execute(`INSERT INTO equipment (item_type) values (:0)`,[item_type],{autoCommit:true})
-		console.log(result)
+		const {changes} = req.body.params
+		
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				console.log(row)
+				const {newData} = changes[row];
+				const keys = Object.keys(newData)
+				let cols = ''
+				let vals = ''
+
+				for(let i=0; i<keys.length; i++){
+					if(keys[i] != 'id'){
+						const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+						const comma = i ? ', ': ''
+						cols = cols + comma + col_name
+						vals = vals + comma + ' :' + keys[i]
+					}else{
+						delete newData.id
+					}
+				}
+
+				const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
+				console.log(query)
+
+				let result = await connection.execute(query,newData,{autoCommit:false})
+				console.log(result)
+			}
+		}
+		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
-			message: 'Successfully add new data!',
-			data: req.body
+			message: 'Successfully added new data!',
 		});
 	}catch(err){
+		connection.close()
 		console.log(err);
 		res.status(400).json({
 			status: 400,
-			message: 'Error add new data!'
+			error:true,
+			message: 'Error adding new data!'
 		});
 	}
-
-	// connection.query('INSERT INTO `equipment` (item_type) values (?)', [ item_type ], function(err, results) {
-	// 	if (err) {
-	// 		console.log(err);
-	// 		res.status(400).json({
-	// 			status: 400,
-	// 			message: 'Error add new data!'
-	// 		});
-	// 	} else {
-	// 		res.status(200).json({
-	// 			status: 200,
-	// 			error: false,
-	// 			message: 'Successfully add new data!',
-	// 			data: req.body
-	// 		});
-	// 	}
-	// });
 };
 
 //!UPDATE EQUIPMENT DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-	const { item_type } = req.body;
+	try{
+		const {changes} = req.body.params
+		const connection =  await oracledb.getConnection(dbConfig);
+		let columnErrors = {}
+		let error = false;
 
-	if (!item_type) {
-		res.status(300).json({
-			status: 300,
-			error: true,
-			message: 'item_type needed for update!'
-		});
-	} else {
-		try{
-			console.log(req.body)
-			let result =  await connection.execute(`UPDATE equipment SET item_type = :0 where id = :1`,[item_type, req.params.id],{autoCommit:true})
-			console.log(result)
-			res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully update data with id: ' + req.params.id,
-				data: req.body
-			});
-		}catch(err){
-			console.log(err);
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				columnErrors[row] = {}
+				const {newData,oldData} = changes[row];
+				const cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
+				const keys = Object.keys(cells.new)
+				let cols = ''
+
+				const uniqueCols = ['bar_tag_num']
+				for(const col of uniqueCols){
+					if(keys.includes(col)){
+						//console.log(col)
+						let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
+						if(result.rows.length > 0){
+							console.log('equipment exists')
+							error = true;
+							columnErrors[row][col]='data exists in database.'
+						}
+					}
+				}
+
+				if(Object.keys(columnErrors[row]).length != 0){
+					for(let i=0; i<keys.length; i++){
+						if(keys[i] != 'id'){
+							const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+							const comma = i ? ', ': ''
+							cols = cols + comma + col_name + ' = :' + keys[i]
+						}else{
+							delete cells.new.id
+						}
+					}
+		
+					let query = `UPDATE EQUIPMENT SET ${cols}
+								WHERE ID = ${cells.old.id}`
+				
+					//console.log(query)
+	
+					let result = await connection.execute(query,cells.new,{autoCommit:false})
+					console.log(result)
+				}
+			}
 		}
-	}
 
-	// if (!item_type) {
-	// 	res.status(300).json({
-	// 		status: 300,
-	// 		error: true,
-	// 		message: 'item_type needed for update!'
-	// 	});
-	// } else {
-	// 	connection.query('UPDATE `equipment` SET item_type = ? where id = ?', [ item_type, req.params.id ], function(
-	// 		err,
-	// 		results
-	// 	) {
-	// 		if (err) {
-	// 			console.log(err);
-	// 		} else {
-	// 			res.status(200).json({
-	// 				status: 200,
-	// 				error: false,
-	// 				message: 'Successfully update data with id: ' + req.params.id,
-	// 				data: req.body
-	// 			});
-	// 		}
-	// 	});
-	// }
+		if(error){
+			connection.close()//don't save changes if error is found.
+		}else{
+			//connection.commit()
+			connection.close()
+		}
+		
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully update data with id: ', //+ req.params.id,
+			data: [],//req.body,
+			columnErrors: columnErrors
+		});
+	}catch(err){
+		connection.close()
+		console.log(err);
+		res.status(400).json({
+			status: 400,
+			error: true,
+			columnErrors:columnErrors,
+			message: 'Cannot delete data with id: ' //+ req.params.id
+		});
+	}
 };
 
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-
 	try{
-		let result =  await connection.execute(`DELETE from equipment WHERE id = :0`,[req.params.id],{autoCommit:true})
-		console.log(result)
-		if (result.rowsAffected > 0) {
-			result.rows = result.rows.map(function(r){
-				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				return r;
-			})
-
-			res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully delete data with id: ' + req.params.id
-			});
-		} else {
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'Cannot delete data with id: ' + req.params.id
-			});
+		const {changes} = req.body.params
+		const connection =  await oracledb.getConnection(dbConfig);
+		let ids = ''
+		//console.log(changes)
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				const {id} = changes[row].oldData
+				let result = await connection.execute(`DELETE from equipment WHERE id = :0`,[id],{autoCommit:false})
+				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
+				console.log(result)
+			}
 		}
+
+		connection.close()
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: `Successfully delete data with ids: ${ids}` //+ req.params.id
+		});
 	}catch(err){
-		console.log(err);
+		connection.close()
+		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: `Cannot delete data with ids: ${ids}` //+ req.params.id
+		});
 	}
-
-
-	// connection.query('DELETE from `equipment` WHERE `id` = ?', [ req.params.id ], function(err, results) {
-	// 	if (err) {
-	// 		console.log(err);
-	// 	} else {
-	// 		if (results.affectedRows > 0) {
-	// 			res.status(200).json({
-	// 				status: 200,
-	// 				error: false,
-	// 				message: 'Successfully delete data with id: ' + req.params.id
-	// 			});
-	// 		} else {
-	// 			res.status(400).json({
-	// 				status: 400,
-	// 				error: true,
-	// 				message: 'Cannot delete data with id: ' + req.params.id
-	// 			});
-	// 		}
-	// 	}
-	// });
 };
