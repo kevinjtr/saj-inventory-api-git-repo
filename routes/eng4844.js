@@ -10,6 +10,8 @@ module.exports = function(app) {
 	//app.route('/eng4844/:id').get(controller.getById);
 
 	app.route('/eng4844/search').post(controller.search);
+	app.route('/eng4844/funding').get(controller.funding);
+	app.route('/eng4844/reportableControlCode').get(controller.reportableControlCode);
 	//!POST
 	//app.route('/eng4844').post(usersController.verifyToken, controller.add);
 	//app.route('/eng4844').post(controller.add);

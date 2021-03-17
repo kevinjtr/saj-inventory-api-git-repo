@@ -75,69 +75,7 @@ exports.search = async function(req, res) {
     const returnForms = []
 
 	try{
-        let query = `SELECT 
-        f.id as form_id,
-        f.DATE_CREATED,
-		f.DOCUMENT_NUM,
-		f.ACQUISITION_DATE,
-		f.PURCHASE_ORDER_NUM,
-		f.VENDOR,
-		f.COST_ACCOUNT,
-		f.REMARKS,
-		f.BAR_TAG_NUM,
-		f.CATALOG_NUM,
-		f.OLD_TAG_NUM,
-		f.BAR_TAG_HISTORY_ID,
-		f.SERIAL_NUM,
-		f.LOCATION,
-		f.ROOM,
-		f.HRA,
-		f.AUTHORIZATION,
-		f.FUNDING,
-		f.CONDITION,
-		f.UTILIZATION,
-		f.VALUE,
-		f.ACCESSORY_NOMENCLATURE,
-		f.ACCESSORY_VALUE,
-		f.MAJOR_NOUN,
-		f.NOMENCLATURE,
-		f.MANUFACTURER,
-		f.PART_NUM,
-		f.MODEL,
-		f.COLOR,
-		f.LENGTH,
-		f.LENGTH_UNITS,
-		f.WIDTH,
-		f.WIDTH_UNITS,
-		f.HEIGHT,
-		f.HEIGHT_UNITS,
-		f.CLASSIFICATION,
-		f.REPORTABLE_ITEM_CONTROL_CODE,
-		f.EQUIPMENT_CONTROL_CODE,
-		f.LINE_ITEM_NUM,
-		f.LOGISTICS_CONTROL_CODE,
-        f.FOLDER_LINK,
-		f.PILFERABLE_CODE,
-		f.NOUN_NOMENCLATURE,
-		f.CATALOG_NUM_1,
-		f.VALUE_1,
-        e.id as EQUIPMENT_ID, 
-            e.BAR_TAG_NUM , 
-            e.CATALOG_NUM , 
-            e.BAR_TAG_HISTORY_ID , 
-            e.MANUFACTURER , 
-            e."MODEL", 
-            e.CONDITION , 
-            e.SERIAL_NUM , 
-            e.ACQUISITION_DATE , 
-            e.ACQUISITION_PRICE , 
-            e.DOCUMENT_NUM, 
-            e.INDIVIDUAL_ROR_PROP , 
-            e.ITEM_TYPE , 
-            e.USER_EMPLOYEE_ID
-            
-            from form_4844 f,equipment e
-        where f.SERIAL_NUM = e.SERIAL_NUM` //+ where + hraFind + andCause + bartagFind
+        let query = `SELECT * from form_4844` //+ where + hraFind + andCause + bartagFind
 
         let result =  await connection.execute(query,{},dbSelectOptions)
 
@@ -251,4 +189,86 @@ exports.destroy = async function(req, res) {
 	// }catch(err){
 	// 	console.log(err);
 	// }
+};
+
+//Funding dropdown
+exports.funding = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnFunding = []
+
+	try{
+        let query = `SELECT * from funding` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
+
+//Reportable Item Control Code dropdown
+exports.reportableControlCode = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnFunding = []
+
+	try{
+        let query = `SELECT * from reportable_item_control_code` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
 };
