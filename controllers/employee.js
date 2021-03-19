@@ -164,7 +164,7 @@ exports.add = async function(req, res) {
 				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
 				console.log(query)
 
-				let result = await connection.execute(query,newData,{autoCommit:false})
+				let result = await connection.execute(query,newData,{autoCommit:true})
 				console.log(result)
 			}
 		}
@@ -211,7 +211,7 @@ exports.update = async function(req, res) {
 							WHERE ID = ${cells.old.id}`
 
 				console.log(query)
-				let result = await connection.execute(query,cells.new,{autoCommit:false})
+				let result = await connection.execute(query,cells.new,{autoCommit:true})
 				console.log(result)
 			}
 		}

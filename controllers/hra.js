@@ -4,13 +4,14 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
+const {employee_officeSymbol} = require('../config/queries')
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute('SELECT * FROM hra, employee where hra.employee_id = employee.id ORDER BY FIRST_NAME,LAST_NAME',{},dbSelectOptions)
+		let result =  await connection.execute(`SELECT * FROM hra, (${employee_officeSymbol}) e where hra.employee_id = e.id ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
 		res.status(200).json({
@@ -167,7 +168,7 @@ exports.add = async function(req, res) {
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
 				console.log(query)
 
-				let result = await connection.execute(query,newData,{autoCommit:false})
+				let result = await connection.execute(query,newData,{autoCommit:true})
 				console.log(result)
 			}
 		}
@@ -211,7 +212,7 @@ exports.update = async function(req, res) {
                                 WHERE EMPLOYEE_ID = ${cells.old.id}`
 
                     console.log(query)
-                    let result = await connection.execute(query,cells.new,{autoCommit:false})
+                    let result = await connection.execute(query,cells.new,{autoCommit:true})
                     console.log(result)
                 }
 			}
@@ -243,7 +244,7 @@ exports.destroy = async function(req, res) {
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.id],{autoCommit:false})
+				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.id],{autoCommit:true})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
 				console.log(result)
 			}
