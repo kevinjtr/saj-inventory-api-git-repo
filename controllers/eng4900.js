@@ -5,6 +5,8 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
+const {propNamesToLowerCase} = require('../tools/tools');
+const {eng4900_losingHra,eng4900_gainingHra} = require('../config/queries');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
@@ -72,14 +74,18 @@ exports.getById = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search = async function(req, res) {
     const connection =  await oracledb.getConnection(dbConfig);
-    const returnForms = []
+	const forms = {}
 
-	try{
+	try{				
         let query = `SELECT 
         f.id as form_id,
-        f.REQUESTED_ACTION,
-        f.LOSING_HRA,
-        f.GAINING_HRA,
+        ra.alias as REQUESTED_ACTION,
+		f.LOSING_HRA,
+		l_hra.losing_hra_first_name,
+		l_hra.losing_hra_last_name,
+		f.GAINING_HRA,
+		g_hra.gaining_hra_first_name,
+		g_hra.gaining_hra_last_name,
         f.DATE_CREATED,
         f.FOLDER_LINK,
         eg.EQUIPMENT_GROUP_ID,
@@ -97,35 +103,34 @@ exports.search = async function(req, res) {
             e.INDIVIDUAL_ROR_PROP , 
             e.ITEM_TYPE , 
             e.USER_EMPLOYEE_ID
-            
-            from form_4900 f,equipment_group eg,equipment e
-        where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id` //+ where + hraFind + andCause + bartagFind
+            from form_4900 f, equipment_group eg, equipment e, requested_action ra, ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+        where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num`
 
         let result =  await connection.execute(query,{},dbSelectOptions)
 
-        console.log(result)
         if(result.rows.length > 0){
-            const uniqFormIds = uniq(result.rows.map(x => x.FORM_ID))
+			result.rows = propNamesToLowerCase(result.rows)
+			const uniqFormIds = uniq(result.rows.map(x => x.form_id))
+			
             for(const form_id of uniqFormIds){
-                const formEquipment = filter(result.rows,function(o){ return o.FORM_ID == form_id})
-                returnForms.push(formEquipment)
+                const formEquipment = filter(result.rows,function(o){ return o.form_id == form_id})
+				forms[form_id] = formEquipment
             }
-        }    
-       
+        }
             
-        if(returnForms.length > 0){
+        if(Object.keys(forms).length > 0){
 			res.status(200).json({
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: returnForms
+				data: forms
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: returnForms
+				data: forms
 			});
 		}
 	}catch(err){

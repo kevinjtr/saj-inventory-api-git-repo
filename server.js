@@ -33,7 +33,9 @@ const productsRoutes = require('./routes/products');
 const categoriesRoutes = require('./routes/categories');
 const equipmentRoutes = require('./routes/equipment');
 const eng4900Routes = require('./routes/eng4900');
-const eng4844Routes = require('./routes/eng4844');
+const employee = require('./routes/employee');
+const hra = require('./routes/hra');
+const officeSymbol = require('./routes/office-symbol');
 
 usersRoutes(app);
 handleError(app);
@@ -41,7 +43,9 @@ productsRoutes(app);
 categoriesRoutes(app);
 equipmentRoutes(app);
 eng4900Routes(app);
-eng4844Routes(app);
+employee(app);
+hra(app);
+officeSymbol(app);
 
 app.listen(port);
 console.log('Started');

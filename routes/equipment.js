@@ -12,11 +12,11 @@ module.exports = function(app) {
 	app.route('/equipment/search').post(controller.search);
 	//!POST
 	//app.route('/equipment').post(usersController.verifyToken, controller.add);
-	app.route('/equipment').post(controller.add);
+	app.route('/equipment/add').post(controller.add);
 	//!PATCH
 	//app.route('/equipment/:id').patch(usersController.verifyToken, controller.update);
-	app.route('/equipment/:id').patch(controller.update);
+	app.route('/equipment/update').post(controller.update);
 	//!DELETE
 	//app.route('/equipment/:id').delete(usersController.verifyToken, controller.destroy);
-	app.route('/equipment/:id').delete(controller.destroy);
+	app.route('/equipment/destroy').post(controller.destroy);
 };

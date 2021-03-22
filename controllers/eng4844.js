@@ -272,3 +272,208 @@ exports.reportableControlCode = async function(req, res) {
 		//logger.error(err)
 }
 };
+
+//Condition dropdown
+exports.condition = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnCondition = []
+
+	try{
+        let query = `SELECT * from condition` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
+
+//Utilization dropdown
+exports.utilization = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnUtilization  = []
+
+	try{
+        let query = `SELECT * from utilization` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
+
+//Classification dropdown
+exports.classification = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnClassification  = []
+
+	try{
+        let query = `SELECT * from classification` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
+
+//Classification dropdown
+exports.piliferableCode = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnPiliferableCode  = []
+
+	try{
+        let query = `SELECT * from piliferable_code` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
+
+//Logistics Control Code dropdown
+exports.logisticsControlCode = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+    const returnLogisticsControlCode  = []
+
+	try{
+        let query = `SELECT * from logistics_control_code` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+				         
+        }    
+		console.log(result.rows);
+		   res.status(200).json({
+			                status: 200,
+			                error: false,
+			                message: 'Successfully get single data!',
+			                data: result.rows
+			            }); 
+            
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: []
+			});
+		//logger.error(err)
+}
+};
