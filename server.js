@@ -36,6 +36,7 @@ const eng4900Routes = require('./routes/eng4900');
 const employee = require('./routes/employee');
 const hra = require('./routes/hra');
 const officeSymbol = require('./routes/office-symbol');
+const eng4844Routes = require('./routes/eng4844');
 
 usersRoutes(app);
 handleError(app);
@@ -46,6 +47,7 @@ eng4900Routes(app);
 employee(app);
 hra(app);
 officeSymbol(app);
+eng4844Routes(app);
 
 app.listen(port);
 console.log('Started');
