@@ -280,60 +280,68 @@ exports.add = async function(req, res) {
 
 //!UPDATE EQUIPMENT DATA
 exports.update = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
+	let columnErrors = {rows:{},errorFound:false}
+
 	try{
 		const {changes} = req.body.params
-		const connection =  await oracledb.getConnection(dbConfig);
-		let columnErrors = {}
-		let error = false;
 
+		console.log(changes)
 		for(const row in changes){
+			console.log(typeof row)
 			if(changes.hasOwnProperty(row)) {
-				columnErrors[row] = {}
+				columnErrors.rows[row] = {}
 				const {newData,oldData} = changes[row];
 				const cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
 				let cols = ''
 
-				const uniqueCols = ['bar_tag_num']
-				for(const col of uniqueCols){
-					if(keys.includes(col)){
-						//console.log(col)
-						let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
-						if(result.rows.length > 0){
-							console.log('equipment exists')
-							error = true;
-							columnErrors[row][col]='data exists in database.'
-						}
-					}
-				}
+				//console.log(cells.new)
+				if(keys.length > 0){
+					//console.log('here0')
+					const uniqueCols = ['bar_tag_num']
+					for(const col of uniqueCols){
+						//console.log('here1')
 
-				if(Object.keys(columnErrors[row]).length != 0){
-					for(let i=0; i<keys.length; i++){
-						if(keys[i] != 'id'){
-							const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-							const comma = i ? ', ': ''
-							cols = cols + comma + col_name + ' = :' + keys[i]
-						}else{
-							delete cells.new.id
+						if(keys.includes(col)){
+							//console.log('here2')
+							let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
+							//console.log(result)
+							if(result.rows.length > 0){
+								console.log('equipment exists')
+								columnErrors.errorFound = true;
+								columnErrors.rows[row][col]='data exists in database.'
+							}
 						}
 					}
+
+					//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
+
+					if(Object.keys(columnErrors.rows[row]).length == 0){
+						for(let i=0; i<keys.length; i++){
+							if(keys[i] != 'id'){
+								const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+								const comma = i ? ', ': ''
+								cols = cols + comma + col_name + ' = :' + keys[i]
+							}else{
+								delete cells.new.id
+							}
+						}
+			
+						let query = `UPDATE EQUIPMENT SET ${cols}
+									WHERE ID = ${cells.old.id}`
+					
+						//console.log(query)
 		
-					let query = `UPDATE EQUIPMENT SET ${cols}
-								WHERE ID = ${cells.old.id}`
-				
-					//console.log(query)
-	
-					let result = await connection.execute(query,cells.new,{autoCommit:false})
-					console.log(result)
+						let result = await connection.execute(query,cells.new,{autoCommit:true})
+						console.log(result)
+					}
 				}
 			}
 		}
 
-		if(error){
+		if(columnErrors.errorFound){
 			connection.close()//don't save changes if error is found.
-		}else{
-			//connection.commit()
-			connection.close()
 		}
 		
 		res.status(200).json({
@@ -357,9 +365,9 @@ exports.update = async function(req, res) {
 
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		const {changes} = req.body.params
-		const connection =  await oracledb.getConnection(dbConfig);
 		let ids = ''
 		//console.log(changes)
 		for(const row in changes){

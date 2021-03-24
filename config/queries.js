@@ -49,12 +49,23 @@ module.exports = {
 	ON e.OFFICE_SYMBOL = o.id`,
 	eng4900_losingHra:`(SELECT h.hra_num as losing_hra_num,
 		e.first_name as losing_hra_first_name,
-		e.last_name as losing_hra_last_name
+		e.last_name as losing_hra_last_name,
+		e.work_phone as losing_hra_work_phone,
+        o.alias as losing_hra_os_alias
 		from hra h, employee e
-		where h.employee_id = e.id)`,
+        LEFT JOIN office_symbol o
+        on e.office_symbol = o.id
+        WHERE h.employee_id = e.id)`,
 	eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
 		e.first_name as gaining_hra_first_name,
-		e.last_name as gaining_hra_last_name
+		e.last_name as gaining_hra_last_name,
+        DECODE(e.work_phone, NULL, '(   )    -    ', 
+        '(' || SUBSTR(e.work_phone, 0, 3) || ') ' || SUBSTR(e.work_phone, 4, 3) ||
+        ' - ' || SUBSTR(e.work_phone, 7, 4)
+        ) as gaining_hra_work_phone,
+        o.alias as gaining_hra_os_alias
 		from hra h, employee e
-		where h.employee_id = e.id)`
+        LEFT JOIN office_symbol o
+        on e.office_symbol = o.id
+        WHERE h.employee_id = e.id)`
   };

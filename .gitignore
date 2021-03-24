@@ -1,2 +1,5 @@
 .env 
 node_modules/
+tools/csv-parser/*.json
+!tools/csv-parser/csv-files/.gitkeep
+*.csv
