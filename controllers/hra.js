@@ -4,15 +4,22 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol} = require('../config/queries')
+const {employee_officeSymbol,hra_employee} = require('../config/queries')
 
+const noReplaceCols = ['hra_num']
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute(`SELECT * FROM hra, (${employee_officeSymbol}) e where hra.employee_id = e.id ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
-		result.rows = propNamesToLowerCase(result.rows)
+		let result =  await connection.execute(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		
+		console.log(hra_employee)
+
+		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
+		if (result.rows.length > 0) {
+			result.rows = propNamesToLowerCase(result.rows)
+		}
 
 		res.status(200).json({
 			status: 200,
@@ -37,7 +44,10 @@ exports.index = async function(req, res) {
 exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let result =  await connection.execute(`SELECT * FROM HRA WHERE hra_num = :0 ORDER BY FIRST_NAME,LAST_NAME`,[req.params.id],dbSelectOptions)
+		let result =  await connection.execute(`${hra_employee}
+												WHERE hra_num = :0
+												ORDER BY FIRST_NAME,LAST_NAME`,[req.params.hra_hum],dbSelectOptions)
+		
 
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
@@ -69,7 +79,7 @@ exports.search = async function(req, res) {
 	try{
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
-			const db_col_name = `LOWER(TO_CHAR(${parameter}))`
+			const db_col_name = `LOWER(TO_CHAR(${(!noReplaceCols.includes(parameter) ? parameter.replace('hra_',''): parameter)}))`
 
 			if(db_col_name != undefined){
 				const db_col_value = req.body[parameter]
@@ -161,7 +171,7 @@ exports.add = async function(req, res) {
 				console.log(keys)
 				for(let i=0; i<keys.length; i++){
 						const comma = i && cols ? ', ': ''
-						cols = cols + comma + keys[i]
+						cols = cols + comma + (!noReplaceCols.includes(keys[i]) ? keys[i].replace('hra_',''): keys[i])
 						vals = vals + comma + ' :'+ keys[i]
 				}
 
@@ -202,14 +212,15 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				let cols = ''
 
+				console.log(cells.old)
                 if(keys.length != 0){
                     for(let i=0; i<keys.length; i++){
 						const comma = i && cols ? ', ': ''
-						cols = cols + comma + keys[i] + ' = :' + keys[i]
+						cols = cols + comma + (!noReplaceCols.includes(keys[i]) ? keys[i].replace('hra_','') : keys[i]) + ' = :' + keys[i]
                     }
         
                     let query = `UPDATE HRA SET ${cols}
-                                WHERE EMPLOYEE_ID = ${cells.old.id}`
+                                WHERE hra_num = ${cells.old.hra_num}`
 
                     console.log(query)
                     let result = await connection.execute(query,cells.new,{autoCommit:true})
@@ -244,8 +255,8 @@ exports.destroy = async function(req, res) {
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.id],{autoCommit:true})
-				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
+				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:false})
+				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.hra_employee_id
 				console.log(result)
 			}
 		}

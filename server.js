@@ -37,6 +37,7 @@ const employee = require('./routes/employee');
 const hra = require('./routes/hra');
 const officeSymbol = require('./routes/office-symbol');
 const eng4844Routes = require('./routes/eng4844');
+const changeHistoryRoutes = require('./routes/change-history');
 
 usersRoutes(app);
 handleError(app);
@@ -48,6 +49,7 @@ employee(app);
 hra(app);
 officeSymbol(app);
 eng4844Routes(app);
+changeHistoryRoutes(app)
 
 app.listen(port);
 console.log('Started');

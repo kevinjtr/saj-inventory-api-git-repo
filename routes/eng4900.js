@@ -7,7 +7,7 @@ module.exports = function(app) {
 	//!GET
 	//app.route('/eng4900').get(controller.index);
 
-	//app.route('/eng4900/:id').get(controller.getById);
+	app.route('/eng4900/:id').get(controller.getById);
 
 	app.route('/eng4900/search').post(controller.search);
 	//!POST

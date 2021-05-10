@@ -17,6 +17,27 @@ const dbSelectOptions = {
     // fetchArraySize:   100                 // internal buffer allocation size for tuning
 	};
 
+const newQuerySelById = `SELECT
+		f.id as form_id,
+		ra.alias as REQUESTED_ACTION,
+		f.LOSING_HRA as losing_hra_num,
+		l_hra.losing_hra_first_name,
+		l_hra.losing_hra_last_name,
+		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_work_phone,
+		f.GAINING_HRA as gaining_hra_num,
+		g_hra.gaining_hra_first_name,
+		g_hra.gaining_hra_last_name,
+		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_work_phone,
+		f.DATE_CREATED,
+		f.FOLDER_LINK,
+		f.equipment_group_id
+		from form_4900 f, requested_action ra,
+		${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
+
+		const newQuerySelById2 = `SELECT * FROM EQUIPMENT_GROUP eg, EQUIPMENT eq WHERE eq.id = eg.equipment_id and eg.equipment_group_id = :0`
 //!SELECT * FROM form_4900
 exports.index = async function(req, res) {
 
@@ -42,42 +63,9 @@ exports.index = async function(req, res) {
 
 //!SELECT form_4900 BY ID
 exports.getById = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
-	// try{
-	// 	let result =  await connection.execute(`SELECT * FROM form_4900 WHERE id = :0`,[req.params.id],dbSelectOptions)
-	// 	console.log('getid',result)
-	// 	if (result.rows.length > 0) {
-	// 		result.rows = result.rows.map(function(r){
-	// 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-	// 			return r;
-	// 		})
-	// 		res.status(200).json({
-	// 			status: 200,
-	// 			error: false,
-	// 			message: 'Successfully get single data!',
-	// 			data: result.rows
-	// 		});
-	// 	} else {
-	// 		res.status(400).json({
-	// 			status: 400,
-	// 			error: true,
-	// 			message: 'No data found!',
-	// 			data: result.rows
-	// 		});
-	// 	}
-	// }catch(err){
-	// 	console.log(err)
-	// 	//logger.error(err)
-	// }
-};
-
-//!SELECT form_4900 BY FIELDS DATA
-exports.search = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-	const forms = {}
-
-	try{				
-        let query = `SELECT 
+	const connection =  await oracledb.getConnection(dbConfig);
+	try{
+		let query = `SELECT 
         f.id as form_id,
         ra.alias as REQUESTED_ACTION,
 		f.LOSING_HRA as losing_hra_num,
@@ -107,8 +95,110 @@ exports.search = async function(req, res) {
             e.INDIVIDUAL_ROR_PROP , 
             e.ITEM_TYPE , 
             e.USER_EMPLOYEE_ID
-            from form_4900 f, equipment_group eg, equipment e, requested_action ra, ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
-        where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num`
+			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
+			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
+		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
+
+		 //console.log(query)
+		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
+
+		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
+
+		//console.log(result2.rows[0].EQUIPMENT_GROUP_ID)
+		//console.log('getid',result)
+		if (result.rows.length > 0) {
+
+			result.rows = propNamesToLowerCase(result.rows)
+			result.rows[0].equipment_group = []
+			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
+
+			if(eg_result.rows.length > 0){
+				eg_result.rows = propNamesToLowerCase(eg_result.rows)
+				result.rows[0].equipment_group = eg_result.rows
+				//console.log(result.rows[0])
+	
+				
+	
+				//console.log(`returning ${result.rows.length} rows`)
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully get single data!',//return form and bartags.
+					data: result.rows[0]
+				});
+			}
+
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully get single data!',//return form and no bartags.
+				data: result.rows[0]
+			});
+		}
+
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: null
+		});
+	}catch(err){
+		console.log(err)
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: null
+		});
+		//logger.error(err)
+	}
+};
+
+//!SELECT form_4900 BY FIELDS DATA
+exports.search = async function(req, res) {
+    const connection =  await oracledb.getConnection(dbConfig);
+	const forms = {}
+
+	const {id} = req.body.fields
+	console.log(id?id:false)
+
+	try{				
+        let query = `SELECT 
+        f.id as form_id,
+        ra.alias as REQUESTED_ACTION,
+		f.LOSING_HRA as losing_hra_num,
+		l_hra.losing_hra_first_name,
+		l_hra.losing_hra_last_name,
+		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_work_phone,
+		f.GAINING_HRA as gaining_hra_num,
+		g_hra.gaining_hra_first_name,
+		g_hra.gaining_hra_last_name,
+		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_work_phone,
+        f.DATE_CREATED,
+        f.FOLDER_LINK,
+        eg.EQUIPMENT_GROUP_ID,
+        e.id as EQUIPMENT_ID, 
+            e.BAR_TAG_NUM , 
+            e.CATALOG_NUM , 
+            e.BAR_TAG_HISTORY_ID , 
+            e.MANUFACTURER , 
+            e."MODEL", 
+            e.CONDITION , 
+            e.SERIAL_NUM , 
+            e.ACQUISITION_DATE , 
+            e.ACQUISITION_PRICE , 
+            e.DOCUMENT_NUM, 
+            e.INDIVIDUAL_ROR_PROP , 
+            e.ITEM_TYPE , 
+            e.USER_EMPLOYEE_ID
+			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
+			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
+		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num ${id? `and f.id = ${id}`:''}`
+
 
         let result =  await connection.execute(query,{},dbSelectOptions)
 

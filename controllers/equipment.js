@@ -7,6 +7,8 @@ const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 
+const BLANKS_DEFAULT = 'includeBlanks'
+
 const eqIncludes = {
 	'includes':'LIKE',
 	'excludes':'NOT LIKE',
@@ -20,10 +22,28 @@ const eqBlanks = {
 	'onlyBlanks':'='
 }
 
+const blankAndOr = {
+	'includeBlanks':'OR',
+	'excludeBlanks':'AND',
+	'onlyBlanks':'OR',
+}
+
+const blankNull = {
+	'=':'IS',
+	'!=':'IS NOT',
+}
+
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
 
-const andOR = {
+const andOR_single = {
+	'includes':and_,
+	'excludes':and_,
+	'equals':and_,
+	'notEquals':and_
+}
+
+const andOR_multiple = {
 	'includes':or_,
 	'excludes':and_,
 	'equals':or_,
@@ -70,7 +90,7 @@ exports.getById = async function(req, res) {
 												on eq_emp.hra_num = hra_emp.hra_num
 												WHERE id = :0`,[req.params.id],dbSelectOptions)
 
-		console.log('getid',result)
+		//console.log('getid',result)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 
@@ -112,8 +132,10 @@ exports.search = async function(req, res) {
 		const {fields,options} = req.body;
 		//console.log(options)
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
-//console.log(searchCriteria)
+		//console.log(searchCriteria)
 		for(const parameter of searchCriteria){
+			//parameter = parameter.replace(/[0-9]/g,'')
+			console.log(parameter)
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
 			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 
@@ -128,8 +150,8 @@ exports.search = async function(req, res) {
 
 					for(let i=0; i<search_values.length;i++){
 						//const operator = isStringColumn ? 'LIKE' : '='
-						console.log('in'+i)
-						const op_chooser = (i == 0 ? and_ : andOR[options.includes[parameter]])
+						//console.log('in'+i)
+						const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
 						const operator = op_chooser(query_search)
 						const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
 
@@ -163,7 +185,9 @@ exports.search = async function(req, res) {
 				}else{
 					//const operator = isStringColumn ? 'LIKE' : '='
 					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-					query_search = query_search.concat(`${andOR[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+
+					//console.log(val,query_search)
 					//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
 				}
 			}
@@ -179,10 +203,14 @@ exports.search = async function(req, res) {
 		// }
 
 		for(const parameter in options.blanks){
+			//if(option.blanks[parameter] != BLANKS_DEFAULT){
+				//parameter = parameter.replace(/[0-9]/g,'')
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
 			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 			const blankOperator = eqBlanks[options.blanks[parameter]]
-			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankOperator} null OR ${db_col_name} ${blankOperator} '' OR ${db_col_name} ${blankOperator} ' ')` : query_search
+			const and_OR = blankAndOr[options.blanks[parameter]]
+			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
+			//}
 		}
 		//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
 
@@ -192,8 +220,12 @@ exports.search = async function(req, res) {
 						on eq_emp.hra_num = hra_emp.hra_num 
 						${query_search != '' ? 'WHERE': ''} ${query_search}`
 
+		let queryPrint = `SELECT * from (hra_employee) hra_emp 
+		RIGHT JOIN (equipment_employee) eq_emp 
+		on eq_emp.hra_num = hra_emp.hra_num 
+		${query_search != '' ? 'WHERE': ''} ${query_search}`
 
-		console.log(query)
+		//console.log(query)
 		let resultEquipment =  await connection.execute(`${query}`,{},dbSelectOptions)
 		
 		if (resultEquipment.rows.length > 0) {
@@ -237,7 +269,7 @@ exports.add = async function(req, res) {
 		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				console.log(row)
+				//console.log(row)
 				const {newData} = changes[row];
 				const keys = Object.keys(newData)
 				let cols = ''
@@ -255,9 +287,9 @@ exports.add = async function(req, res) {
 				}
 
 				const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
-				console.log(query)
+				//console.log(query)
 
-				let result = await connection.execute(query,newData,{autoCommit:false})
+				let result = await connection.execute(query,newData,{autoCommit:true})
 				console.log(result)
 			}
 		}
@@ -286,9 +318,9 @@ exports.update = async function(req, res) {
 	try{
 		const {changes} = req.body.params
 
-		console.log(changes)
+		//console.log(changes)
 		for(const row in changes){
-			console.log(typeof row)
+			//console.log(typeof row)
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
 				const {newData,oldData} = changes[row];
@@ -308,7 +340,7 @@ exports.update = async function(req, res) {
 							let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
 							//console.log(result)
 							if(result.rows.length > 0){
-								console.log('equipment exists')
+								//console.log('equipment exists')
 								columnErrors.errorFound = true;
 								columnErrors.rows[row][col]='data exists in database.'
 							}
