@@ -10,6 +10,7 @@ module.exports = function(app) {
 	app.route('/eng4900/:id').get(controller.getById);
 
 	app.route('/eng4900/search').post(controller.search);
+	app.route('/eng4900/search2').post(controller.search2);
 	//!POST
 	//app.route('/eng4900').post(usersController.verifyToken, controller.add);
 	//app.route('/eng4900').post(controller.add);

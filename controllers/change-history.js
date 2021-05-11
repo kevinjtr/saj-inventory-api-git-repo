@@ -58,7 +58,8 @@ exports.equipment = async function(req, res) {
         e.last_name employee_last_name,
         e.TITLE as employee_title,
         e.OFFICE_SYMBOL as employee_office_symbol,
-        e.WORK_PHONE as employee_work_phone,
+		e.WORK_PHONE as employee_work_phone,
+		eh.deleted,
         eh.updated_date
         FROM equipment_history eh
         LEFT JOIN employee e
@@ -104,7 +105,8 @@ exports.hra = async function(req, res) {
             e.last_name hra_last_name,
             e.TITLE as hra_title,
             e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
-            e.WORK_PHONE as hra_work_phone,
+			e.WORK_PHONE as hra_work_phone,
+			hh.deleted,
             hh.updated_date
             FROM hra_history hh
             LEFT JOIN (${employee_}) e 
@@ -147,7 +149,8 @@ exports.employee = async function(req, res) {
             EH.TITLE,
             EH.OFFICE_SYMBOL,
             EH.WORK_PHONE,
-            O.ALIAS as OFFICE_SYMBOL_ALIAS,
+			O.ALIAS as OFFICE_SYMBOL_ALIAS,
+			EH.DELETED,
             EH.UPDATED_DATE
         FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID 
         ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
@@ -206,7 +209,8 @@ exports.eng4900 = async function(req, res) {
             e.DOCUMENT_NUM, 
             e.INDIVIDUAL_ROR_PROP , 
             e.ITEM_TYPE , 
-            e.USER_EMPLOYEE_ID,
+			e.USER_EMPLOYEE_ID,
+			fh.deleted,
             fh.updated_date
 			from form_4900_history fh, equipment_group eg, equipment e, requested_action ra,
 			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra

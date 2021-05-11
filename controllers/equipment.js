@@ -6,32 +6,34 @@ const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
+const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
+// const {and_, or_,andOR_single, andOR_multiple } = require('../config/functions')
 
-const BLANKS_DEFAULT = 'includeBlanks'
+// const BLANKS_DEFAULT = 'includeBlanks'
 
-const eqIncludes = {
-	'includes':'LIKE',
-	'excludes':'NOT LIKE',
-	'equals':'=',
-	'notEquals':'!='
-}
+// const searchOptions = {
+// 	'includes':'LIKE',
+// 	'excludes':'NOT LIKE',
+// 	'equals':'=',
+// 	'notEquals':'!='
+// }
 
-const eqBlanks = {
-	'includeBlanks':'',
-	'excludeBlanks':'!=',
-	'onlyBlanks':'='
-}
+// const searchBlanks = {
+// 	'includeBlanks':'',
+// 	'excludeBlanks':'!=',
+// 	'onlyBlanks':'='
+// }
 
-const blankAndOr = {
-	'includeBlanks':'OR',
-	'excludeBlanks':'AND',
-	'onlyBlanks':'OR',
-}
+// const blankAndOr = {
+// 	'includeBlanks':'OR',
+// 	'excludeBlanks':'AND',
+// 	'onlyBlanks':'OR',
+// }
 
-const blankNull = {
-	'=':'IS',
-	'!=':'IS NOT',
-}
+// const blankNull = {
+// 	'=':'IS',
+// 	'!=':'IS NOT',
+// }
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -130,7 +132,7 @@ exports.search = async function(req, res) {
 
 	try{
 		const {fields,options} = req.body;
-		//console.log(options)
+		console.log(options)
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 		//console.log(searchCriteria)
 		for(const parameter of searchCriteria){
@@ -142,7 +144,7 @@ exports.search = async function(req, res) {
 			if(db_col_name != undefined){
 				const db_col_value = fields[parameter]
 				const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
-				const includesOperator = eqIncludes[options.includes[parameter]]
+				const includesOperator = searchOptions[options.includes[parameter]]
 				const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
 
 				if(db_col_value.includes(';')){
@@ -185,6 +187,7 @@ exports.search = async function(req, res) {
 				}else{
 					//const operator = isStringColumn ? 'LIKE' : '='
 					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
+					console.log(andOR_single[options.includes[parameter]],query_search)
 					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
 
 					//console.log(val,query_search)
@@ -207,7 +210,7 @@ exports.search = async function(req, res) {
 				//parameter = parameter.replace(/[0-9]/g,'')
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
 			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
-			const blankOperator = eqBlanks[options.blanks[parameter]]
+			const blankOperator = searchBlanks[options.blanks[parameter]]
 			const and_OR = blankAndOr[options.blanks[parameter]]
 			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
 			//}

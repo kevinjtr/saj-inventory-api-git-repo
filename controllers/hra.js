@@ -2,9 +2,9 @@
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
+const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol,hra_employee} = require('../config/queries')
+const {employee_officeSymbol, hra_employee} = require('../config/queries')
 
 const noReplaceCols = ['hra_num']
 //!SELECT * FROM HRA
@@ -223,7 +223,7 @@ exports.update = async function(req, res) {
                                 WHERE hra_num = ${cells.old.hra_num}`
 
                     console.log(query)
-                    let result = await connection.execute(query,cells.new,{autoCommit:true})
+                    let result = await connection.execute(query,cells.new,{autoCommit:false})
                     console.log(result)
                 }
 			}

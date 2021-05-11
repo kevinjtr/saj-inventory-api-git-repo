@@ -73,6 +73,7 @@ module.exports = {
 	eng4900_losingHra:`(SELECT h.hra_num as losing_hra_num,
 		e.first_name as losing_hra_first_name,
 		e.last_name as losing_hra_last_name,
+		e.first_name || ' ' || e.last_name as losing_hra_full_name,
 		e.work_phone as losing_hra_work_phone,
 		e.office_symbol as losing_hra_office_symbol
 		from hra h, employee e
@@ -92,6 +93,7 @@ module.exports = {
 	eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
 		e.first_name as gaining_hra_first_name,
 		e.last_name as gaining_hra_last_name,
+		e.first_name || ' ' || e.last_name as gaining_hra_full_name,
         e.work_phone as gaining_hra_work_phone,
         e.office_symbol as gaining_hra_office_symbol
 		from hra h, employee e
