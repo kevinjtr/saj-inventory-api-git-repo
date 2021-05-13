@@ -70,14 +70,15 @@ module.exports = {
     //     LEFT JOIN office_symbol o
     //     on e.office_symbol = o.id
 	// 	WHERE h.employee_id = e.id)`,
-	eng4900_losingHra:`(SELECT h.hra_num as losing_hra_num,
+	eng4900_losingHra:`SELECT h.hra_num as losing_hra_num,
 		e.first_name as losing_hra_first_name,
 		e.last_name as losing_hra_last_name,
 		e.first_name || ' ' || e.last_name as losing_hra_full_name,
 		e.work_phone as losing_hra_work_phone,
-		e.office_symbol as losing_hra_office_symbol
-		from hra h, employee e
-		WHERE h.employee_id = e.id)`,
+		e.office_symbol as losing_hra_office_symbol,
+		e.office_symbol_alias as losing_hra_os_alias
+		from hra h, (${employee}) e
+		WHERE h.employee_id = e.id`,
 	// eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
 	// 	e.first_name as gaining_hra_first_name,
 	// 	e.last_name as gaining_hra_last_name,
@@ -90,12 +91,13 @@ module.exports = {
     //     LEFT JOIN office_symbol o
     //     on e.office_symbol = o.id
 	//     WHERE h.employee_id = e.id)`
-	eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
+	eng4900_gainingHra:`SELECT h.hra_num as gaining_hra_num,
 		e.first_name as gaining_hra_first_name,
 		e.last_name as gaining_hra_last_name,
 		e.first_name || ' ' || e.last_name as gaining_hra_full_name,
         e.work_phone as gaining_hra_work_phone,
-        e.office_symbol as gaining_hra_office_symbol
-		from hra h, employee e
-        WHERE h.employee_id = e.id)`
+		e.office_symbol as gaining_hra_office_symbol,
+		e.office_symbol_alias as gaining_hra_os_alias
+		from hra h, (${employee}) e
+        WHERE h.employee_id = e.id`
   };

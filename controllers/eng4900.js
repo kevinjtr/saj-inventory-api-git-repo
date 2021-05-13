@@ -36,20 +36,22 @@ const newQuerySelById = `SELECT
 		l_hra.losing_hra_first_name,
 		l_hra.losing_hra_last_name,
 		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_os_alias,
 		l_hra.losing_hra_work_phone,
 		f.GAINING_HRA as gaining_hra_num,
 		g_hra.gaining_hra_first_name,
 		g_hra.gaining_hra_last_name,
 		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_os_alias,
 		g_hra.gaining_hra_work_phone,
 		f.DATE_CREATED,
 		f.FOLDER_LINK,
 		f.equipment_group_id
 		from form_4900 f, requested_action ra,
-		${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
 
-const newQuerySelById2 = `SELECT * FROM EQUIPMENT_GROUP eg, EQUIPMENT eq WHERE eq.id = eg.equipment_id and eg.equipment_group_id = :0`
+const newQuerySelById2 = `SELECT eg.*,eq.*, TO_CHAR(eq.acquisition_date,'mm/dd/yyyy') as acquisition_date_print FROM EQUIPMENT_GROUP eg, EQUIPMENT eq WHERE eq.id = eg.equipment_id and eg.equipment_group_id = :0`
 
 let queryForSearch = `SELECT 
 f.id as form_id,
@@ -84,7 +86,7 @@ e.id as EQUIPMENT_ID,
 	e.ITEM_TYPE , 
 	e.USER_EMPLOYEE_ID
 	from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-	 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+	( ${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
  and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num `
 //!SELECT * FROM form_4900
@@ -147,7 +149,7 @@ exports.getById = async function(req, res) {
             e.ITEM_TYPE , 
             e.USER_EMPLOYEE_ID
 			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+			 (${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
 		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
 
@@ -377,11 +379,13 @@ exports.search = async function(req, res) {
 		l_hra.losing_hra_first_name,
 		l_hra.losing_hra_last_name,
 		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_os_alias,
 		l_hra.losing_hra_work_phone,
 		f.GAINING_HRA as gaining_hra_num,
 		g_hra.gaining_hra_first_name,
 		g_hra.gaining_hra_last_name,
 		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_os_alias,
 		g_hra.gaining_hra_work_phone,
         f.DATE_CREATED,
         f.FOLDER_LINK,
@@ -401,9 +405,9 @@ exports.search = async function(req, res) {
             e.ITEM_TYPE , 
             e.USER_EMPLOYEE_ID
 			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
+			 (${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
-		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num ${id? `and f.id = ${id}`:''}`
+		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num ${id ? `and f.id = ${id}`:''}`
 
 
         let result =  await connection.execute(query,{},dbSelectOptions)

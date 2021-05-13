@@ -8,6 +8,8 @@ const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol} = require('../config/queries');
 
+const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','SYS_']
+
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
@@ -187,48 +189,67 @@ exports.add = async function(req, res) {
 //!UPDATE EQUIPMENT DATA
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+
 	try{
 		const {changes} = req.body.params
-		
+
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				console.log(row)
+
 				const {newData,oldData} = changes[row];
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
+				cells.update = {}
 				let cols = ''
+				
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
 
-				for(let i=0; i<keys.length; i++){
-					if(keys[i] != 'id'){
-						const comma = i ? ', ': ''
-						cols = cols + comma + keys[i] + ' = :' + keys[i]
-					}else{
-						delete cells.new.id
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+
+					for(let i=0; i<keys.length; i++){
+						if(col_names.includes(keys[i])){
+							const comma = i ? ', ': ''
+							cols = cols + comma + keys[i] + ' = :' + keys[i]
+							cells.update[keys[i]] = cells.new[keys[i]]
+						}
 					}
-				}
-	
-				let query = `UPDATE EMPLOYEE SET ${cols}
-							WHERE ID = ${cells.old.id}`
 
-				console.log(query)
-				let result = await connection.execute(query,cells.new,{autoCommit:true})
-				console.log(result)
+					let query = `UPDATE EMPLOYEE SET ${cols}
+								WHERE ID = ${cells.old.id}`
+
+					result = await connection.execute(query,cells.update,{autoCommit:false})
+					console.log(result)
+
+					connection.close()
+					return res.status(200).json({
+						status: 200,
+						error: false,
+						message: 'Successfully update data', //+ req.params.id,
+						data: [],//req.body
+						rowsAffected: result.rowsAffected ? result.rowsAffected : 0
+					});
+				}
 			}
 		}
 
-		res.status(200).json({
-			status: 200,
-			error: false,
-			message: 'Successfully update data with id: ', //+ req.params.id,
-			data: []//req.body
+		connection.close()
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'Cannot updated data.', //+ req.params.id,
+			data: [],//req.body
 		});
 	}catch(err){
 		console.log(err);
+		connection.close()
 
-		res.status(400).json({
+		return res.status(400).json({
 			status: 400,
 			error: true,
-			message: 'Cannot delete data with id: ' //+ req.params.id
+			message: 'Cannot update data.', //+ req.params.id
+			rowsAffected: 0
 		});
 	}
 };

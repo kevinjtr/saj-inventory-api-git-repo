@@ -9,31 +9,7 @@ const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 // const {and_, or_,andOR_single, andOR_multiple } = require('../config/functions')
 
-// const BLANKS_DEFAULT = 'includeBlanks'
-
-// const searchOptions = {
-// 	'includes':'LIKE',
-// 	'excludes':'NOT LIKE',
-// 	'equals':'=',
-// 	'notEquals':'!='
-// }
-
-// const searchBlanks = {
-// 	'includeBlanks':'',
-// 	'excludeBlanks':'!=',
-// 	'onlyBlanks':'='
-// }
-
-// const blankAndOr = {
-// 	'includeBlanks':'OR',
-// 	'excludeBlanks':'AND',
-// 	'onlyBlanks':'OR',
-// }
-
-// const blankNull = {
-// 	'=':'IS',
-// 	'!=':'IS NOT',
-// }
+const BANNED_COLS_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_']
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -132,7 +108,7 @@ exports.search = async function(req, res) {
 
 	try{
 		const {fields,options} = req.body;
-		console.log(options)
+		//console.log(options)
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 		//console.log(searchCriteria)
 		for(const parameter of searchCriteria){
@@ -329,8 +305,17 @@ exports.update = async function(req, res) {
 				const {newData,oldData} = changes[row];
 				const cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
+				cells.update = {}
 				let cols = ''
+				
+				// let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
+				// if(result.rows.length > 0){
+				// 	result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c)})
+				// 	let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
+
+
+				// }
 				//console.log(cells.new)
 				if(keys.length > 0){
 					//console.log('here0')
@@ -368,7 +353,7 @@ exports.update = async function(req, res) {
 					
 						//console.log(query)
 		
-						let result = await connection.execute(query,cells.new,{autoCommit:true})
+						result = await connection.execute(query,cells.new,{autoCommit:false})
 						console.log(result)
 					}
 				}
