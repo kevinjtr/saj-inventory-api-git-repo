@@ -9,6 +9,7 @@ const {employee_officeSymbol, hra_employee} = require('../config/queries')
 const noReplaceCols = ['hra_num']
 
 const BANNED_COLS_HRA = ['HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
@@ -181,7 +182,7 @@ exports.add = async function(req, res) {
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
 				console.log(query)
 
-				let result = await connection.execute(query,newData,{autoCommit:true})
+				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
 				console.log(result)
 			}
 		}
@@ -220,7 +221,7 @@ exports.update = async function(req, res) {
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'HRA'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
-					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA.includes(c)})
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
                     for(let i=0; i<keys.length; i++){
@@ -229,7 +230,7 @@ exports.update = async function(req, res) {
 						if(col_names.includes(key)){
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key + ' = :' + key
-							cells.update[key] = cells.new[key]
+							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[key]) : cells.new[key]
 						}
                     }
         
@@ -237,7 +238,7 @@ exports.update = async function(req, res) {
                                 WHERE hra_num = ${cells.old.hra_num}`
 
                     console.log(query)
-                    result = await connection.execute(query,cells.update,{autoCommit:false})
+                    result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					console.log(result)
 					
 					connection.close()
@@ -281,7 +282,7 @@ exports.destroy = async function(req, res) {
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:false})
+				let result = await connection.execute(`UPDATE HRA SET DELETED = 1 WHERE HRA_NUM = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.hra_employee_id
 				console.log(result)
 			}

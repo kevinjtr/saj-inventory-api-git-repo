@@ -36,6 +36,7 @@ const eng4900Routes = require('./routes/eng4900');
 const employee = require('./routes/employee');
 const hra = require('./routes/hra');
 const officeSymbol = require('./routes/office-symbol');
+const conditionRoutes = require('./routes/condition');
 const eng4844Routes = require('./routes/eng4844');
 const changeHistoryRoutes = require('./routes/change-history');
 
@@ -48,6 +49,7 @@ eng4900Routes(app);
 employee(app);
 hra(app);
 officeSymbol(app);
+conditionRoutes(app);
 eng4844Routes(app);
 changeHistoryRoutes(app)
 

@@ -9,7 +9,8 @@ const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 // const {and_, or_,andOR_single, andOR_multiple } = require('../config/functions')
 
-const BANNED_COLS_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_']
+const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -268,7 +269,7 @@ exports.add = async function(req, res) {
 				const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
 				//console.log(query)
 
-				let result = await connection.execute(query,newData,{autoCommit:true})
+				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
 				console.log(result)
 			}
 		}
@@ -295,7 +296,7 @@ exports.update = async function(req, res) {
 	let columnErrors = {rows:{},errorFound:false}
 
 	try{
-		const {changes} = req.body.params
+		const {changes,undo} = req.body.params
 
 		//console.log(changes)
 		for(const row in changes){
@@ -307,62 +308,69 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-				
-				// let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
-				// if(result.rows.length > 0){
-				// 	result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c)})
-				// 	let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-
-
-				// }
 				//console.log(cells.new)
-				if(keys.length > 0){
-					//console.log('here0')
-					const uniqueCols = ['bar_tag_num']
-					for(const col of uniqueCols){
-						//console.log('here1')
+				
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-						if(keys.includes(col)){
-							//console.log('here2')
-							let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
-							//console.log(result)
-							if(result.rows.length > 0){
-								//console.log('equipment exists')
-								columnErrors.errorFound = true;
-								columnErrors.rows[row][col]='data exists in database.'
+					//console.log(col_names,undo)
+
+					if(keys.length > 0){
+						//console.log('here0')
+						if(!undo){
+							const uniqueCols = ['bar_tag_num']
+							for(const col of uniqueCols){
+								//console.log('here1')
+	
+								if(keys.includes(col)){
+									//console.log('here2')
+									let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
+									//console.log(result)
+									if(result.rows.length > 0){
+										//console.log('equipment exists')
+										columnErrors.errorFound = true;
+										columnErrors.rows[row][col]='data exists in database.'
+									}
+								}
 							}
+						}
+	
+						//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
+	
+						if(Object.keys(columnErrors.rows[row]).length == 0){
+							
+							for(let i=0; i<keys.length; i++){
+								if(col_names.includes(keys[i])){
+									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+									const comma =  i && cols ? ', ': ''
+									cols = cols + comma + col_name + ' = :' + keys[i]
+									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+								}
+							}
+				
+							let query = `UPDATE EQUIPMENT SET ${cols}
+										WHERE ID = ${cells.old.id}`
+						
+							console.log(query)
+							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+							console.log(result)
 						}
 					}
 
-					//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
-
-					if(Object.keys(columnErrors.rows[row]).length == 0){
-						for(let i=0; i<keys.length; i++){
-							if(keys[i] != 'id'){
-								const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-								const comma = i ? ', ': ''
-								cols = cols + comma + col_name + ' = :' + keys[i]
-							}else{
-								delete cells.new.id
-							}
-						}
-			
-						let query = `UPDATE EQUIPMENT SET ${cols}
-									WHERE ID = ${cells.old.id}`
-					
-						//console.log(query)
-		
-						result = await connection.execute(query,cells.new,{autoCommit:false})
-						console.log(result)
-					}
 				}
+
+				//console.log(cells.new)
 			}
 		}
 
-		if(columnErrors.errorFound){
-			connection.close()//don't save changes if error is found.
-		}
+		//if(columnErrors.errorFound){
+			//connection.close()//don't save changes if error is found.
+		//}else if(undo){
+		connection.close()
+		//}
 		
 		res.status(200).json({
 			status: 200,
@@ -393,7 +401,7 @@ exports.destroy = async function(req, res) {
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {id} = changes[row].oldData
-				let result = await connection.execute(`DELETE from equipment WHERE id = :0`,[id],{autoCommit:false})
+				let result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
 				console.log(result)
 			}

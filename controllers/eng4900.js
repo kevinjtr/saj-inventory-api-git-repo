@@ -12,6 +12,14 @@ const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = re
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
+const printElements = (elements) => {
+	let str = ""
+	for(let i=0; i<elements.length; i++){
+		str = str + (i ? ',' : '') + elements[i]
+	}
+	return str
+}
+
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
 
@@ -70,6 +78,7 @@ g_hra.gaining_hra_office_symbol,
 g_hra.gaining_hra_work_phone,
 f.DATE_CREATED,
 f.FOLDER_LINK,
+f.DOCUMENT_SOURCE,
 eg.EQUIPMENT_GROUP_ID,
 e.id as EQUIPMENT_ID, 
 	e.BAR_TAG_NUM , 
@@ -307,7 +316,7 @@ exports.search2 = async function(req, res) {
 		let queryPrint = `${queryForSearch} 
 		${query_search != '' ? 'AND ': ''} ${query_search}`
 
-		console.log(query)
+		//console.log(query)
 		let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 
 		// if (resultEquipment.rows.length > 0) {
@@ -322,6 +331,12 @@ exports.search2 = async function(req, res) {
 		// 	});
 		// } else {
 		if(result.rows.length > 0){
+			const form_ids = result.rows.map(x => x.FORM_ID)
+			const ids_print = printElements(form_ids)
+			query = `${queryForSearch} AND F.ID IN (${ids_print})`
+			result =  await connection.execute(`${query}`,{},dbSelectOptions)
+			//console.log(result2.rows)
+
 			result.rows = propNamesToLowerCase(result.rows)
 			const uniqFormIds = uniq(result.rows.map(x => x.form_id))
 			
