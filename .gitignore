@@ -3,3 +3,8 @@ node_modules/
 tools/csv-parser/*.json
 !tools/csv-parser/csv-files/.gitkeep
 *.csv
+
+BulkPdf/data/*.xlsx
+BulkPdf/*.bulkpdf
+!BulkPdf/data/.gitkeep
+

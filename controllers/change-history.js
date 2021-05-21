@@ -49,7 +49,6 @@ exports.equipment = async function(req, res) {
         eh.ACQUISITION_DATE,
         eh.ACQUISITION_PRICE,
         eh.DOCUMENT_NUM,
-        eh.INDIVIDUAL_ROR_PROP,
         eh.ITEM_TYPE,
         eh.HRA_NUM,
         e.id as employee_id,
@@ -180,72 +179,62 @@ exports.employee = async function(req, res) {
 exports.eng4900 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let query = `SELECT 
-        fh.id as form_id,
-        ra.alias as REQUESTED_ACTION,
-		fh.LOSING_HRA as losing_hra_num,
+		let query = `SELECT
+		f.id as form_id,
+		ra.alias as REQUESTED_ACTION,
+		f.LOSING_HRA as losing_hra_num,
 		l_hra.losing_hra_first_name,
 		l_hra.losing_hra_last_name,
 		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_os_alias,
 		l_hra.losing_hra_work_phone,
-		fh.GAINING_HRA as gaining_hra_num,
+		f.GAINING_HRA as gaining_hra_num,
 		g_hra.gaining_hra_first_name,
 		g_hra.gaining_hra_last_name,
 		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_os_alias,
 		g_hra.gaining_hra_work_phone,
-        fh.DATE_CREATED,
-        fh.FOLDER_LINK,
-        eg.EQUIPMENT_GROUP_ID,
-        e.id as EQUIPMENT_ID, 
-            e.BAR_TAG_NUM , 
-            e.CATALOG_NUM , 
-            e.BAR_TAG_HISTORY_ID , 
-            e.MANUFACTURER , 
-            e."MODEL", 
-            e.CONDITION , 
-            e.SERIAL_NUM , 
-            e.ACQUISITION_DATE , 
-            e.ACQUISITION_PRICE , 
-            e.DOCUMENT_NUM, 
-            e.INDIVIDUAL_ROR_PROP , 
-            e.ITEM_TYPE , 
-			e.USER_EMPLOYEE_ID,
-			fh.deleted,
-            fh.updated_date
-			from form_4900_history fh, equipment_group eg, equipment e, requested_action ra,
-			 ${eng4900_losingHra} l_hra, ${eng4900_gainingHra} g_hra
-		where eg.equipment_group_id = fh.equipment_group_id and e.id = eg.equipment_id and ra.id = fh.requested_action
-		 and fh.losing_hra = l_hra.losing_hra_num and fh.gaining_hra = g_hra.gaining_hra_num`
+		f.DATE_CREATED,
+		f.FOLDER_LINK,
+		f.equipment_group_id,
+		f.expiration_date,
+		TO_CHAR(f.expiration_date,'mm/dd/yyyy') as expiration_date_print,
+		f.temporary_loan
+		from form_4900 f, requested_action ra,
+		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
+		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num`
 
 		 //console.log(query)
 		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
 
-		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
+		let result = await connection.execute(query,{},dbSelectOptions)
 
 		//console.log(result2.rows[0].EQUIPMENT_GROUP_ID)
 		//console.log('getid',result)
 		if (result.rows.length > 0) {
 
 			result.rows = propNamesToLowerCase(result.rows)
-			result.rows[0].equipment_group = []
-			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
 
-			if(eg_result.rows.length > 0){
-				eg_result.rows = propNamesToLowerCase(eg_result.rows)
-				result.rows[0].equipment_group = eg_result.rows
-				//console.log(result.rows[0])
+			// result.rows[0].equipment_group = []
+			// let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
+
+			// if(eg_result.rows.length > 0){
+			// 	eg_result.rows = propNamesToLowerCase(eg_result.rows)
+			// 	result.rows[0].equipment_group = eg_result.rows
+			// 	//console.log(result.rows[0])
 	
 				
 	
-				//console.log(`returning ${result.rows.length} rows`)
-				return res.status(200).json({
-					status: 200,
-					error: false,
-					message: 'Successfully get single data!',//return form and bartags.
-					data: result.rows[0]
-				});
-			}
+			// 	//console.log(`returning ${result.rows.length} rows`)
+			// 	return res.status(200).json({
+			// 		status: 200,
+			// 		error: false,
+			// 		message: 'Successfully get single data!',//return form and bartags.
+			// 		data: result.rows[0]
+			// 	});
+			// }
 
+			connection.close()
 			return res.status(200).json({
 				status: 200,
 				error: false,
@@ -254,19 +243,21 @@ exports.eng4900 = async function(req, res) {
 			});
 		}
 
+		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: null
+			data: []
 		});
 	}catch(err){
 		console.log(err)
+		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: null
+			data: []
 		});
 		//logger.error(err)
 	}

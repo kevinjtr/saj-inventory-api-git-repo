@@ -11,6 +11,7 @@ module.exports = function(app) {
 
 	app.route('/eng4900/search').post(controller.search);
 	app.route('/eng4900/search2').post(controller.search2);
+	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);
 	//!POST
 	//app.route('/eng4900').post(usersController.verifyToken, controller.add);
 	//app.route('/eng4900').post(controller.add);

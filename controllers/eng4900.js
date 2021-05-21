@@ -9,6 +9,7 @@ const {propNamesToLowerCase} = require('../tools/tools');
 const {eng4900_losingHra,eng4900_gainingHra} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
+const {handleData} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
@@ -36,30 +37,6 @@ const andOR_multiple = {
 	'equals':or_,
 	'notEquals':and_
 }
-
-const newQuerySelById = `SELECT
-		f.id as form_id,
-		ra.alias as REQUESTED_ACTION,
-		f.LOSING_HRA as losing_hra_num,
-		l_hra.losing_hra_first_name,
-		l_hra.losing_hra_last_name,
-		l_hra.losing_hra_office_symbol,
-		l_hra.losing_hra_os_alias,
-		l_hra.losing_hra_work_phone,
-		f.GAINING_HRA as gaining_hra_num,
-		g_hra.gaining_hra_first_name,
-		g_hra.gaining_hra_last_name,
-		g_hra.gaining_hra_office_symbol,
-		g_hra.gaining_hra_os_alias,
-		g_hra.gaining_hra_work_phone,
-		f.DATE_CREATED,
-		f.FOLDER_LINK,
-		f.equipment_group_id
-		from form_4900 f, requested_action ra,
-		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
-
-const newQuerySelById2 = `SELECT eg.*,eq.*, TO_CHAR(eq.acquisition_date,'mm/dd/yyyy') as acquisition_date_print FROM EQUIPMENT_GROUP eg, EQUIPMENT eq WHERE eq.id = eg.equipment_id and eg.equipment_group_id = :0`
 
 let queryForSearch = `SELECT 
 f.id as form_id,
@@ -91,13 +68,44 @@ e.id as EQUIPMENT_ID,
 	e.ACQUISITION_DATE , 
 	e.ACQUISITION_PRICE , 
 	e.DOCUMENT_NUM, 
-	e.INDIVIDUAL_ROR_PROP , 
 	e.ITEM_TYPE , 
 	e.USER_EMPLOYEE_ID
 	from form_4900 f, equipment_group eg, equipment e, requested_action ra,
 	( ${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
  and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num `
+
+
+const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM EQUIPMENT E LEFT JOIN CONDITION C ON E.CONDITION = C.ID`   
+
+const newQuerySelById = `SELECT
+		f.id as form_id,
+		ra.alias as REQUESTED_ACTION,
+		f.LOSING_HRA as losing_hra_num,
+		l_hra.losing_hra_first_name,
+		l_hra.losing_hra_last_name,
+		l_hra.losing_hra_office_symbol,
+		l_hra.losing_hra_os_alias,
+		l_hra.losing_hra_work_phone,
+		f.GAINING_HRA as gaining_hra_num,
+		g_hra.gaining_hra_first_name,
+		g_hra.gaining_hra_last_name,
+		g_hra.gaining_hra_office_symbol,
+		g_hra.gaining_hra_os_alias,
+		g_hra.gaining_hra_work_phone,
+		f.DATE_CREATED,
+		f.FOLDER_LINK,
+		f.equipment_group_id,
+		f.expiration_date,
+		TO_CHAR(f.expiration_date,'mm/dd/yyyy') as expiration_date_print,
+		f.temporary_loan
+		from form_4900 f, requested_action ra,
+		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
+		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
+
+const newQuerySelById2 = `SELECT eg.*,eq.*, TO_CHAR(eq.acquisition_date,'mm/dd/yyyy') as acquisition_date_print FROM EQUIPMENT_GROUP eg,
+							(${equipment_condition}) eq WHERE eq.id = eg.equipment_id and eg.equipment_group_id = :0`
+						 
 //!SELECT * FROM form_4900
 exports.index = async function(req, res) {
 
@@ -125,61 +133,38 @@ exports.index = async function(req, res) {
 exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let query = `SELECT 
-        f.id as form_id,
-        ra.alias as REQUESTED_ACTION,
-		f.LOSING_HRA as losing_hra_num,
-		l_hra.losing_hra_first_name,
-		l_hra.losing_hra_last_name,
-		l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
-		l_hra.losing_hra_os_alias,
-		l_hra.losing_hra_work_phone,
-		f.GAINING_HRA as gaining_hra_num,
-		g_hra.gaining_hra_first_name,
-		g_hra.gaining_hra_last_name,
-		g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as g_hra.gaining_hra_full_name,
-		g_hra.gaining_hra_os_alias,
-		g_hra.gaining_hra_work_phone,
-        f.DATE_CREATED,
-        f.FOLDER_LINK,
-        eg.EQUIPMENT_GROUP_ID,
-        e.id as EQUIPMENT_ID, 
-            e.BAR_TAG_NUM , 
-            e.CATALOG_NUM , 
-            e.BAR_TAG_HISTORY_ID , 
-            e.MANUFACTURER , 
-            e."MODEL", 
-            e.CONDITION , 
-            e.SERIAL_NUM , 
-            e.ACQUISITION_DATE , 
-            e.ACQUISITION_PRICE , 
-            e.DOCUMENT_NUM, 
-            e.INDIVIDUAL_ROR_PROP , 
-            e.ITEM_TYPE , 
-            e.USER_EMPLOYEE_ID
-			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-			 (${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
-		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0`
-
-		 //console.log(query)
-		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
-
 		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
 
-		//console.log(result2.rows[0].EQUIPMENT_GROUP_ID)
-		//console.log('getid',result)
 		if (result.rows.length > 0) {
-
 			result.rows = propNamesToLowerCase(result.rows)
+
+			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
+			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
+
+			console.log(g_keys)
+			const hra = {gaining:{},losing:{}}
+
+			for(const key of g_keys){
+				hra.gaining[key.replace('gaining_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
+			}
+
+			for(const key of l_keys){
+				hra.losing[key.replace('losing_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
+			}
+
 			result.rows[0].equipment_group = []
+			result.rows[0].hra = hra
+
+			//console.log(result.rows[0].equipment_group_id)
 			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
 
+			//console.log(eg_result)
 			if(eg_result.rows.length > 0){
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 				result.rows[0].equipment_group = eg_result.rows
 				//console.log(result.rows[0])
 	
+				handleData(result.rows[0])
 				
 	
 				//console.log(`returning ${result.rows.length} rows`)
@@ -316,7 +301,7 @@ exports.search2 = async function(req, res) {
 		let queryPrint = `${queryForSearch} 
 		${query_search != '' ? 'AND ': ''} ${query_search}`
 
-		//console.log(query)
+		console.log(query)
 		let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 
 		// if (resultEquipment.rows.length > 0) {
@@ -376,7 +361,6 @@ exports.search2 = async function(req, res) {
 	}
 };
 
-
 //!SELECT form_4900 BY FIELDS DATA
 exports.search = async function(req, res) {
     const connection =  await oracledb.getConnection(dbConfig);
@@ -416,7 +400,6 @@ exports.search = async function(req, res) {
             e.ACQUISITION_DATE , 
             e.ACQUISITION_PRICE , 
             e.DOCUMENT_NUM, 
-            e.INDIVIDUAL_ROR_PROP , 
             e.ITEM_TYPE , 
             e.USER_EMPLOYEE_ID
 			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
@@ -545,3 +528,58 @@ exports.destroy = async function(req, res) {
 	// 	console.log(err);
 	// }
 };
+
+//!SELECT form_4900 BY ID
+// exports.testPdfBuild = async function(req, res) {
+
+// 	const connection =  await oracledb.getConnection(dbConfig);
+// 	console.log('here')
+// 	try{
+// 		console.log(newQuerySelById)
+// 		let result = await connection.execute(newQuerySelById,[25],dbSelectOptions)
+
+		
+// 		if (result.rows.length > 0) {
+
+// 			result.rows = propNamesToLowerCase(result.rows)
+// 			result.rows[0].equipment_group = []
+// 			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
+
+// 			if(eg_result.rows.length > 0){
+// 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
+// 				result.rows[0].equipment_group = eg_result.rows
+
+// 				pdfFill.handleData(result.rows[0])
+
+// 				return res.status(200).json({
+// 					status: 200,
+// 					error: false,
+// 					message: 'Successfully get single data!',//return form and bartags.
+// 					data: result.rows[0]
+// 				});
+// 			}
+
+// 			return res.status(200).json({
+// 				status: 200,
+// 				error: false,
+// 				message: 'Successfully get single data!',//return form and no bartags.
+// 				data: result.rows[0]
+// 			});
+// 		}
+
+// 		return res.status(400).json({
+// 			status: 400,
+// 			error: true,
+// 			message: 'No data found!',
+// 			data: null
+// 		});
+// 	}catch(err){
+// 		console.log(err)
+// 		return res.status(400).json({
+// 			status: 400,
+// 			error: true,
+// 			message: 'No data found!',
+// 			data: null
+// 		});
+// 	}
+// };

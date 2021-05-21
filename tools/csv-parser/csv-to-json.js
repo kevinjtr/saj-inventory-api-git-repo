@@ -389,7 +389,7 @@ const AddEquipments = async (filterbyHraNumber) => {
                         new Date(equipment.PROP_ACQUISITION_DATE),
                         equipment.PROP_ACQUISITION_COST,
                         null,
-                        null,
+                        //null,
                         equipment.CATALOG_NOMINCLATURE ? equipment.CATALOG_NOMINCLATURE.replace(/\\/g, '') : null,
                         equipment.HRA_ID,
                         equipment.USER_EMPLOYEE_ID,
@@ -405,12 +405,11 @@ const AddEquipments = async (filterbyHraNumber) => {
                         SERIAL_NUM, 
                         ACQUISITION_DATE, 
                         ACQUISITION_PRICE, 
-                        DOCUMENT_NUM, 
-                        INDIVIDUAL_ROR_PROP, 
+                        DOCUMENT_NUM,
                         ITEM_TYPE, 
                         HRA_NUM, 
                         USER_EMPLOYEE_ID
-                    ) values (:0,:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13)`,options,{autoCommit:true})
+                    ) values (:0,:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)`,options,{autoCommit:true})
 
                     if(result.rowsAffected > 0){
                         const rowid = result.lastRowid

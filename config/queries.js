@@ -33,7 +33,6 @@ module.exports = {
 	eq.ACQUISITION_DATE,
 	eq.ACQUISITION_PRICE,
 	eq.DOCUMENT_NUM,
-	eq.INDIVIDUAL_ROR_PROP,
 	eq.ITEM_TYPE,
 	eq.HRA_NUM,
 	e.id as employee_id,
