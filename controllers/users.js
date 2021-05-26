@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
+const users = require('../config/users.json')
 // 	// here the query is executed
 //    });
 //const connection = require('../connect');
@@ -138,7 +139,23 @@ exports.register = async (req, res) => {
 // Authorization: Bearer <access_token>
 
 //! Verify Token
-exports.verifyToken = function verifyToken(req, res, next) {
+
+exports.verifyUser = function verifyToken(req, res, next) {
+	//! Get auth header value
+	const {edipi} = req.headers.cert;
+	console.log(edipi,typeof edipi !== 'undefined',users.map(x=>x.edipi).includes(edipi))
+	if (typeof edipi !== 'undefined') {
+		if(users.map(x=>x.edipi).includes(edipi)){
+			console.log('Succesfully!');
+			next();
+		}
+	} else {
+		//! Forbidden
+		res.status(400).send({message:'Forbiden call!!'});
+	}
+};
+
+exports.verifyToken = async function verifyToken(req, res, next) {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
 

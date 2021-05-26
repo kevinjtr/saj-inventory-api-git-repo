@@ -1,4 +1,7 @@
-
+this.submitForm({
+    cURL: "mailto:first.last@usace.army.mil?subject=Form Returned: " + this.documentFileName + "&Body=Form%20Returned%3A%20"+this.documentFileName.replace(' ','%20')+"%0A%0AThe%20attached%20file%20is%20the%20filled-out%20form.%20Please%20open%20it%20to%20review%20the%20data.%0A",
+    cSubmitAs: "PDF",
+});
 
 
 const today = (new Date()).toISOString().split('T')[0];

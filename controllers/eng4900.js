@@ -141,7 +141,7 @@ exports.getById = async function(req, res) {
 			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
 			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
 
-			console.log(g_keys)
+			//console.log(g_keys)
 			const hra = {gaining:{},losing:{}}
 
 			for(const key of g_keys){
@@ -301,7 +301,7 @@ exports.search2 = async function(req, res) {
 		let queryPrint = `${queryForSearch} 
 		${query_search != '' ? 'AND ': ''} ${query_search}`
 
-		console.log(query)
+		//console.log(query)
 		let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 
 		// if (resultEquipment.rows.length > 0) {
@@ -366,9 +366,9 @@ exports.search = async function(req, res) {
     const connection =  await oracledb.getConnection(dbConfig);
 	const forms = {}
 
-	console.log(req.body.fields)
+	//console.log(req.body.fields)
 	const {id} = req.body.fields
-	console.log(id?id:false)
+	//console.log(id?id:false)
 
 	try{				
         let query = `SELECT 

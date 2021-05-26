@@ -18,7 +18,7 @@ exports.index = async function(req, res) {
 	try{
 		let result =  await connection.execute(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		
-		console.log(hra_employee)
+		//console.log(hra_employee)
 
 		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
 		if (result.rows.length > 0) {
@@ -172,7 +172,7 @@ exports.add = async function(req, res) {
 				let cols = ''
 				let vals = ''
 
-				console.log(keys)
+				//console.log(keys)
 				for(let i=0; i<keys.length; i++){
 						const comma = i && cols ? ', ': ''
 						cols = cols + comma + (!noReplaceCols.includes(keys[i]) ? keys[i].replace('hra_',''): keys[i])
@@ -180,10 +180,10 @@ exports.add = async function(req, res) {
 				}
 
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
-				console.log(query)
+				//console.log(query)
 
 				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
-				console.log(result)
+				//console.log(result)
 			}
 		}
 
@@ -217,7 +217,7 @@ exports.update = async function(req, res) {
 				cells.update = {}
 				let cols = ''
 
-				console.log(cells.new)
+				//console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'HRA'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
@@ -237,9 +237,9 @@ exports.update = async function(req, res) {
                     let query = `UPDATE HRA SET ${cols}
                                 WHERE hra_num = ${cells.old.hra_num}`
 
-                    console.log(query)
+                    //console.log(query)
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-					console.log(result)
+					//console.log(result)
 					
 					connection.close()
 					return res.status(200).json({
@@ -284,7 +284,7 @@ exports.destroy = async function(req, res) {
 			if(changes.hasOwnProperty(row)) {
 				let result = await connection.execute(`UPDATE HRA SET DELETED = 1 WHERE HRA_NUM = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.hra_employee_id
-				console.log(result)
+				//console.log(result)
 			}
 		}
 

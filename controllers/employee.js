@@ -153,7 +153,7 @@ exports.add = async function(req, res) {
 				let cols = ''
 				let vals = ''
 
-				console.log(keys)
+				//console.log(keys)
 				for(let i=0; i<keys.length; i++){
 					if(keys[i] != 'id'){
 						const comma = i ? ', ': ''
@@ -165,10 +165,10 @@ exports.add = async function(req, res) {
 				}
 
 				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
-				console.log(query)
+				//console.log(query)
 
 				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
-				console.log(result)
+				//console.log(result)
 			}
 		}
 
@@ -221,7 +221,7 @@ exports.update = async function(req, res) {
 								WHERE ID = ${cells.old.id}`
 
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-					console.log(result)
+					//console.log(result)
 
 					connection.close()
 					return res.status(200).json({
@@ -267,7 +267,7 @@ exports.destroy = async function(req, res) {
 			if(changes.hasOwnProperty(row)) {
 				let result = await connection.execute(`UPDATE EMPLOYEE SET DELETED = 1 WHERE ID = :0`,[changes[row].oldData.id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				console.log(result)
+				//console.log(result)
 			}
 		}
 

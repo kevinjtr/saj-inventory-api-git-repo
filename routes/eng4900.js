@@ -2,7 +2,7 @@
 
 module.exports = function(app) {
 	const controller = require('../controllers/eng4900');
-	//const usersController = require('../controllers/users');
+	const usersController = require('../controllers/users');
 
 	//!GET
 	//app.route('/eng4900').get(controller.index);

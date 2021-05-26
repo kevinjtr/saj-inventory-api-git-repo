@@ -20,7 +20,7 @@ exports.index = async function(req, res) {
 
 	try{
 		let result =  await connection.execute('SELECT * FROM categories',{},dbSelectOptions)
-		console.log('index',result)
+		//console.log('index',result)
 		result.rows = result.rows.map(function(r){
 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
 			return r;
@@ -47,7 +47,7 @@ exports.getId = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * FROM categories WHERE id = :0`,[req.params.id],dbSelectOptions)
-		console.log('getid',result)
+		//console.log('getid',result)
 		if (result.rows.length > 0) {
 			result.rows = result.rows.map(function(r){
 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
@@ -106,7 +106,7 @@ exports.add = async function(req, res) {
 		const id = result.rows[0].ID ? result.rows[0].ID + 1 : 1
 
 		result =  await connection.execute(`INSERT INTO categories (id,name) values (:0,:1)`,[id,name],{autoCommit:true})
-		console.log(result)
+		//console.log(result)
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -152,9 +152,9 @@ exports.update = async function(req, res) {
 		});
 	} else {
 		try{
-			console.log(req.body)
+			//console.log(req.body)
 			let result =  await connection.execute(`UPDATE categories SET name = :0 where id = :1`,[ name, req.params.id ],{autoCommit:true})
-			console.log(result)
+			//console.log(result)
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -197,7 +197,7 @@ exports.destroy = async function(req, res) {
 
 	try{
 		let result =  await connection.execute(`DELETE from categories WHERE id = :0`,[req.params.id],{autoCommit:true})
-		console.log(result)
+		//console.log(result)
 		if (result.rowsAffected > 0) {
 			result.rows = result.rows.map(function(r){
 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});

@@ -7,6 +7,7 @@ const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
+const users = require('../config/users.json')
 // const {and_, or_,andOR_single, andOR_multiple } = require('../config/functions')
 
 const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
@@ -14,6 +15,16 @@ const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
+
+const rightPermision  = (edi) => {
+	if (typeof edi !== 'undefined') {
+		if(users.map(x=>x.edipi).includes(edi)){
+			return true
+		}
+	}
+
+	return false
+}
 
 const andOR_single = {
 	'includes':and_,
@@ -31,6 +42,7 @@ const andOR_multiple = {
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
+	const edit_rights = rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -46,7 +58,8 @@ exports.index = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get equipment data!',
-			data: result.rows
+			data: result.rows,
+			editable: edit_rights
 		});
 	}catch(err){
 		connection.close()
@@ -55,13 +68,15 @@ exports.index = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights
 		});
 	}
 };
 
 //!SELECT EQUIPMENT BY ID
 exports.getById = async function(req, res) {
+	const edit_rights = rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
@@ -78,7 +93,8 @@ exports.getById = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: result.rows
+				data: result.rows,
+				editable: edit_rights
 			});
 		} else {
 			connection.close()
@@ -86,7 +102,8 @@ exports.getById = async function(req, res) {
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: result.rows
+				data: result.rows,
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -96,7 +113,8 @@ exports.getById = async function(req, res) {
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: []
+				data: [],
+				editable: edit_rights
 			});
 		//logger.error(err)
 	}
@@ -104,9 +122,12 @@ exports.getById = async function(req, res) {
 
 //!SELECT EQUIPMENT BY FIELDS DATA
 exports.search = async function(req, res) {
+	console.log(req.headers.cert.edipi)
+	const edit_rights = rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
+	console.log(edit_rights)
 	try{
 		const {fields,options} = req.body;
 		//console.log(options)
@@ -114,7 +135,7 @@ exports.search = async function(req, res) {
 		//console.log(searchCriteria)
 		for(const parameter of searchCriteria){
 			//parameter = parameter.replace(/[0-9]/g,'')
-			console.log(parameter)
+			//console.log(parameter)
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
 			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 
@@ -164,7 +185,7 @@ exports.search = async function(req, res) {
 				}else{
 					//const operator = isStringColumn ? 'LIKE' : '='
 					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-					console.log(andOR_single[options.includes[parameter]],query_search)
+					//console.log(andOR_single[options.includes[parameter]],query_search)
 					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
 
 					//console.log(val,query_search)
@@ -216,7 +237,8 @@ exports.search = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: resultEquipment.rows
+				data: resultEquipment.rows,
+				editable: edit_rights
 			});
 		} else {
 			connection.close()
@@ -224,7 +246,8 @@ exports.search = async function(req, res) {
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: []
+				data: [],
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -234,7 +257,8 @@ exports.search = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights
 		});
 		//logger.error(err)
 	}
@@ -255,6 +279,7 @@ exports.add = async function(req, res) {
 				let cols = ''
 				let vals = ''
 
+				console.log(newData)
 				for(let i=0; i<keys.length; i++){
 					if(keys[i] != 'id'){
 						const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
@@ -269,8 +294,9 @@ exports.add = async function(req, res) {
 				const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
 				//console.log(query)
 
+				console.log(query)
 				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
-				console.log(result)
+				//console.log(result)
 			}
 		}
 		connection.close()
@@ -354,9 +380,9 @@ exports.update = async function(req, res) {
 							let query = `UPDATE EQUIPMENT SET ${cols}
 										WHERE ID = ${cells.old.id}`
 						
-							console.log(query)
+							//console.log(query)
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-							console.log(result)
+							//console.log(result)
 						}
 					}
 
@@ -403,7 +429,7 @@ exports.destroy = async function(req, res) {
 				const {id} = changes[row].oldData
 				let result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				console.log(result)
+				//console.log(result)
 			}
 		}
 
