@@ -4,18 +4,17 @@ module.exports = function(app) {
     //const controller = require('../controllers/change-history');
     
     const controller = require('../controllers/change-history');
-
-	//const usersController = require('../controllers/users');
+	const usersController = require('../controllers/users');
 
 	//!GET
 	//app.route('/eng4844').get(controller.index);
 
 	//app.route('/eng4844/:id').get(controller.getById);
 	
-	app.route('/change-history/equipment/').get(controller.equipment);
-    app.route('/change-history/hra/').get(controller.hra);
-    app.route('/change-history/employee/').get(controller.employee);
-    app.route('/change-history/eng4900/').get(controller.eng4900);
+	app.route('/change-history/equipment/').get(usersController.verifyUser,controller.equipment);
+    app.route('/change-history/hra/').get(usersController.verifyUser,controller.hra);
+    app.route('/change-history/employee/').get(usersController.verifyUser,controller.employee);
+    app.route('/change-history/eng4900/').get(usersController.verifyUser,controller.eng4900);
     //app.route('/change-history/eng4844/').get(controller.eng4844);
 
 	//!POST

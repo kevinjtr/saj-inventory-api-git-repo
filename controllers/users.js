@@ -140,19 +140,26 @@ exports.register = async (req, res) => {
 
 //! Verify Token
 
-exports.verifyUser = function verifyToken(req, res, next) {
+exports.verifyUser = async (req, res, next) => {
 	//! Get auth header value
 	const {edipi} = req.headers.cert;
-	console.log(edipi,typeof edipi !== 'undefined',users.map(x=>x.edipi).includes(edipi))
+	const connection =  await oracledb.getConnection(dbConfig);
+
+	//console.log(req.headers.cert)
 	if (typeof edipi !== 'undefined') {
-		if(users.map(x=>x.edipi).includes(edipi)){
-			console.log('Succesfully!');
+		let result =  await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+		connection.close()
+
+		if(result.rows.length > 0){
+			console.log(`Succesfully identified user: ${edipi}!`);
 			next();
+			return;
 		}
-	} else {
-		//! Forbidden
-		res.status(400).send({message:'Forbiden call!!'});
 	}
+
+	//! Forbidden
+	res.status(400).send({message:'Forbiden call!!'});
+	//console.log(connection.on())
 };
 
 exports.verifyToken = async function verifyToken(req, res, next) {

@@ -5,7 +5,7 @@ const dbConfig = require('../dbconfig.js');
 //const connection = require('../connect');
 const {propNamesToLowerCase} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {eng4900_losingHra,eng4900_gainingHra} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,user_rights} = require('../config/queries');
 
 const employee_ = `SELECT
 e.ID,
@@ -62,11 +62,13 @@ exports.equipment = async function(req, res) {
         eh.updated_date
         FROM equipment_history eh
         LEFT JOIN employee e
-        on eh.user_employee_id = e.id`
+		on eh.user_employee_id = e.id
+		LEFT JOIN (${user_rights}) ur
+		on ur.id = eh.updated_by`
     
 		let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
 												RIGHT JOIN (${equipment_employee_}) eh_emp
-												on eh_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
+												on eh_emp.hra_num = hra_emp.hra_num ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 		}
@@ -110,7 +112,7 @@ exports.hra = async function(req, res) {
             FROM hra_history hh
             LEFT JOIN (${employee_}) e 
             on hh.employee_id = e.id
-            ORDER BY UPDATED_DATE`,{},dbSelectOptions)
+            ORDER BY hh.UPDATED_DATE desc`,{},dbSelectOptions)
 
 		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
 		if (result.rows.length > 0) {
@@ -152,7 +154,7 @@ exports.employee = async function(req, res) {
 			EH.DELETED,
             EH.UPDATED_DATE
         FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID 
-        ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+        ORDER BY EH.FIRST_NAME,EH.LAST_NAME`,{},dbSelectOptions)
 
 		result.rows = propNamesToLowerCase(result.rows)
 

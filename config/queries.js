@@ -19,7 +19,13 @@ ON e.OFFICE_SYMBOL = o.id
 LEFT JOIN (${equipment_count.employee}) eec
 ON e.id = eec.user_employee_id`
 
+
+const user_rights = `SELECT u.id, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM USER_RIGHTS u
+LEFT JOIN EMPLOYEE e
+on u.employee_id = e.id`
+
 module.exports = {
+	user_rights:user_rights,
 	employee_officeSymbol: employee,
     equipment_employee: `SELECT
 	eq.ID,
@@ -44,7 +50,9 @@ module.exports = {
 	e.WORK_PHONE as employee_work_phone
 	FROM equipment eq
 	LEFT JOIN employee e
-    on eq.user_employee_id = e.id`,
+	on eq.user_employee_id = e.id
+	LEFT JOIN (${user_rights}) ur
+	on ur.id = eq.updated_by`,
 	hra_employee:`SELECT 
 	h.hra_num,
 	e.id as hra_employee_id,

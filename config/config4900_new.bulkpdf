@@ -4,7 +4,7 @@
   <Options>
     <DataSource>
       <Typ>Spreadsheet</Typ>
-      <Parameter>PATH\BulkPdf\data\data_to_pdf.xlsx</Parameter>
+      <Parameter>PATH\data_to_pdf.xlsx</Parameter>
     </DataSource>
     <PDF>
       <Filepath>PATH\forms\eng4900.pdf</Filepath>

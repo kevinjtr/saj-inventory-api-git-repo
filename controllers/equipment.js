@@ -3,28 +3,18 @@
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
+const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
+const {rightPermision} = require('./validation/tools/user-database')
 const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const users = require('../config/users.json')
-// const {and_, or_,andOR_single, andOR_multiple } = require('../config/functions')
-
-const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
+//const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
+const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
-
-const rightPermision  = (edi) => {
-	if (typeof edi !== 'undefined') {
-		if(users.map(x=>x.edipi).includes(edi)){
-			return true
-		}
-	}
-
-	return false
-}
 
 const andOR_single = {
 	'includes':and_,
@@ -42,7 +32,7 @@ const andOR_multiple = {
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
-	const edit_rights = rightPermision(req.headers.cert.edipi)
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -76,7 +66,7 @@ exports.index = async function(req, res) {
 
 //!SELECT EQUIPMENT BY ID
 exports.getById = async function(req, res) {
-	const edit_rights = rightPermision(req.headers.cert.edipi)
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
@@ -122,12 +112,12 @@ exports.getById = async function(req, res) {
 
 //!SELECT EQUIPMENT BY FIELDS DATA
 exports.search = async function(req, res) {
-	console.log(req.headers.cert.edipi)
-	const edit_rights = rightPermision(req.headers.cert.edipi)
+
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
-	console.log(edit_rights)
+	//console.log(edit_rights)
 	try{
 		const {fields,options} = req.body;
 		//console.log(options)
@@ -215,16 +205,18 @@ exports.search = async function(req, res) {
 		}
 		//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
 
+		const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
+		//x.replace('SELECT','Hello')
 
 		let query = `SELECT * from (${hra_employee}) hra_emp 
-						RIGHT JOIN (${equipment_employee}) eq_emp 
+						RIGHT JOIN (${newEquipmentEmployee}) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num 
-						${query_search != '' ? 'WHERE': ''} ${query_search}`
+						${query_search != '' ? 'WHERE': ''} ${query_search} ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name `
 
-		let queryPrint = `SELECT * from (hra_employee) hra_emp 
-		RIGHT JOIN (equipment_employee) eq_emp 
-		on eq_emp.hra_num = hra_emp.hra_num 
-		${query_search != '' ? 'WHERE': ''} ${query_search}`
+		// let queryPrint = `SELECT * from (hra_employee) hra_emp 
+		// RIGHT JOIN (equipment_employee) eq_emp 
+		// on eq_emp.hra_num = hra_emp.hra_num 
+		// ${query_search != '' ? 'WHERE': ''} ${query_search}`
 
 		//console.log(query)
 		let resultEquipment =  await connection.execute(`${query}`,{},dbSelectOptions)
@@ -264,13 +256,51 @@ exports.search = async function(req, res) {
 	}
 };
 
+
+const ColumnItemExists = async (connection,table_name,rowObj,col_names) => {
+
+	const keys = Object.keys(rowObj.data)
+	let return_obj = {errorFound:false,rows:{}}
+
+	if(keys.length > 0){
+		for(const col of col_names){
+			//console.log('here1')
+			if(keys.includes(col)){
+				//console.log(rowObj.data[col])
+				let result = await connection.execute(`SELECT ${col} FROM ${table_name} WHERE ${col} = :0`,[rowObj.data[col]],dbSelectOptions)
+				//console.log(`SELECT ${col} FROM ${table_name} WHERE ${col} = :0`,rowObj.data[col],rowObj.data)
+				if(result.rows.length > 0){
+					if(!return_obj.hasOwnProperty(rowObj.row)) {
+						return_obj.rows[rowObj.row] = {}
+					}
+					//console.log('equipment exists')
+					return_obj.errorFound = true;
+					return_obj.rows[rowObj.row][col]='data exists in database.'
+				}
+			}
+		}
+	}
+
+	return return_obj
+}
+
+const dbColumnNamesReFormat = (cols,table_name) => {
+	if(table_name == 'EQUIPMENT'){
+		return cols.map(x => x.COLUMN_NAME.toLowerCase().replace('user_','').replace('sys_nc00016$','hra_num'))
+	}
+
+	return cols
+}
+
 //!INSERT EQUIPMENT
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	let columnErrors = {rows:{},errorFound:false}
+	const {edipi} = req.headers.cert
 
 	try{
 		const {changes} = req.body.params
-		
+		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				//console.log(row)
@@ -278,32 +308,86 @@ exports.add = async function(req, res) {
 				const keys = Object.keys(newData)
 				let cols = ''
 				let vals = ''
+				let insert_obj = {}
 
-				console.log(newData)
-				for(let i=0; i<keys.length; i++){
-					if(keys[i] != 'id'){
-						const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-						const comma = i ? ', ': ''
-						cols = cols + comma + col_name
-						vals = vals + comma + ' :' + keys[i]
-					}else{
-						delete newData.id
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
+
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
+					let col_names = dbColumnNamesReFormat(result.rows,'EQUIPMENT')
+
+					if(keys.length > 0){
+						columnErrors = await ColumnItemExists(connection,"EQUIPMENT",{row:row,data:newData},["bar_tag_num"])
+	
+						if(!columnErrors.errorFound){
+							
+							for(let i=0; i<keys.length; i++){
+								if(col_names.includes(keys[i])){
+									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+									let comma =  i && cols ? ', ': ''
+									cols = cols + comma + col_name
+									vals = vals + comma + ':' + keys[i]
+									insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+
+									if(i == keys.length - 1 && typeof edipi != 'undefined'){
+										result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+										if(result.rows.length > 0){
+											const user_rights_id = result.rows[0].ID
+											comma = cols ? ', ': ''
+											cols = cols + comma + 'updated_by'
+											vals = vals + comma + ':' + 'updated_by'
+											insert_obj['updated_by'] = user_rights_id
+										}
+									}
+								}
+							}
+				
+							let query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
+						
+							//console.log(query,newData)
+							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+							//console.log(result)
+
+							connection.close()
+							return res.status(200).json({
+								status: 200,
+								error: false,
+								message: 'Successfully added new data!',
+								columnErrors : columnErrors
+							});
+						}
 					}
+
 				}
+				
 
-				const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
-				//console.log(query)
 
-				console.log(query)
-				let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
+				// console.log(newData)
+				// for(let i=0; i<keys.length; i++){
+				// 	if(keys[i] != 'id'){
+				// 		const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+				// 		const comma = i ? ', ': ''
+				// 		cols = cols + comma + col_name
+				// 		vals = vals + comma + ' :' + keys[i]
+				// 	}else{
+				// 		delete newData.id
+				// 	}
+				// }
+
+				// const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
+				// //console.log(query)
+
+				// console.log(query)
+				// let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
 				//console.log(result)
 			}
 		}
 		connection.close()
 		res.status(200).json({
 			status: 200,
-			error: false,
-			message: 'Successfully added new data!',
+			error: true,
+			message: 'Error adding new data!',
+			columnErrors: columnErrors
 		});
 	}catch(err){
 		connection.close()
@@ -320,6 +404,7 @@ exports.add = async function(req, res) {
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
+	const {edipi} = req.headers.cert
 
 	try{
 		const {changes,undo} = req.body.params
@@ -340,40 +425,36 @@ exports.update = async function(req, res) {
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
-					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+					let col_names = dbColumnNamesReFormat(result.rows,'EQUIPMENT')
 
-					//console.log(col_names,undo)
+					//console.log(col_names)
 
 					if(keys.length > 0){
 						//console.log('here0')
 						if(!undo){
-							const uniqueCols = ['bar_tag_num']
-							for(const col of uniqueCols){
-								//console.log('here1')
-	
-								if(keys.includes(col)){
-									//console.log('here2')
-									let result = await connection.execute(`SELECT ${col} FROM EQUIPMENT WHERE ${col} = :0`,[cells.new.bar_tag_num],dbSelectOptions)
-									//console.log(result)
-									if(result.rows.length > 0){
-										//console.log('equipment exists')
-										columnErrors.errorFound = true;
-										columnErrors.rows[row][col]='data exists in database.'
-									}
-								}
-							}
+							columnErrors = await ColumnItemExists(connection,"EQUIPMENT",{row:row,data:cells.new},["bar_tag_num"])
 						}
 	
 						//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
 	
-						if(Object.keys(columnErrors.rows[row]).length == 0){
+						if(!columnErrors.errorFound){
 							
 							for(let i=0; i<keys.length; i++){
 								if(col_names.includes(keys[i])){
 									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-									const comma =  i && cols ? ', ': ''
+									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name + ' = :' + keys[i]
 									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+								}
+
+								if(i == keys.length - 1 && typeof edipi != 'undefined'){
+									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+									if(result.rows.length > 0){
+										const user_rights_id = result.rows[0].ID
+										const comma =  cols ? ', ': ''
+										cols = cols + comma + 'updated_by = :updated_by'
+										cells.update['updated_by'] = user_rights_id
+									}
 								}
 							}
 				
@@ -420,6 +501,8 @@ exports.update = async function(req, res) {
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
+
 	try{
 		const {changes} = req.body.params
 		let ids = ''
@@ -427,7 +510,19 @@ exports.destroy = async function(req, res) {
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {id} = changes[row].oldData
-				let result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
+				let cols = ''
+
+				if(typeof edipi != 'undefined'){
+					let result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					if(result.rows.length > 0){
+						const user_rights_id = result.rows[0].ID
+						//comma =  cols ? ', ': ''
+						//cols = cols + comma + 'updated_by = :updated_by'
+						cols = `, UPDATED_BY = ${user_rights_id}`
+					}
+				}
+
+				let result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 ${cols} WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
 				//console.log(result)
 			}

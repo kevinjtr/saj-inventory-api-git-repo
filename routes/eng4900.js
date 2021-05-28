@@ -7,10 +7,10 @@ module.exports = function(app) {
 	//!GET
 	//app.route('/eng4900').get(controller.index);
 
-	app.route('/eng4900/:id').get(controller.getById);
+	app.route('/eng4900/:id').get(usersController.verifyUser,controller.getById);
 
-	app.route('/eng4900/search').post(controller.search);
-	app.route('/eng4900/search2').post(controller.search2);
+	app.route('/eng4900/search').post(usersController.verifyUser,controller.search);
+	app.route('/eng4900/search2').post(usersController.verifyUser,controller.search2);
 	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);
 	//!POST
 	//app.route('/eng4900').post(usersController.verifyToken, controller.add);

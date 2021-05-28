@@ -11,6 +11,7 @@ const logger = require('../services/logger');
 const allowedEDIPI=[1544978469, 1503957074];
 async function getUser(req, res) {
   
+  CONSOLE.LOG('USER ENTERED WEBSITE.')
   if(req.headers.cert && req.headers.cert.edipi) {
     try {
       //console.log(allowedEDIPI.includes(req.headers.cert.edipi))

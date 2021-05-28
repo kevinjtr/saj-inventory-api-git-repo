@@ -51,7 +51,7 @@ const officeSymbol = require('./routes/office-symbol');
 const conditionRoutes = require('./routes/condition');
 const eng4844Routes = require('./routes/eng4844');
 const changeHistoryRoutes = require('./routes/change-history');
-const user = require('./routes/user');
+//const user = require('./routes/user');
 
 usersRoutes(app);
 handleError(app);
@@ -65,7 +65,7 @@ officeSymbol(app);
 conditionRoutes(app);
 eng4844Routes(app);
 changeHistoryRoutes(app)
-user(app)
+//user(app)
 
 if(process.env.HTTPS === 'true') {
 	const fs = require('fs');

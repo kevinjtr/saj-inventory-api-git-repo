@@ -1,3 +1,5 @@
+const users = require('../config/users.json')
+
 module.exports = {
     propNamesToLowerCase: (rows) => {
       const returnRows = rows.map(function(r){
@@ -127,5 +129,5 @@ module.exports = {
       // Return the object of differences
       return diffs;
   
-    }
+    },    
   };
