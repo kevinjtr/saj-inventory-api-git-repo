@@ -51,6 +51,7 @@ const officeSymbol = require('./routes/office-symbol');
 const conditionRoutes = require('./routes/condition');
 const eng4844Routes = require('./routes/eng4844');
 const changeHistoryRoutes = require('./routes/change-history');
+const annualInventoryRoutes = require('./routes/annual-inventory');
 //const user = require('./routes/user');
 
 usersRoutes(app);
@@ -65,6 +66,7 @@ officeSymbol(app);
 conditionRoutes(app);
 eng4844Routes(app);
 changeHistoryRoutes(app)
+annualInventoryRoutes(app)
 //user(app)
 
 if(process.env.HTTPS === 'true') {
