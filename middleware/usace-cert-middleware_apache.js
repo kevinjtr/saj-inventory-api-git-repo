@@ -1,9 +1,10 @@
 const certUtils = require('./utils/certUtils_apache');
+const certTools = require('./utils/cert-tools');
 
 const usaceCertMiddleware = function (req, res, next) {
   if(req.get('SSL_CLIENT_CERT')!=='(null)' && typeof req.get('SSL_CLIENT_CERT') !== 'undefined') {
     const header = req.get('SSL_CLIENT_CERT');
-    const cert = certUtils.parseCert(header);
+	const cert = certUtils.parseCert(header);
     if(typeof cert !== 'undefined') {
       let certObj = {};
       certObj.originalcert= cert.toString('utf8');
@@ -20,6 +21,11 @@ const usaceCertMiddleware = function (req, res, next) {
       }else{
         certObj ={};
       }
+
+      if(typeof certObj != 'undefined' && Object.keys(certObj).length > 0) {
+        certTools.UpdateUserAccessHistory(certObj)
+      }
+      
       req.headers.cert = certObj;
     }
   }
@@ -27,11 +33,3 @@ const usaceCertMiddleware = function (req, res, next) {
 };
 
 module.exports = usaceCertMiddleware;
-
-// DEV CRED
-// req.cert = {
-//       originalcert: privateInfo.certInfo.original,
-//       cert: privateInfo.certInfo.cert,
-//       edipi: privateInfo.certInfo.edipi,
-//       cn: privateInfo.certInfo.cn
-//     }
