@@ -4,12 +4,19 @@ const equipment_count = {
 	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM EQUIPMENT GROUP BY HRA_NUM`
 }
 
+const user_rights = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM USER_RIGHTS u
+LEFT JOIN EMPLOYEE e
+on u.employee_id = e.id`
+
+const user_rights_all_cols = `SELECT u.*, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM USER_RIGHTS u
+LEFT JOIN EMPLOYEE e
+on u.employee_id = e.id`
+
 const employee = `SELECT
 e.ID,
 e.FIRST_NAME,
 e.LAST_NAME,
 e.TITLE,
-e.OFFICE_SYMBOL,
 e.WORK_PHONE,
 o.ALIAS as OFFICE_SYMBOL_ALIAS,
 eec.EMPLOYEE_EQUIPMENT_COUNT
@@ -17,15 +24,13 @@ FROM EMPLOYEE e
 LEFT JOIN OFFICE_SYMBOL o
 ON e.OFFICE_SYMBOL = o.id
 LEFT JOIN (${equipment_count.employee}) eec
-ON e.id = eec.user_employee_id`
-
-
-const user_rights = `SELECT u.id, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM USER_RIGHTS u
-LEFT JOIN EMPLOYEE e
-on u.employee_id = e.id`
+ON e.id = eec.user_employee_id
+LEFT JOIN (${user_rights}) ur
+on ur.id = e.updated_by`
 
 module.exports = {
 	user_rights:user_rights,
+	user_rights_all_cols:user_rights_all_cols,
 	employee_officeSymbol: employee,
     equipment_employee: `SELECT
 	eq.ID,
@@ -55,7 +60,6 @@ module.exports = {
 	on ur.id = eq.updated_by`,
 	hra_employee:`SELECT 
 	h.hra_num,
-	e.id as hra_employee_id,
 	e.first_name || ' ' || e.last_name as hra_full_name,
 	e.first_name hra_first_name,
 	e.last_name hra_last_name,
@@ -63,11 +67,13 @@ module.exports = {
 	e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
 	e.WORK_PHONE as hra_work_phone,
 	hec.HRA_EQUIPMENT_COUNT
-	 FROM hra h
+	FROM hra h
 	LEFT JOIN (${employee}) e 
 	on h.employee_id = e.id
 	LEFT JOIN (${equipment_count.hra}) hec
-	on h.hra_num = hec.hra_num`,
+	on h.hra_num = hec.hra_num
+	LEFT JOIN (${user_rights}) ur
+	on ur.id = h.updated_by`,
 	hra_employee_no_count:`SELECT 
 	h.hra_num,
 	e.id as hra_employee_id,

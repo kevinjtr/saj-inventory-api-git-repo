@@ -18,7 +18,8 @@ exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		const newHRA = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+		let result =  await connection.execute(`${newHRA} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		
 		//console.log(hra_employee)
 

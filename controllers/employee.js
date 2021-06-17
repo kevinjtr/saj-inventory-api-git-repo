@@ -17,7 +17,9 @@ exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute(`${employee_officeSymbol} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		const newEmployee = edit_rights ? employee_officeSymbol.replace('SELECT','SELECT\ne.OFFICE_SYMBOL,\nur.updated_by_full_name,\n') : employee_officeSymbol.replace('e.ID,','')
+
+		let result =  await connection.execute(`${newEmployee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
 		res.status(200).json({

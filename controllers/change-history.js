@@ -6,6 +6,7 @@ const dbConfig = require('../dbconfig.js');
 const {propNamesToLowerCase} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {eng4900_losingHra,eng4900_gainingHra,user_rights} = require('../config/queries');
+const {rightPermision} = require('./validation/tools/user-database')
 
 const employee_ = `SELECT
 e.ID,
@@ -22,6 +23,7 @@ ON e.OFFICE_SYMBOL = o.id`
 //!SELECT * FROM EQUIPMENT HISTORY
 exports.equipment = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 
 	try{
         const hra_employee_ = `SELECT 
@@ -59,7 +61,8 @@ exports.equipment = async function(req, res) {
         e.OFFICE_SYMBOL as employee_office_symbol,
 		e.WORK_PHONE as employee_work_phone,
 		eh.deleted,
-        eh.updated_date
+		eh.updated_date,
+		ur.UPDATED_BY_FULL_NAME
         FROM equipment_history eh
         LEFT JOIN employee e
 		on eh.user_employee_id = e.id
@@ -78,7 +81,8 @@ exports.equipment = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get equipment data!',
-			data: {equipment:result.rows}
+			data: {equipment:result.rows},
+			editable: edit_rights,
 		});
 	}catch(err){
 		connection.close()
@@ -87,7 +91,8 @@ exports.equipment = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true}
+			data: {error:true},
+			editable: edit_rights,
 		});
 	}
 };
@@ -95,6 +100,7 @@ exports.equipment = async function(req, res) {
 //!SELECT * FROM HRA HISTORY
 exports.hra = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 
 	try{
 
@@ -108,10 +114,13 @@ exports.hra = async function(req, res) {
             e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
 			e.WORK_PHONE as hra_work_phone,
 			hh.deleted,
-            hh.updated_date
+			hh.updated_date,
+			ur.UPDATED_BY_FULL_NAME
             FROM hra_history hh
             LEFT JOIN (${employee_}) e 
-            on hh.employee_id = e.id
+			on hh.employee_id = e.id
+			LEFT JOIN (${user_rights}) ur
+			on ur.id = hh.updated_by
             ORDER BY hh.UPDATED_DATE desc`,{},dbSelectOptions)
 
 		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
@@ -123,7 +132,8 @@ exports.hra = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: {hra:result.rows}
+			data: {hra:result.rows},
+			editable: edit_rights,
 		});
 
 	}catch(err){
@@ -132,7 +142,8 @@ exports.hra = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true}//result.rows
+			data: {error:true},//result.rows
+			editable: edit_rights,
 		});
 		//logger.error(err)
 	}
@@ -141,6 +152,7 @@ exports.hra = async function(req, res) {
 //!SELECT * FROM EMPLOYEE HISTORY
 exports.employee = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 
 	try{
         let result =  await connection.execute(`SELECT 
@@ -152,8 +164,12 @@ exports.employee = async function(req, res) {
             EH.WORK_PHONE,
 			O.ALIAS as OFFICE_SYMBOL_ALIAS,
 			EH.DELETED,
-            EH.UPDATED_DATE
-        FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID 
+			EH.UPDATED_DATE,
+			EH.UPDATED_BY,
+			ur.UPDATED_BY_FULL_NAME
+		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
+		LEFT JOIN (${user_rights}) ur
+		on ur.id = eh.updated_by
         ORDER BY EH.FIRST_NAME,EH.LAST_NAME`,{},dbSelectOptions)
 
 		result.rows = propNamesToLowerCase(result.rows)
@@ -162,7 +178,8 @@ exports.employee = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: {employee:result.rows}
+			data: {employee:result.rows},
+			editable: edit_rights,
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -171,7 +188,8 @@ exports.employee = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true}
+			data: {error:true},
+			editable: edit_rights,
 		});
 		//logger.error(err)
 	}
@@ -180,6 +198,8 @@ exports.employee = async function(req, res) {
 //!SELECT * FROM FORM_4900_HISTORY
 exports.eng4900 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+
 	try{
 		let query = `SELECT
 		f.id as form_id,
@@ -241,7 +261,8 @@ exports.eng4900 = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',//return form and no bartags.
-				data: result.rows[0]
+				data: result.rows[0],
+				editable: edit_rights,
 			});
 		}
 
@@ -250,7 +271,8 @@ exports.eng4900 = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights,
 		});
 	}catch(err){
 		console.log(err)
@@ -259,7 +281,8 @@ exports.eng4900 = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights,
 		});
 		//logger.error(err)
 	}

@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const morgan = require('morgan');
 const cors = require('cors');
 const path = require('path');
+const csv = require('./tools/csv-parser/csv-to-json')
 
 let  usaceCertMiddleware;
 
@@ -52,7 +53,8 @@ const conditionRoutes = require('./routes/condition');
 const eng4844Routes = require('./routes/eng4844');
 const changeHistoryRoutes = require('./routes/change-history');
 const annualInventoryRoutes = require('./routes/annual-inventory');
-//const user = require('./routes/user');
+const dbPopulateRoutes = require('./routes/db-populate.js');
+const user = require('./routes/user');
 
 usersRoutes(app);
 handleError(app);
@@ -67,7 +69,8 @@ conditionRoutes(app);
 eng4844Routes(app);
 changeHistoryRoutes(app)
 annualInventoryRoutes(app)
-//user(app)
+dbPopulateRoutes(app)
+user(app)
 
 if(process.env.HTTPS === 'true') {
 	const fs = require('fs');
@@ -82,12 +85,14 @@ if(process.env.HTTPS === 'true') {
 	httpsServer.timeout = 240000;
 	httpsServer.listen(port);
 	console.log(`Server is listening on https://localhost:${port}`);
+	//csv.run()
   } else {
 	const http = require('http');
 	const httpServer = http.createServer(app);    
 	httpServer.timeout = 240000;
 	httpServer.listen(port);
 	console.log(`Server is listening on http://localhost:${port}`);
-  }
+	}
+	
 //app.listen(port);
 //console.log('Started');

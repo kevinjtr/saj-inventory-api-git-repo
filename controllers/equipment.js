@@ -8,7 +8,6 @@ const {rightPermision} = require('./validation/tools/user-database')
 const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
-const users = require('../config/users.json')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
 const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
@@ -116,7 +115,13 @@ exports.search = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
+	let cols = []
 
+	let resultC = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
+	if(resultC.rows.length > 0 ){
+		cols = filter(resultC.rows.map(x => x.COLUMN_NAME.toLowerCase()),function(c){ return !c.includes('sys_') && !c.includes('id')} )
+	}
+	
 	//console.log(edit_rights)
 	try{
 		const {fields,options} = req.body;
@@ -230,7 +235,8 @@ exports.search = async function(req, res) {
 				error: false,
 				message: 'Successfully get single data!',
 				data: resultEquipment.rows,
-				editable: edit_rights
+				editable: edit_rights,
+				columns: cols
 			});
 		} else {
 			connection.close()
@@ -239,7 +245,8 @@ exports.search = async function(req, res) {
 				error: true,
 				message: 'No data found!',
 				data: [],
-				editable: edit_rights
+				editable: edit_rights,
+				columns: cols
 			});
 		}
 	}catch(err){
@@ -250,7 +257,8 @@ exports.search = async function(req, res) {
 			error: true,
 			message: 'No data found!',
 			data: [],
-			editable: edit_rights
+			editable: edit_rights,
+			columns: cols
 		});
 		//logger.error(err)
 	}
