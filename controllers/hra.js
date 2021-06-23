@@ -200,7 +200,7 @@ exports.add = async function(req, res) {
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key
 							vals = vals + comma + ' :'+ keys[i]
-							insert_obj[key] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'){
@@ -219,7 +219,7 @@ exports.add = async function(req, res) {
 				//console.log(keys)
 
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
-				//console.log(query,newData)
+				console.log(query,insert_obj)
 
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 				//console.log(result)

@@ -364,6 +364,16 @@ exports.search = async function(req, res) {
 	}
 };
 
+
+const createEquipmentGroup = async (hra_num,connection) => {
+	let result = await connection.execute(`SELECT SEQ_EQUIPMENT_GROUP_ID.nextval from dual`,{},dbSelectOptions)
+	if(result.rows.length > 0){
+		result = await connection.execute(`INSERT INTO EQUIPMENT_GROUP (EQUIPMENT_GROUP_ID, EQUIPMENT_ID)
+		(SELECT :0, ID FROM EQUIPMENT WHERE HRA_NUM = :1);`,[result.rows[0].NEXTVAL,hra_num],dbSelectOptions)
+		console.log(result)
+	}
+}
+
 //!INSERT ANNUAL_INVENTORY
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
@@ -382,7 +392,7 @@ exports.add = async function(req, res) {
 				let vals = ''
 				let insert_obj = {}
 
-				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_IVENTORY'`,{},dbSelectOptions)
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INVENTORY'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
@@ -391,9 +401,12 @@ exports.add = async function(req, res) {
 					if(keys.length > 0){                      
                         for(let i=0; i<keys.length; i++){
                             if(col_names.includes(keys[i])){
-                                const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+								isHraNum = keys[i] == 'hra_num'
+
+								//await createEquipmentGroup(keys[i],connection)
+                                //const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
                                 let comma =  i && cols ? ', ': ''
-                                cols = cols + comma + col_name
+                                cols = cols + comma + keys[i]
                                 vals = vals + comma + ':' + keys[i]
                                 insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
 
@@ -410,7 +423,7 @@ exports.add = async function(req, res) {
                             }
                         }
             
-                        let query = `INSERT INTO ANNUAL_IVENTORY (${cols}) VALUES (${vals})`
+                        let query = `INSERT INTO ANNUAL_INVENTORY (${cols}) VALUES (${vals})`
                     
                         //console.log(query,newData)
                         result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
