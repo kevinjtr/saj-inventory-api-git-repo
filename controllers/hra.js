@@ -275,7 +275,7 @@ exports.update = async function(req, res) {
 							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
 						}
 
-						if(i == keys.length - 1 && typeof edipi != 'undefined'){
+						if(i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')){
 							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
 							if(result.rows.length > 0){
 								const user_rights_id = result.rows[0].ID

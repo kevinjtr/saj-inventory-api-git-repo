@@ -5,14 +5,16 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase} = require('../tools/tools');
+const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {handleData} = require('../pdf-fill.js')
 const {rightPermision} = require('./validation/tools/user-database')
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
+const BANNED_COLS_ANNUAL_INV = ['ID','HRA_NUM','EQUIPMENT_GROUP','FISCAL_YEAR','FOLDER_LINK','HAS_FLIPL','UPDATED_BY']
 
 const printElements = (elements) => {
 	let str = ""
@@ -120,9 +122,12 @@ exports.index = async function(req, res) {
        
 
 
-        let result =  await connection.execute(`SELECT * FROM ANNUAL_INVENTORY a
-        LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num`,{},dbSelectOptions)
-        
+        let result =  await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INVENTORY a
+		LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+		LEFT JOIN (SELECT count(*) as annual_equipment_count,EQUIPMENT_GROUP_ID FROM EQUIPMENT_GROUP GROUP BY EQUIPMENT_GROUP_ID) eg
+		on eg.equipment_group_id = a.equipment_group`,{},dbSelectOptions)
+		
+		//console.log(result)
         connection.close()
 
         if(result.rows.length > 0){
@@ -171,6 +176,53 @@ exports.getById = async function(req, res) {
     
 	try{
         let result =  await connection.execute(`SELECT * FROM ANNUAL_INVENTORY WHERE id = :0`,[req.params.id],dbSelectOptions)
+        connection.close()
+
+		if (result.rows.length > 0) {
+			result.rows = propNamesToLowerCase(result.rows)
+
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully get single data!',
+				data: result.rows,
+				editable: edit_rights
+			});
+        }
+        
+        return res.status(200).json({
+            status: 200,
+            error: false,
+            message: 'No data found!',
+            data: [],
+            editable: edit_rights
+        });
+		
+	}catch(err){
+		console.log(err)
+		return res.status(400).json({
+            status: 400,
+            error: true,
+            message: 'No data found!',
+            data: [],
+            editable: edit_rights
+        });
+	}
+};
+
+//!SELECT ANNUAL_INVENTORY BY ID
+exports.getById = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+    const connection =  await oracledb.getConnection(dbConfig);
+    
+	try{
+        let result =  await connection.execute(`SELECT * FROM ANNUAL_INVENTORY AI
+		LEFT JOIN (SELECT * FROM EQUIPMENT_GROUP eg
+		left join equipment e
+		on e.id = eg.equipment_id) EQ
+		ON AI.equipment_group = EQ.equipment_group_id
+		WHERE ai.id = :0`,[req.params.id],dbSelectOptions)
+		
         connection.close()
 
 		if (result.rows.length > 0) {
@@ -368,10 +420,15 @@ exports.search = async function(req, res) {
 const createEquipmentGroup = async (hra_num,connection) => {
 	let result = await connection.execute(`SELECT SEQ_EQUIPMENT_GROUP_ID.nextval from dual`,{},dbSelectOptions)
 	if(result.rows.length > 0){
+		const eGroupId = result.rows[0].NEXTVAL
+		//console.log(eGroupId,result,hra_num)
 		result = await connection.execute(`INSERT INTO EQUIPMENT_GROUP (EQUIPMENT_GROUP_ID, EQUIPMENT_ID)
-		(SELECT :0, ID FROM EQUIPMENT WHERE HRA_NUM = :1);`,[result.rows[0].NEXTVAL,hra_num],dbSelectOptions)
-		console.log(result)
+		(SELECT :0, ID FROM EQUIPMENT WHERE HRA_NUM = :1)`,[eGroupId,hra_num],{autoCommit:AUTO_COMMIT.ADD})
+		//console.log(result)
+		return(result.rowsAffected > 0 ? eGroupId : -1)
 	}
+
+	return(-1)
 }
 
 //!INSERT ANNUAL_INVENTORY
@@ -379,6 +436,7 @@ exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	const {edipi} = req.headers.cert
+	let eGroupId = -1
 
 	try{
 		const {changes} = req.body.params
@@ -395,17 +453,37 @@ exports.add = async function(req, res) {
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INVENTORY'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
-					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
+					//result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
 					if(keys.length > 0){                      
                         for(let i=0; i<keys.length; i++){
                             if(col_names.includes(keys[i])){
-								isHraNum = keys[i] == 'hra_num'
+								const isHraNum = keys[i] == 'hra_num'
 
-								//await createEquipmentGroup(keys[i],connection)
+								if(isHraNum){
+									const EQ_GROUP_ID_COL_NAME = "equipment_group"
+									eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
+
+									console.log(eGroupId)
+									if(eGroupId == -1){
+										connection.close()
+										return res.status(200).json({
+											status: 200,
+											error: true,
+											message: 'Error adding new data!',
+											columnErrors : columnErrors
+										});
+									}
+
+									let comma =  i && cols ? ', ': ''
+									cols = cols + comma + EQ_GROUP_ID_COL_NAME
+									vals = vals + comma + ':' + EQ_GROUP_ID_COL_NAME
+									insert_obj[EQ_GROUP_ID_COL_NAME] = eGroupId
+								}
+								
                                 //const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-                                let comma =  i && cols ? ', ': ''
+                                let comma =  cols ? ', ': ''
                                 cols = cols + comma + keys[i]
                                 vals = vals + comma + ':' + keys[i]
                                 insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
@@ -425,9 +503,9 @@ exports.add = async function(req, res) {
             
                         let query = `INSERT INTO ANNUAL_INVENTORY (${cols}) VALUES (${vals})`
                     
-                        //console.log(query,newData)
+                        console.log(query,insert_obj)
                         result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-                        //console.log(result)
+                        console.log(result)
 
                         connection.close()
                         return res.status(200).json({
@@ -473,28 +551,49 @@ exports.update = async function(req, res) {
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
 				const {newData,oldData} = changes[row];
-				const cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
-				const keys = Object.keys(cells.new)
+				const cells = newData && oldData ? {new:objectDifference(oldData,newData,'tableData'),old:oldData} : newData
+				console.log(cells)
+				const keys = cells.new ?  Object.keys(cells.new) : []
 				cells.update = {}
 				let cols = ''
+				const cell_id = cells.old ? cells.old.id : cells.id
 
-				//console.log(cells.new)
+				let result = await connection.execute(`SELECT * FROM ANNUAL_INVENTORY WHERE ID = :0`,[cell_id],dbSelectOptions)
+
+				const editable = result.rows.length > 0 ? (result.rows[0].LOCKED == 2 ? true : false) : true
 				
-				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INVENTORY'`,{},dbSelectOptions)
-				if(result.rows.length > 0){
-					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
+				result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INVENTORY'`,{},dbSelectOptions)
+
+				if(result.rows.length > 0 && editable){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ANNUAL_INV.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
 					//console.log(col_names)
 
-					if(keys.length > 0){
+					const isUpdate = newData.update ? (newData.update ? true : false) : false
+
+					if(isUpdate){
+						const eGroupId = await createEquipmentGroup(cells.hra_num, connection)
+
+						let query = `UPDATE ANNUAL_INVENTORY SET equipment_group = :0
+									WHERE ID = ${cell_id}`
+
+						if(eGroupId != -1){
+							result = await connection.execute(query,[eGroupId],{autoCommit:AUTO_COMMIT.UPDATE})
+							console.log(result)
+						}else {
+							columnErrors = {...columnErrors,errorFound:true}
+						}
+					}
+					
+					if(keys.length > 0 && !isUpdate){
 						//console.log('here0')
 						//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
                         for(let i=0; i<keys.length; i++){
                             if(col_names.includes(keys[i])){
-                                const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+                                //const col_name = keys[i]
                                 let comma =  i && cols ? ', ': ''
-                                cols = cols + comma + col_name + ' = :' + keys[i]
+                                cols = cols + comma + keys[i] + ' = :' + keys[i]
                                 cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
                             }
 
@@ -512,10 +611,22 @@ exports.update = async function(req, res) {
                         let query = `UPDATE ANNUAL_INVENTORY SET ${cols}
                                     WHERE ID = ${cells.old.id}`
                     
-                        //console.log(query)
+                        console.log(query)
                         result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-                        //console.log(result)
+                        console.log(result)
 					}
+
+					connection.close()
+
+					return (
+						res.status(200).json({
+							status: 200,
+							error: false,
+							message: 'Successfully update data with id: ', //+ req.params.id,
+							data: [],//req.body,
+							columnErrors: columnErrors
+						})
+					)
 				}
 				//console.log(cells.new)
 			}
@@ -526,13 +637,15 @@ exports.update = async function(req, res) {
 		connection.close()
 		//}
 		
-		res.status(200).json({
-			status: 200,
-			error: false,
-			message: 'Successfully update data with id: ', //+ req.params.id,
-			data: [],//req.body,
-			columnErrors: columnErrors
-		});
+		return (
+			res.status(200).json({
+				status: 200,
+				error: true,
+				message: 'Could not update data', //+ req.params.id,
+				data: [],//req.body,
+				columnErrors: columnErrors
+			})
+		)
 	}catch(err){
 		connection.close()
 		console.log(err);

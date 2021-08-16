@@ -9,7 +9,7 @@ const {equipment_employee,hra_employee} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
-const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
+const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const and_ = (q) => q != '' ? 'AND' : ''
@@ -455,7 +455,7 @@ exports.update = async function(req, res) {
 									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
 								}
 
-								if(i == keys.length - 1 && typeof edipi != 'undefined'){
+								if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
 									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
 									if(result.rows.length > 0){
 										const user_rights_id = result.rows[0].ID

@@ -152,7 +152,7 @@ exports.search = async function(req, res) {
 };
 
 //!INSERT EMPLOYEE
-exports.add = async function(req, res) {
+exports.add = async function(req, res) { 
 	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
 	try{
@@ -194,12 +194,6 @@ exports.add = async function(req, res) {
 					}
 
 				}
-
-
-
-
-
-
 
 				//console.log(keys)
 				// for(let i=0; i<keys.length; i++){
@@ -251,6 +245,7 @@ exports.update = async function(req, res) {
 				cells.update = {}
 				let cols = ''
 				
+				console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
@@ -264,7 +259,7 @@ exports.update = async function(req, res) {
 							cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
 						}
 
-						if(i == keys.length - 1 && typeof edipi != 'undefined'){
+						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
 							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
 							if(result.rows.length > 0){
 								const user_rights_id = result.rows[0].ID
@@ -278,6 +273,7 @@ exports.update = async function(req, res) {
 					let query = `UPDATE EMPLOYEE SET ${cols}
 								WHERE ID = ${cells.old.id}`
 
+					console.log(query)
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					//console.log(result)
 
