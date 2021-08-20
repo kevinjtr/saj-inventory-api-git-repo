@@ -74,6 +74,10 @@ exports.equipment = async function(req, res) {
 												on eh_emp.hra_num = hra_emp.hra_num ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
+			result.rows.map(x => {
+				x.deleted = x.deleted ? x.deleted != 2 : false
+				return x
+			})
 		}
 
 		connection.close()
@@ -126,6 +130,10 @@ exports.hra = async function(req, res) {
 		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
+			result.rows.map(x => {
+				x.deleted = x.deleted ? x.deleted != 2 : false
+				return x
+			})
 		}
 
 		res.status(200).json({
@@ -170,9 +178,16 @@ exports.employee = async function(req, res) {
 		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
 		LEFT JOIN (${user_rights}) ur
 		on ur.id = eh.updated_by
-        ORDER BY EH.FIRST_NAME,EH.LAST_NAME`,{},dbSelectOptions)
+        ORDER BY EH.UPDATED_DATE desc`,{},dbSelectOptions)
 
-		result.rows = propNamesToLowerCase(result.rows)
+		if(result.rows.length > 0){
+			result.rows = propNamesToLowerCase(result.rows)
+			result.rows.map(x => {
+				x.deleted = x.deleted ? x.deleted != 2 : false
+				return x
+			})
+		}
+		
 
 		res.status(200).json({
 			status: 200,

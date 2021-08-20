@@ -8,7 +8,7 @@ const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
-const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS']
+const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM EMPLOYEE
@@ -178,7 +178,8 @@ exports.add = async function(req, res) {
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + keys[i]
 							vals = vals + comma + ' :'+ keys[i]
-							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'){
@@ -222,8 +223,9 @@ exports.add = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		res.status(400).json({
+		res.status(200).json({
 			status: 400,
+			error: true,
 			message: 'Error adding new data!'
 		});
 	}
@@ -235,7 +237,7 @@ exports.update = async function(req, res) {
 	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-
+		console.log(edipi)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 
@@ -245,22 +247,26 @@ exports.update = async function(req, res) {
 				cells.update = {}
 				let cols = ''
 				
-				console.log(cells.new)
+				//console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
+					//console.log(col_names)
 					for(let i=0; i<keys.length; i++){
 						if(col_names.includes(keys[i])){
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + keys[i] + ' = :' + keys[i]
-							cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+							cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+							console.log(edipi)
 							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+							console.log(result.rows)
 							if(result.rows.length > 0){
 								const user_rights_id = result.rows[0].ID
 								const comma =  cols ? ', ': ''
@@ -273,7 +279,7 @@ exports.update = async function(req, res) {
 					let query = `UPDATE EMPLOYEE SET ${cols}
 								WHERE ID = ${cells.old.id}`
 
-					console.log(query)
+					//console.log(query,cells.update)
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					//console.log(result)
 
@@ -300,7 +306,7 @@ exports.update = async function(req, res) {
 		console.log(err);
 		connection.close()
 
-		return res.status(400).json({
+		return res.status(200).json({
 			status: 400,
 			error: true,
 			message: 'Cannot update data.', //+ req.params.id

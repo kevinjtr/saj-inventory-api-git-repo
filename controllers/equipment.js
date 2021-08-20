@@ -335,7 +335,8 @@ exports.add = async function(req, res) {
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name
 									vals = vals + comma + ':' + keys[i]
-									insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+									insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
 									if(i == keys.length - 1 && typeof edipi != 'undefined'){
 										result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
@@ -452,7 +453,8 @@ exports.update = async function(req, res) {
 									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name + ' = :' + keys[i]
-									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 								}
 
 								if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){

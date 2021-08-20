@@ -200,7 +200,8 @@ exports.add = async function(req, res) {
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key
 							vals = vals + comma + ' :'+ keys[i]
-							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'){
@@ -234,8 +235,9 @@ exports.add = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		res.status(400).json({
+		res.status(200).json({
 			status: 400,
+			error: true,
 			message: 'Error adding new data!'
 		});
 	}
@@ -272,7 +274,8 @@ exports.update = async function(req, res) {
 						if(col_names.includes(key)){
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key + ' = :' + key
-							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')){
@@ -289,7 +292,6 @@ exports.update = async function(req, res) {
                     let query = `UPDATE HRA SET ${cols}
                                 WHERE hra_num = ${cells.old.hra_num}`
 
-                    console.log(query,cells.new)
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					console.log(result)
 					
@@ -317,7 +319,7 @@ exports.update = async function(req, res) {
 		console.log(err);
 
 		connection.close()
-		return res.status(400).json({
+		return res.status(200).json({
 			status: 400,
 			error: true,
 			message: 'Cannot delete data.' //+ req.params.id

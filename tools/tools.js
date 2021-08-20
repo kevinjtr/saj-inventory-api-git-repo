@@ -127,5 +127,8 @@ module.exports = {
       // Return the object of differences
       return diffs;
   
-    },    
+    },
+    containsAll: (needles, haystack) => { 
+      return needles.every(i => haystack.includes(i))
+    }   
   };

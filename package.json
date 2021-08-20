@@ -29,10 +29,13 @@
 		"mysql2": "^1.7.0",
 		"oracledb": "^5.0.0",
 		"path": "^0.12.7",
+		"pdf-lib": "^1.16.0",
 		"sequelize": "^5.17.0",
+		"util": "^0.12.4",
 		"winston": "^3.3.3",
 		"x509.js": "^1.0.0",
 		"xlsx": "^0.17.0",
+		"xml-js": "^1.6.11",
 		"xml2js": "^0.4.23"
 	},
 	"devDependencies": {},

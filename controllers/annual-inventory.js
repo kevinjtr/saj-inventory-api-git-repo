@@ -5,8 +5,8 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count} = require('../config/queries');
+const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
+const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {handleData} = require('../pdf-fill.js')
@@ -15,6 +15,7 @@ const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 const BANNED_COLS_ANNUAL_INV = ['ID','HRA_NUM','EQUIPMENT_GROUP','FISCAL_YEAR','FOLDER_LINK','HAS_FLIPL','UPDATED_BY']
+const ACCEPTED_USER_INPUT_COLS = ["FISCAL_YEAR","HRA_NUM"]
 
 const printElements = (elements) => {
 	let str = ""
@@ -131,8 +132,7 @@ exports.index = async function(req, res) {
         connection.close()
 
         if(result.rows.length > 0){
-            result.rows = propNamesToLowerCase(result.rows)
-
+			result.rows = propNamesToLowerCase(result.rows)
             // const {equipment_gorup_id} = result.rows[0]
             // const query_eq = `SELECT * FROM EQUIPMENT_GROUP EG LEFT JOIN EQUIPMENT E ON E.ID = EG.EQUIPMENT_ID WHERE EG.ID = :0`
 
@@ -172,57 +172,23 @@ exports.index = async function(req, res) {
 //!SELECT ANNUAL_INVENTORY BY ID
 exports.getById = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
-    const connection =  await oracledb.getConnection(dbConfig);
-    
+	const connection =  await oracledb.getConnection(dbConfig);
+	
 	try{
-        let result =  await connection.execute(`SELECT * FROM ANNUAL_INVENTORY WHERE id = :0`,[req.params.id],dbSelectOptions)
-        connection.close()
-
-		if (result.rows.length > 0) {
-			result.rows = propNamesToLowerCase(result.rows)
-
-			return res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully get single data!',
-				data: result.rows,
-				editable: edit_rights
-			});
-        }
-        
-        return res.status(200).json({
-            status: 200,
-            error: false,
-            message: 'No data found!',
-            data: [],
-            editable: edit_rights
-        });
-		
-	}catch(err){
-		console.log(err)
-		return res.status(400).json({
-            status: 400,
-            error: true,
-            message: 'No data found!',
-            data: [],
-            editable: edit_rights
-        });
-	}
-};
-
-//!SELECT ANNUAL_INVENTORY BY ID
-exports.getById = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
-    const connection =  await oracledb.getConnection(dbConfig);
-    
-	try{
-        let result =  await connection.execute(`SELECT * FROM ANNUAL_INVENTORY AI
+        let result =  await connection.execute(`SELECT EQ.hra_num,
+		AI.fiscal_year,
+		EQ.bar_tag_num,
+		EQ.item_type,
+		EQ.serial_num,
+		EQ.employee_full_name
+		FROM ANNUAL_INVENTORY AI
 		LEFT JOIN (SELECT * FROM EQUIPMENT_GROUP eg
-		left join equipment e
+		left join (${equipment_employee}) e
 		on e.id = eg.equipment_id) EQ
 		ON AI.equipment_group = EQ.equipment_group_id
-		WHERE ai.id = :0`,[req.params.id],dbSelectOptions)
-		
+		WHERE ai.id = :0
+		order by EQ.employee_full_name asc`,[req.params.id],dbSelectOptions)		
+
         connection.close()
 
 		if (result.rows.length > 0) {
@@ -440,20 +406,21 @@ exports.add = async function(req, res) {
 
 	try{
 		const {changes} = req.body.params
-		console.log(changes)
+
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				const {newData} = changes[row];
 				const keys = Object.keys(newData)
 				let cols = ''
 				let vals = ''
 				let insert_obj = {}
+				const isAllDataAvailable = containsAll(ACCEPTED_USER_INPUT_COLS.map(x=>x.toLowerCase()),keys)
+				const isDateWithinRange = isAllDataAvailable ? (newData.fiscal_year >= 1990 && newData.fiscal_year <= (new Date()).getFullYear() + 1) : false
 
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INVENTORY'`,{},dbSelectOptions)
 
-				if(result.rows.length > 0){
-					//result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
+				if(result.rows.length > 0 && isAllDataAvailable && isDateWithinRange){
+					result.rows = filter(result.rows,function(x){ return ACCEPTED_USER_INPUT_COLS.includes(x.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
 					if(keys.length > 0){                      
@@ -465,7 +432,6 @@ exports.add = async function(req, res) {
 									const EQ_GROUP_ID_COL_NAME = "equipment_group"
 									eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
 
-									console.log(eGroupId)
 									if(eGroupId == -1){
 										connection.close()
 										return res.status(200).json({
@@ -482,11 +448,11 @@ exports.add = async function(req, res) {
 									insert_obj[EQ_GROUP_ID_COL_NAME] = eGroupId
 								}
 								
-                                //const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
                                 let comma =  cols ? ', ': ''
                                 cols = cols + comma + keys[i]
-                                vals = vals + comma + ':' + keys[i]
-                                insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) : newData[keys[i]]
+								vals = vals + comma + ':' + keys[i]
+								insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+								(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
                                 if(i == keys.length - 1 && typeof edipi != 'undefined'){
                                     result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
@@ -500,21 +466,22 @@ exports.add = async function(req, res) {
                                 }
                             }
                         }
-            
+			
                         let query = `INSERT INTO ANNUAL_INVENTORY (${cols}) VALUES (${vals})`
-                    
-                        console.log(query,insert_obj)
-                        result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-                        console.log(result)
+						result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
                         connection.close()
                         return res.status(200).json({
                             status: 200,
-                            error: false,
+                            error: columnErrors.errorFound,
                             message: 'Successfully added new data!',
                             columnErrors : columnErrors
                         });
 					}
+				}
+
+				if(!isAllDataAvailable || !isDateWithinRange){
+					columnErrors = {...columnErrors,errorFound:true}
 				}
 			}
 		}
@@ -527,11 +494,13 @@ exports.add = async function(req, res) {
 		});
 	}catch(err){
 		connection.close()
+		columnErrors = {...columnErrors,errorFound:true}
 		console.log(err);
-		res.status(400).json({
-			status: 400,
+		res.status(200).json({
+			status: 200,
 			error:true,
-			message: 'Error adding new data!'
+			message: 'Error adding new data!',
+			columnErrors: columnErrors
 		});
 	}
 };
@@ -594,7 +563,8 @@ exports.update = async function(req, res) {
                                 //const col_name = keys[i]
                                 let comma =  i && cols ? ', ': ''
                                 cols = cols + comma + keys[i] + ' = :' + keys[i]
-                                cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) : cells.new[keys[i]]
+								cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+								(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
                             }
 
                             if(i == keys.length - 1 && typeof edipi != 'undefined'){
