@@ -2,23 +2,38 @@
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
+const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol} = require('../config/queries')
+const {employee_officeSymbol, hra_employee} = require('../config/queries')
+const {rightPermision} = require('./validation/tools/user-database')
+const noReplaceCols = ['hra_num']
+
+const BANNED_COLS_HRA = ['HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
+const BANNED_COLS_HRA_ADD = ['OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute(`SELECT * FROM hra, (${employee_officeSymbol}) e where hra.employee_id = e.id ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
-		result.rows = propNamesToLowerCase(result.rows)
+		const newHRA = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+		let result =  await connection.execute(`${newHRA} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		
+		//console.log(hra_employee)
+
+		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
+		if (result.rows.length > 0) {
+			result.rows = propNamesToLowerCase(result.rows)
+		}
 
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: result.rows
+			data: result.rows,
+			editable: edit_rights
 		});
 
 	}catch(err){
@@ -27,7 +42,8 @@ exports.index = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []//result.rows
+			data: [],//result.rows
+			editable: edit_rights
 		});
 		//logger.error(err)
 	}
@@ -35,9 +51,13 @@ exports.index = async function(req, res) {
 
 //!SELECT HRA BY HRA_NUM
 exports.getById = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let result =  await connection.execute(`SELECT * FROM HRA WHERE hra_num = :0 ORDER BY FIRST_NAME,LAST_NAME`,[req.params.id],dbSelectOptions)
+		let result =  await connection.execute(`${hra_employee}
+												WHERE hra_num = :0
+												ORDER BY FIRST_NAME,LAST_NAME`,[req.params.hra_hum],dbSelectOptions)
+		
 
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
@@ -46,14 +66,16 @@ exports.getById = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: result.rows
+				data: result.rows,
+				editable: edit_rights
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: result.rows
+				data: result.rows,
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -64,12 +86,13 @@ exports.getById = async function(req, res) {
 
 //!SELECT HRA BY FIELDS DATA
 exports.search = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
-			const db_col_name = `LOWER(TO_CHAR(${parameter}))`
+			const db_col_name = `LOWER(TO_CHAR(${(!noReplaceCols.includes(parameter) ? parameter.replace('hra_',''): parameter)}))`
 
 			if(db_col_name != undefined){
 				const db_col_value = req.body[parameter]
@@ -123,14 +146,16 @@ exports.search = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: resultHra.rows
+				data: resultHra.rows,
+				editable: edit_rights
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: resultHra.rows
+				data: resultHra.rows,
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -139,7 +164,8 @@ exports.search = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights
 		});
 		//logger.error(err)
 	}
@@ -148,6 +174,8 @@ exports.search = async function(req, res) {
 //!INSERT HRA
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
+
 	try{
 		const {changes} = req.body.params		
 		for(const row in changes){
@@ -157,19 +185,45 @@ exports.add = async function(req, res) {
 				const keys = Object.keys(newData);
 				let cols = ''
 				let vals = ''
+				let insert_obj = {}
 
-				console.log(keys)
-				for(let i=0; i<keys.length; i++){
-						const comma = i && cols ? ', ': ''
-						cols = cols + comma + keys[i]
-						vals = vals + comma + ' :'+ keys[i]
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'HRA'`,{},dbSelectOptions)
+
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA_ADD.includes(c.COLUMN_NAME)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+
+					for(let i=0; i<keys.length; i++){
+						const key = (!noReplaceCols.includes(keys[i]) ? keys[i].replace('hra_',''): keys[i])
+
+						if(col_names.includes(key)){
+							const comma = i && cols ? ', ': ''
+							cols = cols + comma + key
+							vals = vals + comma + ' :'+ keys[i]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
+						}
+
+						if(i == keys.length - 1 && typeof edipi != 'undefined'){
+							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+							if(result.rows.length > 0){
+								const user_rights_id = result.rows[0].ID
+								const comma = cols ? ', ': ''
+								cols = cols + comma + 'updated_by'
+								vals = vals + comma + ':' + 'updated_by'
+								insert_obj['updated_by'] = user_rights_id
+							}
+						}
+					}
+
 				}
+				//console.log(keys)
 
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
-				console.log(query)
+				console.log(query,insert_obj)
 
-				let result = await connection.execute(query,newData,{autoCommit:true})
-				console.log(result)
+				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+				//console.log(result)
 			}
 		}
 
@@ -181,8 +235,9 @@ exports.add = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		res.status(400).json({
+		res.status(200).json({
 			status: 400,
+			error: true,
 			message: 'Error adding new data!'
 		});
 	}
@@ -191,46 +246,83 @@ exports.add = async function(req, res) {
 //!UPDATE HRA DATA
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
+
 	try{
 		const {changes} = req.body.params
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				console.log(row)
+				//console.log(row)
 				const {newData,oldData} = changes[row];
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
+				cells.update = {}
 				let cols = ''
 
-                if(keys.length != 0){
+				//console.log(cells.new)
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'HRA'`,{},dbSelectOptions)
+
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA.includes(c.COLUMN_NAME)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+
+					console.log(col_names)
                     for(let i=0; i<keys.length; i++){
-						const comma = i && cols ? ', ': ''
-						cols = cols + comma + keys[i] + ' = :' + keys[i]
+						const key = keys[i].replace('hra_','')
+
+						if(col_names.includes(key)){
+							const comma = i && cols ? ', ': ''
+							cols = cols + comma + key + ' = :' + key
+							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
+						}
+
+						if(i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')){
+							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+							if(result.rows.length > 0){
+								const user_rights_id = result.rows[0].ID
+								const comma =  cols ? ', ': ''
+								cols = cols + comma + 'updated_by = :updated_by'
+								cells.update['updated_by'] = user_rights_id
+							}
+						}
                     }
         
                     let query = `UPDATE HRA SET ${cols}
-                                WHERE EMPLOYEE_ID = ${cells.old.id}`
+                                WHERE hra_num = ${cells.old.hra_num}`
 
-                    console.log(query)
-                    let result = await connection.execute(query,cells.new,{autoCommit:true})
-                    console.log(result)
-                }
+                    result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+					console.log(result)
+					
+					connection.close()
+					return res.status(200).json({
+						status: 200,
+						error: false,
+						message: 'Successfully update data.', //+ req.params.id,
+						data: [],//req.body
+						rowsAffected: result.rowsAffected ? result.rowsAffected : 0
+					});
+
+				}
 			}
 		}
 
-		res.status(200).json({
+		connection.close()
+		return res.status(200).json({
 			status: 200,
-			error: false,
-			message: 'Successfully update data with id: ', //+ req.params.id,
+			error: true,
+			message: 'Cannot delete data.', //+ req.params.id,
 			data: []//req.body
 		});
 	}catch(err){
 		console.log(err);
 
-		res.status(400).json({
+		connection.close()
+		return res.status(200).json({
 			status: 400,
 			error: true,
-			message: 'Cannot delete data with id: ' //+ req.params.id
+			message: 'Cannot delete data.' //+ req.params.id
 		});
 	}
 };
@@ -239,14 +331,29 @@ exports.update = async function(req, res) {
 exports.destroy = async function(req, res) {
 	let ids = ''
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
+
 	try{
 		const {changes} = req.body.params
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				let result = await connection.execute(`DELETE from HRA WHERE hra_num = :0`,[changes[row].oldData.id],{autoCommit:true})
-				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				console.log(result)
+				//const {id} = changes[row].oldData
+				let cols = ''
+
+				if(typeof edipi != 'undefined'){
+					let result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					if(result.rows.length > 0){
+						const user_rights_id = result.rows[0].ID
+						//comma =  cols ? ', ': ''
+						//cols = cols + comma + 'updated_by = :updated_by'
+						cols = `, UPDATED_BY = ${user_rights_id}`
+					}
+				}
+
+				let result = await connection.execute(`UPDATE HRA SET DELETED = 1 ${cols} WHERE HRA_NUM = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:AUTO_COMMIT.DELETE})
+				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.hra_employee_id
+				//console.log(result)
 			}
 		}
 

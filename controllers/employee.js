@@ -7,20 +7,27 @@ const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol} = require('../config/queries');
+const {rightPermision} = require('./validation/tools/user-database')
+const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		let result =  await connection.execute(`${employee_officeSymbol} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		const newEmployee = edit_rights ? employee_officeSymbol.replace('SELECT','SELECT\ne.OFFICE_SYMBOL,\nur.updated_by_full_name,\n') : employee_officeSymbol.replace('e.ID,','')
+
+		let result =  await connection.execute(`${newEmployee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: result.rows
+			data: result.rows,
+			editable: edit_rights
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -29,7 +36,8 @@ exports.index = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights
 		});
 		//logger.error(err)
 	}
@@ -37,6 +45,7 @@ exports.index = async function(req, res) {
 
 //!SELECT EMPLOYEE BY ID
 exports.getById = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * FROM employee WHERE id = :0 ORDER BY FIRST_NAME,LAST_NAME`,[req.params.id],dbSelectOptions)
@@ -47,14 +56,16 @@ exports.getById = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: result.rows
+				data: result.rows,
+				editable: edit_rights
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: []
+				data: [],
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -65,6 +76,7 @@ exports.getById = async function(req, res) {
 
 //!SELECT EMPLOYEE BY FIELDS DATA
 exports.search = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
@@ -114,14 +126,16 @@ exports.search = async function(req, res) {
 				status: 200,
 				error: false,
 				message: 'Successfully get single data!',
-				data: resultEquipment.rows
+				data: resultEquipment.rows,
+				editable: edit_rights
 			});
 		} else {
 			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'No data found!',
-				data: resultEquipment.rows
+				data: resultEquipment.rows,
+				editable: edit_rights
 			});
 		}
 	}catch(err){
@@ -130,15 +144,17 @@ exports.search = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: []
+			data: [],
+			editable: edit_rights
 		});
 		//logger.error(err)
 	}
 };
 
 //!INSERT EMPLOYEE
-exports.add = async function(req, res) {
+exports.add = async function(req, res) { 
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
 		
@@ -149,23 +165,53 @@ exports.add = async function(req, res) {
 				const keys = Object.keys(newData);
 				let cols = ''
 				let vals = ''
+				let insert_obj = {}
 
-				console.log(keys)
-				for(let i=0; i<keys.length; i++){
-					if(keys[i] != 'id'){
-						const comma = i ? ', ': ''
-						cols = cols + comma + keys[i]
-						vals = vals + comma + ' :'+ keys[i]
-					}else{
-						delete newData.id
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
+
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c.COLUMN_NAME)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+
+					for(let i=0; i<keys.length; i++){
+						if(col_names.includes(keys[i])){
+							const comma = i && cols ? ', ': ''
+							cols = cols + comma + keys[i]
+							vals = vals + comma + ' :'+ keys[i]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
+						}
+
+						if(i == keys.length - 1 && typeof edipi != 'undefined'){
+							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+							if(result.rows.length > 0){
+								const user_rights_id = result.rows[0].ID
+								const comma = cols ? ', ': ''
+								cols = cols + comma + 'updated_by'
+								vals = vals + comma + ':' + 'updated_by'
+								insert_obj['updated_by'] = user_rights_id
+							}
+						}
 					}
+
 				}
 
-				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
-				console.log(query)
+				//console.log(keys)
+				// for(let i=0; i<keys.length; i++){
+				// 	if(keys[i] != 'id'){
+				// 		const comma = i ? ', ': ''
+				// 		cols = cols + comma + keys[i]
+				// 		vals = vals + comma + ' :'+ keys[i]
+				// 	}else{
+				// 		delete newData.id
+				// 	}
+				// }
 
-				let result = await connection.execute(query,newData,{autoCommit:true})
-				console.log(result)
+				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
+				//console.log(query)
+
+				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+				//console.log(result)
 			}
 		}
 
@@ -177,58 +223,94 @@ exports.add = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		res.status(400).json({
+		res.status(200).json({
 			status: 400,
+			error: true,
 			message: 'Error adding new data!'
 		});
 	}
 };
 
-//!UPDATE EQUIPMENT DATA
+//!UPDATE EMPLOYEE DATA
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-		
+		console.log(edipi)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				console.log(row)
+
 				const {newData,oldData} = changes[row];
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
+				cells.update = {}
 				let cols = ''
+				
+				//console.log(cells.new)
+				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
 
-				for(let i=0; i<keys.length; i++){
-					if(keys[i] != 'id'){
-						const comma = i ? ', ': ''
-						cols = cols + comma + keys[i] + ' = :' + keys[i]
-					}else{
-						delete cells.new.id
+				if(result.rows.length > 0){
+					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c.COLUMN_NAME)})
+					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+
+					//console.log(col_names)
+					for(let i=0; i<keys.length; i++){
+						if(col_names.includes(keys[i])){
+							const comma = i && cols ? ', ': ''
+							cols = cols + comma + keys[i] + ' = :' + keys[i]
+							cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+						}
+
+						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+							console.log(edipi)
+							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+							console.log(result.rows)
+							if(result.rows.length > 0){
+								const user_rights_id = result.rows[0].ID
+								const comma =  cols ? ', ': ''
+								cols = cols + comma + 'updated_by = :updated_by'
+								cells.update['updated_by'] = user_rights_id
+							}
+						}
 					}
-				}
-	
-				let query = `UPDATE EMPLOYEE SET ${cols}
-							WHERE ID = ${cells.old.id}`
 
-				console.log(query)
-				let result = await connection.execute(query,cells.new,{autoCommit:true})
-				console.log(result)
+					let query = `UPDATE EMPLOYEE SET ${cols}
+								WHERE ID = ${cells.old.id}`
+
+					//console.log(query,cells.update)
+					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+					//console.log(result)
+
+					connection.close()
+					return res.status(200).json({
+						status: 200,
+						error: false,
+						message: 'Successfully update data', //+ req.params.id,
+						data: [],//req.body
+						rowsAffected: result.rowsAffected ? result.rowsAffected : 0
+					});
+				}
 			}
 		}
 
-		res.status(200).json({
-			status: 200,
-			error: false,
-			message: 'Successfully update data with id: ', //+ req.params.id,
-			data: []//req.body
+		connection.close()
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'Cannot updated data.', //+ req.params.id,
+			data: [],//req.body
 		});
 	}catch(err){
 		console.log(err);
+		connection.close()
 
-		res.status(400).json({
+		return res.status(200).json({
 			status: 400,
 			error: true,
-			message: 'Cannot delete data with id: ' //+ req.params.id
+			message: 'Cannot update data.', //+ req.params.id
+			rowsAffected: 0
 		});
 	}
 };
@@ -237,15 +319,28 @@ exports.update = async function(req, res) {
 exports.destroy = async function(req, res) {
 	let ids = ''
 	const connection =  await oracledb.getConnection(dbConfig);
-	
+	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-		//console.log(changes)
+
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				let result = await connection.execute(`DELETE from employee WHERE id = :0`,[changes[row].oldData.id],{autoCommit:false})
+				//const {id} = changes[row].oldData
+				let cols = ''
+
+				if(typeof edipi != 'undefined'){
+					let result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					if(result.rows.length > 0){
+						const user_rights_id = result.rows[0].ID
+						//comma =  cols ? ', ': ''
+						//cols = cols + comma + 'updated_by = :updated_by'
+						cols = `, UPDATED_BY = ${user_rights_id}`
+					}
+				}
+
+				let result = await connection.execute(`UPDATE EMPLOYEE SET DELETED = 1 ${cols} WHERE HRA_NUM = :0`,[changes[row].oldData.id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				console.log(result)
+				//console.log(result)
 			}
 		}
 

@@ -4,6 +4,9 @@ require('dotenv').config();
 
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
+const {user_rights} = require('../config/queries')
+const {propNamesToLowerCase} = require('../tools/tools')
+
 // 	// here the query is executed
 //    });
 //const connection = require('../connect');
@@ -23,23 +26,35 @@ const dbSelectOptions = {
 
 //!LOGIN USERS
 exports.login = async (req, res) => {
-	const email = req.body.email;
+	const edipi = req.headers.cert.edipi
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		let result =  await connection.execute('SELECT * FROM users where email = :0',[email],dbSelectOptions)
-		result.rows = result.rows.map(function(r){
-			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			return r;
-		})
-		console.log(result)
-		var user = {
-			id: result.rows[0]['id'],
-			name: result.rows[0]['full_name'],
-			email: result.rows[0]['email']
-		};
+		let user = {
+			id: 'n/a',
+			name: 'guest',
+			level: 'user'
+		}
+
+		if(edipi){
+			let result =  await connection.execute(`${user_rights} where edipi = :0`,[edipi],dbSelectOptions)
+
+			if(result.rows.length > 0){
+				result.rows = propNamesToLowerCase(result.rows)
+
+				//console.log(result)
+				user = {
+					id: result.rows[0]['id'],
+					name: result.rows[0]['updated_by_full_name'],
+					level: result.rows[0]['user_level'] == 1 ? 'admin' : 'user'
+				};
+			}	
+		}
+
+		//console.log(result,user)
 		jwt.sign({ user: user }, process.env.SECRET_KEY, (err, token) => {
 			res.json({
-				token: token
+				token: token,
+				user: user.level
 			});
 		});
 	}catch(err){
@@ -138,7 +153,30 @@ exports.register = async (req, res) => {
 // Authorization: Bearer <access_token>
 
 //! Verify Token
-exports.verifyToken = function verifyToken(req, res, next) {
+
+exports.verifyUser = async (req, res, next) => {
+	//! Get auth header value
+	const {edipi} = req.headers.cert;
+	const connection =  await oracledb.getConnection(dbConfig);
+
+	//console.log(req.headers.cert)
+	if (typeof edipi !== 'undefined') {
+		let result =  await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+		connection.close()
+
+		if(result.rows.length > 0){
+			console.log(`Succesfully identified user: ${edipi}!`);
+			next();
+			return;
+		}
+	}
+
+	//! Forbidden
+	res.status(400).send({message:'Forbiden call!!'});
+	//console.log(connection.on())
+};
+
+exports.verifyToken = async function verifyToken(req, res, next) {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
 
