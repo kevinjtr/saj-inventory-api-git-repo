@@ -244,14 +244,20 @@ exports.getPdfById = async function(req, res) {
 	
 				//res.contentType("application/pdf");
 				var file = path.join(__dirname , '../output/output_eng4900.pdf');    
-				res.download(file, function (err) {
-					if (err) {
-						console.log("Error");
-						console.log(err);
-					} else {
-						console.log("Success");
-					}    
+
+				fs.readFile(file , function (err,data){
+					res.contentType("application/pdf");
+					res.send(data);
 				});
+
+				// res.download(file, function (err) {
+				// 	if (err) {
+				// 		console.log("Error on sending file.");
+				// 		console.log(err);
+				// 	} else {
+				// 		console.log("Success on seding file.");
+				// 	}    
+				// });
 				//console.log(`returning ${result.rows.length} rows`)
 				// return res.status(200).json({
 				// 	status: 200,
