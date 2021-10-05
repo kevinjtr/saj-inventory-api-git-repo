@@ -1,3 +1,5 @@
+const fs = require('fs')
+
 module.exports = {
     propNamesToLowerCase: (rows) => {
       const returnRows = rows.map(function(r){
@@ -130,5 +132,13 @@ module.exports = {
     },
     containsAll: (needles, haystack) => { 
       return needles.every(i => haystack.includes(i))
-    }   
+    },
+    ReadJSON: async (file) => {
+      const read_data = await fs.promises.readFile(file, "utf8")
+      return new Promise((resolve) => { 
+          const parsed_read_data = JSON.parse(read_data);
+          resolve (parsed_read_data)
+      })
+      
+   }
   };
