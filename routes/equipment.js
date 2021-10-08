@@ -8,6 +8,7 @@ module.exports = function(app) {
 
 	//!GET
 	app.route('/equipment').get(controller.index);
+	app.route('/equipment/form').get(controller.form);
 
 	app.route('/equipment/:id').get(controller.getById);
 

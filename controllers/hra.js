@@ -4,7 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol, hra_employee} = require('../config/queries')
+const {employee_officeSymbol, hra_employee, hra_employee_form_auth} = require('../config/queries')
 const {rightPermision} = require('./validation/tools/user-database')
 const noReplaceCols = ['hra_num']
 
@@ -48,6 +48,49 @@ exports.index = async function(req, res) {
 		//logger.error(err)
 	}
 };
+
+//!SELECT * FROM HRA
+exports.form = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const connection =  await oracledb.getConnection(dbConfig);
+	const hra = {}
+	try{
+		const auth_hras = edit_rights ? hra_employee_form_auth.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth
+		let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		hra.losing = propNamesToLowerCase(result.rows)
+
+		for(let i=0;i<hra.losing.length;i++){
+			const {hra_num} = hra.losing[i]
+			result = await connection.execute(`SELECT * FROM EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
+			hra.losing[i].equipments = propNamesToLowerCase(result.rows)
+		}
+
+		const all_hras = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+		result = await connection.execute(`${all_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+		
+		hra.gaining = propNamesToLowerCase(result.rows)
+
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully get single data!',
+			data: hra,
+			editable: edit_rights
+		});
+
+	}catch(err){
+		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: [],//result.rows
+			editable: edit_rights
+		});
+		//logger.error(err)
+	}
+};
+
 
 //!SELECT HRA BY HRA_NUM
 exports.getById = async function(req, res) {

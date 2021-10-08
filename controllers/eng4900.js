@@ -16,6 +16,8 @@ const {handleData} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
+const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
+
 const printElements = (elements) => {
 	let str = ""
 	for(let i=0; i<elements.length; i++){
@@ -84,6 +86,7 @@ const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM EQUIPMEN
 
 const newQuerySelById = `SELECT
 		f.id as form_id,
+		f.status,
 		ra.alias as REQUESTED_ACTION,
 		f.LOSING_HRA as losing_hra_num,
 		l_hra.losing_hra_first_name,
@@ -544,30 +547,172 @@ exports.search = async function(req, res) {
 	}
 };
 
+
+const create4900EquipmentGroup = async (equipmentIds,connection) => {
+	let result = await connection.execute(`SELECT SEQ_EQUIPMENT_GROUP_ID.nextval from dual`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		const eGroupId = result.rows[0].NEXTVAL
+		let query = `INSERT INTO EQUIPMENT_GROUP (EQUIPMENT_GROUP_ID, EQUIPMENT_ID)
+		(SELECT ${eGroupId}, ID FROM EQUIPMENT WHERE ID IN (`
+
+		const uniqEqs = uniq(equipmentIds)
+
+		for(let i = 0; i < uniqEqs.length; i++){
+			query += (i > 0) ? ", :" + i : ":" + i;
+		}
+			
+		query += "))";
+
+		result = await connection.execute(query,uniqEqs,{autoCommit:true})
+		console.log(result)
+
+
+		return(result.rowsAffected > 0 ? eGroupId : -1)
+	}
+
+	return(-1)
+}
+
+
 //!INSERT form_4900
 exports.add = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edipi} = req.headers.cert
+	const connection =  await oracledb.getConnection(dbConfig);
+	const equipmentIds = req.body.form.equipment_group.map(x => x.id)
+
+	let keys = Object.keys(req.body.form)
+	const form = {}
+	const cells = {}
+	let cols = ""
+	let vals = ""
+
+	for(const key of keys){
+		if(req.body.form[key]){
+			form[key] = req.body.form[key]
+		}
+	}
+
+	let result =  await connection.execute(`SELECT * FROM REQUESTED_ACTION WHERE UPPER(NAME) = UPPER(:0)`,[form.requested_action],dbSelectOptions)
+
+
+	if(result.rows.length > 0 && form.hra.losing.hra_num && form.hra.gaining.hra_num && equipmentIds.length > 0){
+		form.requested_action = result.rows[0].ID
+		form.losing_hra = form.hra.losing.hra_num
+		form.gaining_hra = form.hra.gaining.hra_num
+		form.equipment_group_id = await create4900EquipmentGroup(equipmentIds,connection)
+		delete form.hra
+		delete form.equipment_group
+
+		result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+
+		if(result.rows.length > 0 && form.equipment_group_id != -1){
+			result.rows = filter(result.rows,function(x){ return !BANNED_COLS_ENG4900.includes(x.COLUMN_NAME)})
+			const col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+			keys = Object.keys(form)
+
+			for(let i=0; i<keys.length; i++){
+				if(col_names.includes(keys[i])){
+					let comma =  i && cols ? ', ': ''
+					cols = cols + comma + keys[i]
+					vals = vals + comma + ':' + keys[i]
+					cells[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(form[keys[i]]) :
+					(typeof form[keys[i]] == 'boolean') ? (form[keys[i]] ? 1 : 2) :  form[keys[i]]
+				}
+
+				if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+					result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					if(result.rows.length > 0){
+						const user_rights_id = result.rows[0].ID
+						const comma =  cols ? ', ': ''
+						cols = cols + comma + 'updated_by'
+                        vals = vals + comma + ':' + 'updated_by'
+						cells['updated_by'] = user_rights_id
+					}
+				}
+			}
+
+			let query = `INSERT INTO ANNUAL_INVENTORY (${cols}) VALUES (${vals})`
+
+			//result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+
+			console.log(query,cells)
+
+			connection.close()
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully added new form!',
+			});
+		}
+	}
+
+	// let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+
+		
+	// if(result.rows.length > 0){
+	// 	result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ENG4900.includes(c.COLUMN_NAME)})
+	// 	const col_names = result.rows.map(x=>x.COLUMN_NAME)
+	// 	keys = Object.keys(form)
+
+	// 	for(let i=0; i<keys.length; i++){
+	// 		if(col_names.includes(keys[i])){
+	// 			const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+	// 			let comma =  i && cols ? ', ': ''
+	// 			cols = cols + comma + col_name + ' = :' + keys[i]
+	// 			cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+	// 			(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+	// 		}
+
+	// 		if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+	// 			result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+	// 			if(result.rows.length > 0){
+	// 				const user_rights_id = result.rows[0].ID
+	// 				const comma =  cols ? ', ': ''
+	// 				cols = cols + comma + 'updated_by = :updated_by'
+	// 				cells.update['updated_by'] = user_rights_id
+	// 			}
+	// 		}
+	// 	}
+
+	// 	console.log(col_names)
+	// }
+	//console.log(req.body.form,form)
+
+	// req.body.form
+	// const {type} = req.body
+	// const {equipment_group, requested_action} = req.body.form
+	// const {losing, gaining} = req.body.form.hra
+	// const equipmentIds = equipment_group.map(x => x.id)
+
+	res.status(200).json({
+				status: 200,
+				message: 'data sent!'
+	});
+
 	// const connection =  await oracledb.getConnection(dbConfig);
 	// // const item_type = req.body.item_type ? req.body.item_type : 'no data' || ternary operator
 	// const { item_type } = req.body;
 
-	// try{
-	// 	result =  await connection.execute(`INSERT INTO form_4900 (item_type) values (:0)`,[item_type],{autoCommit:true})
-	// 	console.log(result)
-	// 	res.status(200).json({
-	// 		status: 200,
-	// 		error: false,
-	// 		message: 'Successfully add new data!',
-	// 		data: req.body
-	// 	});
-	// }catch(err){
-	// 	console.log(err);
-	// 	res.status(400).json({
-	// 		status: 400,
-	// 		message: 'Error add new data!'
-	// 	});
-	// }
+	try{
+	// 	let result =  await connection.execute(`SELECT * FROM REQUESTED_ACTION WHERE UPPER(NAME) = UPPER(:0)`,[requested_action],dbSelectOptions)
+
+	// 	if(result.rows.length > 0 && losing.hra_num && gaining.hra_num && equipmentIds.length > 0){
+	// 		const req_act_id = result.rows[0].ID
+
+	// 		console.log(req_act_id,losing.hra_num,gaining.hra_num,equipmentIds)
+	// 	}
+		
+
+	}catch(err){
+		console.log(err);
+		// res.status(400).json({
+		// 	status: 400,
+		// 	message: 'Error add new data!'
+		// });
+	}
 };
+
 
 //!UPDATE form_4900 DATA
 exports.update = async function(req, res) {

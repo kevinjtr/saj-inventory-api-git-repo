@@ -75,6 +75,35 @@ module.exports = {
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${user_rights}) ur
 	on ur.id = h.updated_by`,
+	hra_employee_form_auth:`SELECT 
+	h.hra_num,
+	e.first_name || ' ' || e.last_name as hra_full_name,
+	e.first_name hra_first_name,
+	e.last_name hra_last_name,
+	e.TITLE as hra_title,
+	e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
+	e.WORK_PHONE as hra_work_phone,
+	hec.HRA_EQUIPMENT_COUNT
+	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE USER_RIGHTS_ID = 1)
+	union all
+	SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM USER_RIGHTS WHERE ID = 1)) h
+	LEFT JOIN (${employee}) e 
+	on h.employee_id = e.id
+	LEFT JOIN (${equipment_count.hra}) hec
+	on h.hra_num = hec.hra_num
+	LEFT JOIN (${user_rights}) ur
+	on ur.id = h.updated_by`,
+	hra_num_form_auth:`SELECT 
+	h.hra_num
+	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE USER_RIGHTS_ID = 1)
+	union all
+	SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM USER_RIGHTS WHERE ID = 1)) h
+	LEFT JOIN (${employee}) e 
+	on h.employee_id = e.id
+	LEFT JOIN (${equipment_count.hra}) hec
+	on h.hra_num = hec.hra_num
+	LEFT JOIN (${user_rights}) ur
+	on ur.id = h.updated_by`,
 	hra_employee_no_count:`SELECT 
 	h.hra_num,
 	e.id as hra_employee_id,

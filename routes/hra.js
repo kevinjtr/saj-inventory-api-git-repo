@@ -6,6 +6,7 @@ module.exports = function(app) {
 
 	//!GET
 	app.route('/hra').get(controller.index);
+	app.route('/hra/form').get(controller.form);
 
 	app.route('/hra/:id').get(controller.getById);
 
