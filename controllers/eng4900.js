@@ -5,10 +5,11 @@ const path = require('path')
 const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
+const groupBy = require('lodash/groupBy');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_auth} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
@@ -21,7 +22,7 @@ const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const printElements = (elements) => {
 	let str = ""
 	for(let i=0; i<elements.length; i++){
-		str = str + (i ? ',' : '') + elements[i]
+		str = str + (i ? ', ' : '') + elements[i]
 	}
 	return str
 }
@@ -43,11 +44,12 @@ const andOR_multiple = {
 	'notEquals':and_
 }
 
-let queryForSearch = `SELECT 
+const queryForSearch = (id) => `SELECT 
 f.id as form_id,
 f.status,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 2 END originator,
 l_hra.losing_hra_first_name,
 l_hra.losing_hra_last_name,
 l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
@@ -296,6 +298,29 @@ exports.getPdfById = async function(req, res) {
 	}
 };
 
+
+
+const FormsToMaterialTableFormat = (form_groups) => {
+
+	const form_return = []
+
+	for(const id in form_groups){
+		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator} = form_groups[id][0]
+		
+		form_return.push({
+			bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
+			document_source: document_source,
+			form_id: form_id,
+			gaining_hra: `${gaining_hra_num} - ${gaining_hra_full_name}`,
+			losing_hra: `${losing_hra_num} - ${losing_hra_full_name}`,
+			status: status,
+			originator:originator
+		})
+	}
+
+	return(form_return)
+}
+
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
@@ -303,6 +328,7 @@ exports.search2 = async function(req, res) {
 	let query_search = '';
 	const forms = {}
 
+	console.log(req.user)
 	try{
 		if(edit_rights){
 			const {fields,options} = req.body;
@@ -391,50 +417,38 @@ exports.search2 = async function(req, res) {
 			//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
 
 
-			let query = `${queryForSearch} 
+			let query = `${queryForSearch(req.user)} 
 							${query_search != '' ? 'AND': ''} ${query_search}`
+
+			query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)})
+						OR
+					f.GAINING_HRA IN (${hra_num_form_auth(req.user)}))`
 
 			// let queryPrint = `${queryForSearch}
 			// ${query_search != '' ? 'AND ': ''} ${query_search}`
 
 			//console.log(query)
 			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+			let {rows} = result
 
-			// if (resultEquipment.rows.length > 0) {
-			// 	resultEquipment.rows = propNamesToLowerCase(resultEquipment.rows)
+			console.log(query)
 
-			// 	connection.close()
-			// 	res.status(200).json({
-			// 		status: 200,
-			// 		error: false,
-			// 		message: 'Successfully get single data!',
-			// 		data: resultEquipment.rows
-			// 	});
-			// } else {
-			if(result.rows.length > 0){
-				const form_ids = result.rows.map(x => x.FORM_ID)
-				const ids_print = printElements(form_ids)
-				query = `${queryForSearch} AND F.ID IN (${ids_print})`
-				result =  await connection.execute(`${query}`,{},dbSelectOptions)
-				//console.log(result2.rows)
+			
 
-				result.rows = propNamesToLowerCase(result.rows)
-				const uniqFormIds = uniq(result.rows.map(x => x.form_id))
-				
-				for(const form_id of uniqFormIds){
-					const formEquipment = filter(result.rows,function(o){ return o.form_id == form_id})
-					forms[form_id] = formEquipment
-				}
-			}
+			rows = propNamesToLowerCase(rows)
 
-			connection.close()
+			const form_groups = groupBy(rows, function(r) {
+				return r.form_id;
+			  });		
 
-			if(Object.keys(forms).length > 0){
+			const search_return = FormsToMaterialTableFormat(form_groups)
+
+			if(search_return.length > 0){
 				return res.status(200).json({
 					status: 200,
 					error: false,
 					message: 'Successfully get single data!',
-					data: forms,
+					data: search_return,
 					editable: edit_rights
 				});
 			}
@@ -444,7 +458,7 @@ exports.search2 = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: forms,
+			data: search_return,
 			editable: edit_rights
 		});
 	}catch(err){
@@ -565,9 +579,6 @@ const create4900EquipmentGroup = async (equipmentIds,connection) => {
 		query += "))";
 
 		result = await connection.execute(query,uniqEqs,{autoCommit:true})
-		console.log(result)
-
-
 		return(result.rowsAffected > 0 ? eGroupId : -1)
 	}
 
@@ -632,17 +643,35 @@ exports.add = async function(req, res) {
 				}
 			}
 
-			let query = `INSERT INTO ANNUAL_INVENTORY (${cols}) VALUES (${vals})`
+			let query = `INSERT INTO FORM_4900 (${cols}) VALUES (${vals})`
+			result = await connection.execute(query,cells,{autoCommit:true})
 
-			//result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+			if(result.rowsAffected > 0){
+				query = `${queryForSearch(req.user)} AND F.ROWID = :0`
+				result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
+				result.rows = propNamesToLowerCase(result.rows)
 
-			console.log(query,cells)
+				const form_groups = groupBy(result.rows, function(r) {
+					return r.form_id;
+				  });	
+
+				const search_return = FormsToMaterialTableFormat(form_groups)
+
+				connection.close()
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully added new form!',
+					data: search_return[0]
+				});
+			}
 
 			connection.close()
 			return res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully added new form!',
+				status: 400,
+				error: true,
+				message: 'Could not add new form!',
+				data: {},
 			});
 		}
 	}

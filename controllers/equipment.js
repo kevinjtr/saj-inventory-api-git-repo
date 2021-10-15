@@ -72,7 +72,7 @@ exports.form = async function(req, res) {
 	let hra_num_groups = {}
 
 	try{
-		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth}) hra_emp
+		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth(1)}) hra_emp
 												LEFT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
 

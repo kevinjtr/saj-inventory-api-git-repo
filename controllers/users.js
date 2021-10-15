@@ -166,6 +166,7 @@ exports.verifyUser = async (req, res, next) => {
 
 		if(result.rows.length > 0){
 			console.log(`Succesfully identified user: ${edipi}!`);
+			req.user = result.rows[0].ID
 			next();
 			return;
 		}

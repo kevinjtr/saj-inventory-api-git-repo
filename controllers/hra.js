@@ -55,7 +55,7 @@ exports.form = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	const hra = {}
 	try{
-		const auth_hras = edit_rights ? hra_employee_form_auth.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth
+		const auth_hras = edit_rights ? hra_employee_form_auth(1).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(1)
 		let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		hra.losing = propNamesToLowerCase(result.rows)
 
