@@ -331,7 +331,7 @@ exports.search2 = async function(req, res) {
 	console.log(req.user)
 	try{
 		if(edit_rights){
-			const {fields,options} = req.body;
+			const {fields,options, tab} = req.body;
 			//console.log(options)
 			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 			//console.log(searchCriteria)
@@ -416,24 +416,19 @@ exports.search2 = async function(req, res) {
 			}
 			//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
 
-
 			let query = `${queryForSearch(req.user)} 
 							${query_search != '' ? 'AND': ''} ${query_search}`
 
-			query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)})
-						OR
-					f.GAINING_HRA IN (${hra_num_form_auth(req.user)}))`
+			if(tab == "my_forms"){
+				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ))`
+			}
 
-			// let queryPrint = `${queryForSearch}
-			// ${query_search != '' ? 'AND ': ''} ${query_search}`
+			if(tab == "sign_forms"){
+				query += `AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS >= 5)`
+			}
 
-			//console.log(query)
 			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 			let {rows} = result
-
-			console.log(query)
-
-			
 
 			rows = propNamesToLowerCase(rows)
 
