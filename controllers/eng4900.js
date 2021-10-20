@@ -8,8 +8,8 @@ const dbConfig = require('../dbconfig.js');
 const groupBy = require('lodash/groupBy');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_auth} = require('../config/queries');
+const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
+const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_auth, hra_num_form_all} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
@@ -18,6 +18,7 @@ const {handleData} = require('../pdf-fill.js')
 //const connection = require('../connect');
 
 const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const printElements = (elements) => {
 	let str = ""
@@ -323,15 +324,15 @@ const FormsToMaterialTableFormat = (form_groups) => {
 
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
+	const TABS = ["my_forms","hra_forms","sign_forms","completed_forms"]
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
-	const forms = {}
 
 	console.log(req.user)
 	try{
 		if(edit_rights){
-			const {fields,options, tab} = req.body;
+			const {fields,options, tab, init} = req.body;
 			//console.log(options)
 			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 			//console.log(searchCriteria)
@@ -415,16 +416,76 @@ exports.search2 = async function(req, res) {
 				//}
 			}
 			//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
+			const tabsReturnObject = {}		
 
-			let query = `${queryForSearch(req.user)} 
-							${query_search != '' ? 'AND': ''} ${query_search}`
+			if(init){
+				for(let i=0;i<TABS.length;i++){
+					const tab_name = TABS[i]
+
+					let query = `${queryForSearch(req.user)} `
+
+					if(tab_name == "my_forms"){
+						query += `AND (f.LOSING_HRA IN (${hra_num_form_self(req.user)} )) `
+					}
+
+					if(tab_name == "hra_forms"){
+						query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
+					}
+		
+					if(tab_name == "sign_forms"){//Change: needs to be self.
+						query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3)`
+					}
+
+					if(tab_name == "completed_forms"){
+						query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS >= 6) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_all(req.user)} ) AND F.STATUS >= 6)`
+					}
+
+					//console.log(`QUERY-${tab_name}`,query)
+		
+					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+					let {rows} = result
+		
+					rows = propNamesToLowerCase(rows)
+		
+					const form_groups = groupBy(rows, function(r) {
+						return r.form_id;
+					  });		
+		
+					tabsReturnObject[i] = FormsToMaterialTableFormat(form_groups)
+				}
+
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully get single data!',
+					data: tabsReturnObject,
+					editable: edit_rights
+				});
+			}
+
+			let query = `${queryForSearch(req.user)}
+							${query_search != '' ? ' AND': ''} ${query_search} `
+
+			query += `${query_search != '' ? 'AND': ''} ${query_search}`
 
 			if(tab == "my_forms"){
-				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ))`
+				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
+			}
+
+			if(tab == "hra_forms"){
+				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
 			}
 
 			if(tab == "sign_forms"){
-				query += `AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS >= 5)`
+				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3)`
+			}
+
+			if(tab == "completed_forms"){
+				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS >= 6) UNION ALL 
+				${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS >= 6)`
 			}
 
 			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
@@ -443,7 +504,7 @@ exports.search2 = async function(req, res) {
 					status: 200,
 					error: false,
 					message: 'Successfully get single data!',
-					data: search_return,
+					data: {[TABS.indexOf(tab)]: search_return},
 					editable: edit_rights
 				});
 			}
@@ -738,33 +799,125 @@ exports.add = async function(req, res) {
 };
 
 
-//!UPDATE form_4900 DATA
+//!UPDATE FROM_4900 DATA
 exports.update = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
-	// const connection =  await oracledb.getConnection(dbConfig);
-	// const { item_type } = req.body;
+	const connection =  await oracledb.getConnection(dbConfig);
+	//let columnErrors = {rows:{},errorFound:false}
+	const {edipi} = req.headers.cert
 
-	// if (!item_type) {
-	// 	res.status(300).json({
-	// 		status: 300,
-	// 		error: true,
-	// 		message: 'item_type needed for update!'
-	// 	});
-	// } else {
-	// 	try{
-	// 		console.log(req.body)
-	// 		let result =  await connection.execute(`UPDATE form_4900 SET item_type = :0 where id = :1`,[item_type, req.params.id],{autoCommit:true})
-	// 		console.log(result)
-	// 		res.status(200).json({
-	// 			status: 200,
-	// 			error: false,
-	// 			message: 'Successfully update data with id: ' + req.params.id,
-	// 			data: req.body
-	// 		});
-	// 	}catch(err){
-	// 		console.log(err);
-	// 	}
-	// }
+	try{
+		const {changes, undo} = req.body.params
+
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				//columnErrors.rows[row] = {}
+				const {newData,oldData} = changes[row];
+				const cells = newData && oldData ? {new:objectDifference(oldData,newData,'tableData'),old:oldData} : newData
+				//console.log(cells)
+
+				const keys = cells.new ?  Object.keys(cells.new) : []
+				cells.update = {}
+				let cols = ''
+				const cell_id = cells.old ? cells.old.form_id : -1
+
+				if(cell_id != -1){
+					let result = await connection.execute(`SELECT * FROM FORM_4900 WHERE ID = :0`,[cell_id],dbSelectOptions)
+					//const editable = result.rows.length > 0 ? (result.rows[0].STATUS >= 8 ? true : false) : true
+					result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+	
+					if(result.rows.length > 0){
+						result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ENG4900.includes(c.COLUMN_NAME)})
+						let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())	
+	
+						if(keys.length > 0){
+							for(let i=0; i<keys.length; i++){
+								if(col_names.includes(keys[i])){
+									let comma =  i && cols ? ', ': ''
+									cols = cols + comma + keys[i] + ' = :' + keys[i]
+									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+								}
+	
+								if(i == keys.length - 1 && typeof edipi != 'undefined'){
+									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+
+									if(result.rows.length > 0){
+										const user_rights_id = result.rows[0].ID
+										const comma =  cols ? ', ': ''
+										cols = cols + comma + 'updated_by = :updated_by'
+										cells.update['updated_by'] = user_rights_id
+									}
+								}
+							}
+				
+							let query = `UPDATE FORM_4900 SET ${cols} 
+							WHERE ID = ${cells.old.form_id}`
+						
+							//console.log(query,cells.update)
+							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+							
+							if(result.rowsAffected > 0){
+								query = `${queryForSearch(req.user)} AND F.ROWID = :0`
+								result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
+								result.rows = propNamesToLowerCase(result.rows)
+				
+								const form_groups = groupBy(result.rows, function(r) {
+									return r.form_id;
+								  });	
+				
+								const search_return = FormsToMaterialTableFormat(form_groups)
+				
+								console.log(form_groups,result.rows)
+								connection.close()
+								return res.status(200).json({
+									status: 200,
+									error: false,
+									message: 'Successfully added new form!',
+									data: search_return[0]
+								});
+							}
+						}
+	
+						//connection.close()
+	
+						// return (
+						// 	res.status(200).json({
+						// 		status: 200,
+						// 		error: false,
+						// 		message: 'Successfully update data with id: ', //+ req.params.id,
+						// 		data: null,//req.body,
+						// 		//columnErrors: columnErrors
+						// 	})
+						// )
+					}
+				}
+			}
+		}
+		//if(columnErrors.errorFound){
+			//connection.close()//don't save changes if error is found.
+		//}else if(undo){
+		connection.close()
+		//}
+		
+		return (
+			res.status(200).json({
+				status: 400,
+				error: true,
+				message: 'Could not update data', //+ req.params.id,
+				data: null,//req.body,
+				//columnErrors: columnErrors
+			})
+		)
+	}catch(err){
+		connection.close()
+		console.log(err);
+		res.status(400).json({
+			status: 400,
+			error: true,
+			//columnErrors:columnErrors,
+			message: 'Cannot delete data with id: ' //+ req.params.id
+		});
+	}
 };
 
 //!DELETE form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).

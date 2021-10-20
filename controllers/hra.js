@@ -4,7 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol, hra_employee, hra_employee_form_auth} = require('../config/queries')
+const {employee_officeSymbol, hra_employee, hra_employee_form_all, hra_employee_form_auth, hra_employee_form_self} = require('../config/queries')
 const {rightPermision} = require('./validation/tools/user-database')
 const noReplaceCols = ['hra_num']
 
@@ -53,33 +53,57 @@ exports.index = async function(req, res) {
 exports.form = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
-	const hra = {}
-	try{
-		const auth_hras = edit_rights ? hra_employee_form_auth(1).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(1)
-		let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
-		hra.losing = propNamesToLowerCase(result.rows)
+	const TABS = ["my_forms","hra_forms"]
+	const tabsReturnObject = {}	
 
-		for(let i=0;i<hra.losing.length;i++){
-			const {hra_num} = hra.losing[i]
-			result = await connection.execute(`SELECT * FROM EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
-			hra.losing[i].equipments = propNamesToLowerCase(result.rows)
+	try{
+		for(let i=0;i<TABS.length;i++){
+			const tab_name = TABS[i]
+			const hra = {}
+			let auth_hras = []
+
+			if(tab_name == "my_forms"){
+				auth_hras = edit_rights ? hra_employee_form_self(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_self(req.user)
+			}
+
+			if(tab_name == "hra_forms"){
+				auth_hras = edit_rights ? hra_employee_form_auth(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(req.user)
+			}
+
+			//console.log('auth_hras',auth_hras)
+			//const auth_hras = edit_rights ? hra_employee_form_auth(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(req.user)
+			let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+
+			if(result.rows.length > 0){
+				hra.losing = propNamesToLowerCase(result.rows)
+
+				for(let j=0;j<hra.losing.length;j++){
+					const {hra_num} = hra.losing[j]
+					result = await connection.execute(`SELECT * FROM EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
+					hra.losing[j].equipments = propNamesToLowerCase(result.rows)
+				}
+
+				const all_hras = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+				result = await connection.execute(`${all_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
+				
+				hra.gaining = propNamesToLowerCase(result.rows)
+
+				tabsReturnObject[i] = hra
+			}
 		}
 
-		const all_hras = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
-		result = await connection.execute(`${all_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
-		
-		hra.gaining = propNamesToLowerCase(result.rows)
-
+		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: hra,
+			data: tabsReturnObject,
 			editable: edit_rights
 		});
 
 	}catch(err){
 		console.log(err)
+		connection.close()
 		res.status(400).json({
 			status: 400,
 			error: true,
@@ -90,7 +114,6 @@ exports.form = async function(req, res) {
 		//logger.error(err)
 	}
 };
-
 
 //!SELECT HRA BY HRA_NUM
 exports.getById = async function(req, res) {

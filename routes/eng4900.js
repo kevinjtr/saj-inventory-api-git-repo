@@ -15,6 +15,7 @@ module.exports = function(app) {
 	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);
 	//!POST
 	app.route('/eng4900/add').post(usersController.verifyUser, controller.add);
+	app.route('/eng4900/update').post(usersController.verifyUser, controller.update);
 	//app.route('/eng4900').post(controller.add);
 	//!PATCH
 	//app.route('/eng4900/:id').patch(usersController.verifyToken, controller.update);
