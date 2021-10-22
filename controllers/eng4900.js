@@ -50,7 +50,7 @@ f.id as form_id,
 f.status,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 2 END originator,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
 l_hra.losing_hra_first_name,
 l_hra.losing_hra_last_name,
 l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
@@ -952,11 +952,22 @@ exports.destroy = async function(req, res) {
 
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.upload = async function(req, res) {
-	console.log(req.headers)
+	if (!req.files) {
+        return res.status(500).send({ msg: "file is not found" })
+    }
+        // accessing the file
+    const myFile = req.files.file;
 
-	res.status(200).json({
-		status: 200,
-	})
+	//  mv() method places the file inside public directory
+	
+    myFile.mv(path.join(__dirname,`../public/${myFile.name}`), function (err) {
+        if (err) {
+            console.log(err)
+            return res.status(500).send({ msg: "Error occured" });
+        }
+        // returing the response with file path and name
+        return res.send({name: myFile.name, path: `/${myFile.name}`});
+    });
 };
 
 

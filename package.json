@@ -18,6 +18,7 @@
 		"date-fns": "^2.21.3",
 		"dotenv": "^8.1.0",
 		"express": "^4.17.1",
+		"express-fileupload": "^1.2.1",
 		"express-validation": "^1.0.3",
 		"fs": "0.0.1-security",
 		"https": "^1.0.0",
