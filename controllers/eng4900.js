@@ -950,6 +950,16 @@ exports.destroy = async function(req, res) {
 	// }
 };
 
+//!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
+exports.upload = async function(req, res) {
+	console.log(req.headers)
+
+	res.status(200).json({
+		status: 200,
+	})
+};
+
+
 //!SELECT form_4900 BY ID
 // exports.testPdfBuild = async function(req, res) {
 
