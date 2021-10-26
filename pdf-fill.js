@@ -8,6 +8,17 @@ const fs = require('fs');
 const path = require('path')
 const moment = require('moment')
 //const dir = path.join(__dirname,'./BulkPdf')
+const findIndex = require('lodash/findIndex');
+
+const SIGN_DATE_FIELD_NAME = {
+    ROR_PROP:"b Date",
+    LOSING:"b Date_2",
+    GAINING:"b Date_3",
+    PBO_LOSING:"f Date",
+    PBO_GAINING:"f Date_2",
+    LOGISTICS_RECEIVED:"b Date_4",
+    LOGISTICS_POSTED_BY:"b Date_5"
+}
 
 function formatPhoneNumber(phoneNumberString) {
     var cleaned = ('' + phoneNumberString).replace(/\D/g, '');
@@ -16,7 +27,40 @@ function formatPhoneNumber(phoneNumberString) {
       return '(' + match[1] + ') ' + match[2] + '-' + match[3];
     }
     return null;
-  }
+}
+
+const eng4900Signature = async (pdf,person) => {
+
+    const field_keys = Object.keys(SIGN_DATE_FIELD_NAME)
+    const idx = findIndex(field_keys,function(k){return k == person.toUpperCase()})
+
+    if(idx == -1 ) return false
+
+    const newKeys = field_keys.filter(function(value, index, arr){ 
+        return index <= idx && index > 0;//ignore ror_prop signature.
+    });
+
+    const readFile = util.promisify(fs.readFile)
+
+    function getStuff() {
+        return readFile(path.join(__dirname, pdf))
+    }
+
+    const file = await getStuff()
+    const pdfDoc = await PDFDocument.load(file)
+    const form = pdfDoc.getForm()
+    let flag = true
+
+    for(const key of newKeys){
+        const pdfField = form.getTextField(SIGN_DATE_FIELD_NAME[key])
+        const fieldText = pdfField.getText()
+        const isFieldReadOnly = pdfField.isReadOnly()    
+
+        flag = flag && (fieldText ? fieldText.length == 10 : false) && isFieldReadOnly
+    }
+    
+    return flag
+}
 
 var fillEng4900PDF = async function(data){
     const readFile = util.promisify(fs.readFile)
@@ -103,8 +147,7 @@ var create4900Json = async function(form_data){
     fillEng4900PDF(data)
 }
 
-module.exports = function(){
-    return {
+module.exports = {
         handleData : async (data) => {
             try{
                 await create4900Json(data)
@@ -113,11 +156,9 @@ module.exports = function(){
                 console.log(err)
                 return false
             }
-            
-    }
+        },
+        ValidateEng4900Signature: async (pdf, person) => await eng4900Signature(pdf, person),
 }
-}();
-
 
 // var createFilledEng4900 = async function(form_data){
 //     console.log("updateXmlDirectory() start");

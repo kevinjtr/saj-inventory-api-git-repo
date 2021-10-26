@@ -13,7 +13,7 @@ const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_aut
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
-const {handleData} = require('../pdf-fill.js')
+const {handleData, ValidateEng4900Signature} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
@@ -299,8 +299,6 @@ exports.getPdfById = async function(req, res) {
 	}
 };
 
-
-
 const FormsToMaterialTableFormat = (form_groups) => {
 
 	const form_return = []
@@ -531,92 +529,6 @@ exports.search2 = async function(req, res) {
 	}
 };
 
-//!SELECT form_4900 BY FIELDS DATA
-exports.search = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-	const forms = {}
-
-	//console.log(req.body.fields)
-	const {id} = req.body.fields
-	//console.log(id?id:false)
-
-	try{				
-        let query = `SELECT 
-        f.id as form_id,
-        ra.alias as REQUESTED_ACTION,
-		f.LOSING_HRA as losing_hra_num,
-		l_hra.losing_hra_first_name,
-		l_hra.losing_hra_last_name,
-		l_hra.losing_hra_office_symbol,
-		l_hra.losing_hra_os_alias,
-		l_hra.losing_hra_work_phone,
-		f.GAINING_HRA as gaining_hra_num,
-		g_hra.gaining_hra_first_name,
-		g_hra.gaining_hra_last_name,
-		g_hra.gaining_hra_office_symbol,
-		g_hra.gaining_hra_os_alias,
-		g_hra.gaining_hra_work_phone,
-        f.DATE_CREATED,
-        f.FOLDER_LINK,
-        eg.EQUIPMENT_GROUP_ID,
-        e.id as EQUIPMENT_ID, 
-            e.BAR_TAG_NUM , 
-            e.CATALOG_NUM , 
-            e.BAR_TAG_HISTORY_ID , 
-            e.MANUFACTURER , 
-            e."MODEL", 
-            e.CONDITION , 
-            e.SERIAL_NUM , 
-            e.ACQUISITION_DATE , 
-            e.ACQUISITION_PRICE , 
-            e.DOCUMENT_NUM, 
-            e.ITEM_TYPE , 
-            e.USER_EMPLOYEE_ID
-			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-			 (${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
-		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num ${id ? `and f.id = ${id}`:''}`
-
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = propNamesToLowerCase(result.rows)
-			const uniqFormIds = uniq(result.rows.map(x => x.form_id))
-			
-            for(const form_id of uniqFormIds){
-                const formEquipment = filter(result.rows,function(o){ return o.form_id == form_id})
-				forms[form_id] = formEquipment
-            }
-        }
-            
-        if(Object.keys(forms).length > 0){
-			res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully get single data!',
-				data: forms
-			});
-		} else {
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: forms
-			});
-		}
-	}catch(err){
-        console.log('in error')
-		res.status(400).json({
-            status: 400,
-            error: true,
-            message: 'No data found!',
-            data: []
-        });
-		//logger.error(err)
-	}
-};
-
 
 const create4900EquipmentGroup = async (equipmentIds,connection) => {
 	let result = await connection.execute(`SELECT SEQ_EQUIPMENT_GROUP_ID.nextval from dual`,{},dbSelectOptions)
@@ -640,7 +552,6 @@ const create4900EquipmentGroup = async (equipmentIds,connection) => {
 
 	return(-1)
 }
-
 
 //!INSERT form_4900
 exports.add = async function(req, res) {
@@ -950,26 +861,39 @@ exports.destroy = async function(req, res) {
 	// }
 };
 
+const savePdfToDatabase = async (filename) => {
+	console.log(filename)
+	const connection =  await oracledb.getConnection(dbConfig);
+	result = await connection.execute('CALL WRITE_BLOB_TO_FILE (:0)',[filename],{autoCommit:true})
+	console.log(result)
+	connection.close()
+}
+
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.upload = async function(req, res) {
 	if (!req.files) {
         return res.status(500).send({ msg: "file is not found" })
-    }
-        // accessing the file
-    const myFile = req.files.file;
-
-	//  mv() method places the file inside public directory
+	}
 	
-    myFile.mv(path.join(__dirname,`../public/${myFile.name}`), function (err) {
+    // accessing the file
+	const myFile = req.files.file;
+	
+	//  mv() method places the file inside public directory
+    myFile.mv(path.join(__dirname,`../public/${myFile.name}`), async function (err) {
         if (err) {
             console.log(err)
             return res.status(500).send({ msg: "Error occured" });
-        }
-        // returing the response with file path and name
-        return res.send({name: myFile.name, path: `/${myFile.name}`});
-    });
-};
+		}
 
+		const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
+		console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
+
+		//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
+	});
+	
+	// returing the response with file path and name
+	return res.send({name: myFile.name, path: `/${myFile.name}`});
+};
 
 //!SELECT form_4900 BY ID
 // exports.testPdfBuild = async function(req, res) {

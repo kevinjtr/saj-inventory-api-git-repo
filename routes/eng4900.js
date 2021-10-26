@@ -9,7 +9,6 @@ module.exports = function(app) {
 
 	app.route('/eng4900/:id').get(usersController.verifyUser,controller.getById);
 	app.route('/eng4900/pdf/:id').get(usersController.verifyUser,controller.getPdfById);
-	app.route('/eng4900/search').post(usersController.verifyUser,controller.search);
 	app.route('/eng4900/search2').post(usersController.verifyUser,controller.search2);
 	app.route('/eng4900/upload').post(usersController.verifyUser, controller.upload);
 
