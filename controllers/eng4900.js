@@ -13,7 +13,7 @@ const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_aut
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
-const {handleData, ValidateEng4900Signature} = require('../pdf-fill.js')
+const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 
@@ -174,7 +174,7 @@ exports.getById = async function(req, res) {
 				result.rows[0].equipment_group = eg_result.rows
 				//console.log(result.rows[0])
 	
-				handleData(result.rows[0])
+				create4900(result.rows[0])
 	
 				//console.log(`returning ${result.rows.length} rows`)
 				return res.status(200).json({
@@ -222,8 +222,6 @@ exports.getPdfById = async function(req, res) {
 
 			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
 			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
-
-			//console.log(g_keys)
 			const hra = {gaining:{},losing:{}}
 
 			for(const key of g_keys){
@@ -236,25 +234,40 @@ exports.getPdfById = async function(req, res) {
 
 			result.rows[0].equipment_group = []
 			result.rows[0].hra = hra
-
-			//console.log(result.rows[0].equipment_group_id)
 			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
 
-			//console.log(eg_result)
 			if(eg_result.rows.length > 0){
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
-				result.rows[0].equipment_group = eg_result.rows
-				//console.log(result.rows[0])
-	
-				await handleData(result.rows[0])
+				result.rows[0].equipment_group = eg_result.rows	
+				const result_pdf = await create4900(result.rows[0])
+				
+				if(result_pdf){
+					var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+
+					fs.readFile(file , function (err,data){
+						res.contentType("application/pdf");
+						res.send(data);
+						
+					});
+
+					return(res)
+				}
+				
+				// .then(()=>{
+
+				// 	var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+
+				// 	fs.readFile(file , function (err,data){
+				// 		res.contentType("application/pdf");
+				// 		res.send(data);
+				// 	});
+				// }).catch((err) => {
+				// 	res.status(400)
+				// 	  .json({message: 'an error has occured.', err: err});
+				//   });
 	
 				//res.contentType("application/pdf");
-				var file = path.join(__dirname , '../output/output_eng4900.pdf');    
-
-				fs.readFile(file , function (err,data){
-					res.contentType("application/pdf");
-					res.send(data);
-				});
+				
 
 				// res.download(file, function (err) {
 				// 	if (err) {
@@ -273,29 +286,12 @@ exports.getPdfById = async function(req, res) {
 				// });
 			}
 
-			// return res.status(200).json({
-			// 	status: 200,
-			// 	error: false,
-			// 	message: 'Successfully get single data!',//return form and no bartags.
-			// 	data: result.rows[0]
-			// });
+			return res.status(400).json({message: 'an error has occured.', error: true});
 		}
 
-		// return res.status(400).json({
-		// 	status: 400,
-		// 	error: true,
-		// 	message: 'No data found!',
-		// 	data: null
-		// });
 	}catch(err){
-		// console.log(err)
-		// return res.status(400).json({
-		// 	status: 400,
-		// 	error: true,
-		// 	message: 'No data found!',
-		// 	data: null
-		// });
-		//logger.error(err)
+		console.log(err)
+		res.status(400).json({message: err, error: true});
 	}
 };
 
@@ -915,7 +911,7 @@ exports.upload = async function(req, res) {
 // 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 // 				result.rows[0].equipment_group = eg_result.rows
 
-// 				pdfFill.handleData(result.rows[0])
+// 				pdfFill.create4900(result.rows[0])
 
 // 				return res.status(200).json({
 // 					status: 200,
