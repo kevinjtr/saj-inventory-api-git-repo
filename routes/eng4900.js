@@ -9,12 +9,13 @@ module.exports = function(app) {
 
 	app.route('/eng4900/:id').get(usersController.verifyUser,controller.getById);
 	app.route('/eng4900/pdf/:id').get(usersController.verifyUser,controller.getPdfById);
-	app.route('/eng4900/search').post(usersController.verifyUser,controller.search);
 	app.route('/eng4900/search2').post(usersController.verifyUser,controller.search2);
-	
+	app.route('/eng4900/upload').post(usersController.verifyUser, controller.upload);
+
 	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);
 	//!POST
-	//app.route('/eng4900').post(usersController.verifyToken, controller.add);
+	app.route('/eng4900/add').post(usersController.verifyUser, controller.add);
+	app.route('/eng4900/update').post(usersController.verifyUser, controller.update);
 	//app.route('/eng4900').post(controller.add);
 	//!PATCH
 	//app.route('/eng4900/:id').patch(usersController.verifyToken, controller.update);

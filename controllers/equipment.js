@@ -1,11 +1,13 @@
 'use strict';
 //const response = require('../response');
+const fs = require('fs');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
+const groupBy = require('lodash/groupBy');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {rightPermision} = require('./validation/tools/user-database')
-const {equipment_employee,hra_employee} = require('../config/queries');
+const {equipment_employee,hra_employee, hra_num_form_auth} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
@@ -48,6 +50,46 @@ exports.index = async function(req, res) {
 			error: false,
 			message: 'Successfully get equipment data!',
 			data: result.rows,
+			editable: edit_rights
+		});
+	}catch(err){
+		connection.close()
+		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: [],
+			editable: edit_rights
+		});
+	}
+};
+
+//!SELECT * FROM EQUIPMENT
+exports.form = async function(req, res) {
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const connection =  await oracledb.getConnection(dbConfig);
+	let hra_num_groups = {}
+
+	try{
+		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth(1)}) hra_emp
+												LEFT JOIN (${equipment_employee}) eq_emp
+												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
+
+		
+		if(result.rows.length > 0){
+			result.rows = propNamesToLowerCase(result.rows)
+			hra_num_groups = groupBy(result.rows, function(n) {
+				return n.hra_num;
+			  });
+		}
+
+		connection.close()
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully get equipment data!',
+			data: hra_num_groups,
 			editable: edit_rights
 		});
 	}catch(err){

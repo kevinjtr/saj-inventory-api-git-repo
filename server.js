@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const cors = require('cors');
 const path = require('path');
 const csv = require('./tools/csv-parser/csv-to-json')
+const fileUpload = require('express-fileupload');
 
 let  usaceCertMiddleware;
 
@@ -28,6 +29,7 @@ app.use(
 app.use(bodyParser.json());
 app.use(morgan('dev'));
 app.use(usaceCertMiddleware);
+app.use(fileUpload());
 //app.use(cors());
 
 // app.use((req, res, next) => {

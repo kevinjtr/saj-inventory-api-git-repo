@@ -5,21 +5,25 @@ const path = require('path')
 const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
+const groupBy = require('lodash/groupBy');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra} = require('../config/queries');
+const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
+const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_auth, hra_num_form_all} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
-const {handleData} = require('../pdf-fill.js')
+const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
+
+const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 const printElements = (elements) => {
 	let str = ""
 	for(let i=0; i<elements.length; i++){
-		str = str + (i ? ',' : '') + elements[i]
+		str = str + (i ? ', ' : '') + elements[i]
 	}
 	return str
 }
@@ -41,11 +45,12 @@ const andOR_multiple = {
 	'notEquals':and_
 }
 
-let queryForSearch = `SELECT 
+const queryForSearch = (id) => `SELECT 
 f.id as form_id,
 f.status,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
 l_hra.losing_hra_first_name,
 l_hra.losing_hra_last_name,
 l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
@@ -84,6 +89,7 @@ const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM EQUIPMEN
 
 const newQuerySelById = `SELECT
 		f.id as form_id,
+		f.status,
 		ra.alias as REQUESTED_ACTION,
 		f.LOSING_HRA as losing_hra_num,
 		l_hra.losing_hra_first_name,
@@ -168,7 +174,7 @@ exports.getById = async function(req, res) {
 				result.rows[0].equipment_group = eg_result.rows
 				//console.log(result.rows[0])
 	
-				handleData(result.rows[0])
+				create4900(result.rows[0])
 	
 				//console.log(`returning ${result.rows.length} rows`)
 				return res.status(200).json({
@@ -216,8 +222,6 @@ exports.getPdfById = async function(req, res) {
 
 			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
 			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
-
-			//console.log(g_keys)
 			const hra = {gaining:{},losing:{}}
 
 			for(const key of g_keys){
@@ -230,25 +234,40 @@ exports.getPdfById = async function(req, res) {
 
 			result.rows[0].equipment_group = []
 			result.rows[0].hra = hra
-
-			//console.log(result.rows[0].equipment_group_id)
 			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
 
-			//console.log(eg_result)
 			if(eg_result.rows.length > 0){
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
-				result.rows[0].equipment_group = eg_result.rows
-				//console.log(result.rows[0])
-	
-				await handleData(result.rows[0])
+				result.rows[0].equipment_group = eg_result.rows	
+				const result_pdf = await create4900(result.rows[0])
+				
+				if(result_pdf){
+					var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+
+					fs.readFile(file , function (err,data){
+						res.contentType("application/pdf");
+						res.send(data);
+						
+					});
+
+					return(res)
+				}
+				
+				// .then(()=>{
+
+				// 	var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+
+				// 	fs.readFile(file , function (err,data){
+				// 		res.contentType("application/pdf");
+				// 		res.send(data);
+				// 	});
+				// }).catch((err) => {
+				// 	res.status(400)
+				// 	  .json({message: 'an error has occured.', err: err});
+				//   });
 	
 				//res.contentType("application/pdf");
-				var file = path.join(__dirname , '../output/output_eng4900.pdf');    
-
-				fs.readFile(file , function (err,data){
-					res.contentType("application/pdf");
-					res.send(data);
-				});
+				
 
 				// res.download(file, function (err) {
 				// 	if (err) {
@@ -267,42 +286,47 @@ exports.getPdfById = async function(req, res) {
 				// });
 			}
 
-			// return res.status(200).json({
-			// 	status: 200,
-			// 	error: false,
-			// 	message: 'Successfully get single data!',//return form and no bartags.
-			// 	data: result.rows[0]
-			// });
+			return res.status(400).json({message: 'an error has occured.', error: true});
 		}
 
-		// return res.status(400).json({
-		// 	status: 400,
-		// 	error: true,
-		// 	message: 'No data found!',
-		// 	data: null
-		// });
 	}catch(err){
-		// console.log(err)
-		// return res.status(400).json({
-		// 	status: 400,
-		// 	error: true,
-		// 	message: 'No data found!',
-		// 	data: null
-		// });
-		//logger.error(err)
+		console.log(err)
+		res.status(400).json({message: err, error: true});
 	}
 };
 
+const FormsToMaterialTableFormat = (form_groups) => {
+
+	const form_return = []
+
+	for(const id in form_groups){
+		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator} = form_groups[id][0]
+		
+		form_return.push({
+			bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
+			document_source: document_source,
+			form_id: form_id,
+			gaining_hra: `${gaining_hra_num} - ${gaining_hra_full_name}`,
+			losing_hra: `${losing_hra_num} - ${losing_hra_full_name}`,
+			status: status,
+			originator:originator
+		})
+	}
+
+	return(form_return)
+}
+
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
+	const TABS = ["my_forms","hra_forms","sign_forms","completed_forms"]
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
-	const forms = {}
 
+	console.log(req.user)
 	try{
 		if(edit_rights){
-			const {fields,options} = req.body;
+			const {fields,options, tab, init} = req.body;
 			//console.log(options)
 			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 			//console.log(searchCriteria)
@@ -386,52 +410,95 @@ exports.search2 = async function(req, res) {
 				//}
 			}
 			//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
+			const tabsReturnObject = {}		
 
+			if(init){
+				for(let i=0;i<TABS.length;i++){
+					const tab_name = TABS[i]
 
-			let query = `${queryForSearch} 
-							${query_search != '' ? 'AND': ''} ${query_search}`
+					let query = `${queryForSearch(req.user)} `
 
-			// let queryPrint = `${queryForSearch}
-			// ${query_search != '' ? 'AND ': ''} ${query_search}`
+					if(tab_name == "my_forms"){
+						query += `AND (f.LOSING_HRA IN (${hra_num_form_self(req.user)} )) `
+					}
 
-			//console.log(query)
-			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+					if(tab_name == "hra_forms"){
+						query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
+					}
+		
+					if(tab_name == "sign_forms"){//Change: needs to be self.
+						query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3)`
+					}
 
-			// if (resultEquipment.rows.length > 0) {
-			// 	resultEquipment.rows = propNamesToLowerCase(resultEquipment.rows)
+					if(tab_name == "completed_forms"){
+						query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS >= 6) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_all(req.user)} ) AND F.STATUS >= 6)`
+					}
 
-			// 	connection.close()
-			// 	res.status(200).json({
-			// 		status: 200,
-			// 		error: false,
-			// 		message: 'Successfully get single data!',
-			// 		data: resultEquipment.rows
-			// 	});
-			// } else {
-			if(result.rows.length > 0){
-				const form_ids = result.rows.map(x => x.FORM_ID)
-				const ids_print = printElements(form_ids)
-				query = `${queryForSearch} AND F.ID IN (${ids_print})`
-				result =  await connection.execute(`${query}`,{},dbSelectOptions)
-				//console.log(result2.rows)
-
-				result.rows = propNamesToLowerCase(result.rows)
-				const uniqFormIds = uniq(result.rows.map(x => x.form_id))
-				
-				for(const form_id of uniqFormIds){
-					const formEquipment = filter(result.rows,function(o){ return o.form_id == form_id})
-					forms[form_id] = formEquipment
+					//console.log(`QUERY-${tab_name}`,query)
+		
+					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+					let {rows} = result
+		
+					rows = propNamesToLowerCase(rows)
+		
+					const form_groups = groupBy(rows, function(r) {
+						return r.form_id;
+					  });		
+		
+					tabsReturnObject[i] = FormsToMaterialTableFormat(form_groups)
 				}
-			}
 
-			connection.close()
-
-			if(Object.keys(forms).length > 0){
 				return res.status(200).json({
 					status: 200,
 					error: false,
 					message: 'Successfully get single data!',
-					data: forms,
+					data: tabsReturnObject,
+					editable: edit_rights
+				});
+			}
+
+			let query = `${queryForSearch(req.user)}
+							${query_search != '' ? ' AND': ''} ${query_search} `
+
+			query += `${query_search != '' ? 'AND': ''} ${query_search}`
+
+			if(tab == "my_forms"){
+				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
+			}
+
+			if(tab == "hra_forms"){
+				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
+			}
+
+			if(tab == "sign_forms"){
+				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
+						${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3)`
+			}
+
+			if(tab == "completed_forms"){
+				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS >= 6) UNION ALL 
+				${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS >= 6)`
+			}
+
+			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+			let {rows} = result
+
+			rows = propNamesToLowerCase(rows)
+
+			const form_groups = groupBy(rows, function(r) {
+				return r.form_id;
+			  });		
+
+			const search_return = FormsToMaterialTableFormat(form_groups)
+
+			if(search_return.length > 0){
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully get single data!',
+					data: {[TABS.indexOf(tab)]: search_return},
 					editable: edit_rights
 				});
 			}
@@ -441,7 +508,7 @@ exports.search2 = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: forms,
+			data: search_return,
 			editable: edit_rights
 		});
 	}catch(err){
@@ -458,144 +525,306 @@ exports.search2 = async function(req, res) {
 	}
 };
 
-//!SELECT form_4900 BY FIELDS DATA
-exports.search = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-	const forms = {}
 
-	//console.log(req.body.fields)
-	const {id} = req.body.fields
-	//console.log(id?id:false)
+const create4900EquipmentGroup = async (equipmentIds,connection) => {
+	let result = await connection.execute(`SELECT SEQ_EQUIPMENT_GROUP_ID.nextval from dual`,{},dbSelectOptions)
 
-	try{				
-        let query = `SELECT 
-        f.id as form_id,
-        ra.alias as REQUESTED_ACTION,
-		f.LOSING_HRA as losing_hra_num,
-		l_hra.losing_hra_first_name,
-		l_hra.losing_hra_last_name,
-		l_hra.losing_hra_office_symbol,
-		l_hra.losing_hra_os_alias,
-		l_hra.losing_hra_work_phone,
-		f.GAINING_HRA as gaining_hra_num,
-		g_hra.gaining_hra_first_name,
-		g_hra.gaining_hra_last_name,
-		g_hra.gaining_hra_office_symbol,
-		g_hra.gaining_hra_os_alias,
-		g_hra.gaining_hra_work_phone,
-        f.DATE_CREATED,
-        f.FOLDER_LINK,
-        eg.EQUIPMENT_GROUP_ID,
-        e.id as EQUIPMENT_ID, 
-            e.BAR_TAG_NUM , 
-            e.CATALOG_NUM , 
-            e.BAR_TAG_HISTORY_ID , 
-            e.MANUFACTURER , 
-            e."MODEL", 
-            e.CONDITION , 
-            e.SERIAL_NUM , 
-            e.ACQUISITION_DATE , 
-            e.ACQUISITION_PRICE , 
-            e.DOCUMENT_NUM, 
-            e.ITEM_TYPE , 
-            e.USER_EMPLOYEE_ID
-			from form_4900 f, equipment_group eg, equipment e, requested_action ra,
-			 (${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
-		 and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num ${id ? `and f.id = ${id}`:''}`
+	if(result.rows.length > 0){
+		const eGroupId = result.rows[0].NEXTVAL
+		let query = `INSERT INTO EQUIPMENT_GROUP (EQUIPMENT_GROUP_ID, EQUIPMENT_ID)
+		(SELECT ${eGroupId}, ID FROM EQUIPMENT WHERE ID IN (`
 
+		const uniqEqs = uniq(equipmentIds)
 
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = propNamesToLowerCase(result.rows)
-			const uniqFormIds = uniq(result.rows.map(x => x.form_id))
-			
-            for(const form_id of uniqFormIds){
-                const formEquipment = filter(result.rows,function(o){ return o.form_id == form_id})
-				forms[form_id] = formEquipment
-            }
-        }
-            
-        if(Object.keys(forms).length > 0){
-			res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully get single data!',
-				data: forms
-			});
-		} else {
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: forms
-			});
+		for(let i = 0; i < uniqEqs.length; i++){
+			query += (i > 0) ? ", :" + i : ":" + i;
 		}
-	}catch(err){
-        console.log('in error')
-		res.status(400).json({
-            status: 400,
-            error: true,
-            message: 'No data found!',
-            data: []
-        });
-		//logger.error(err)
+			
+		query += "))";
+
+		result = await connection.execute(query,uniqEqs,{autoCommit:true})
+		return(result.rowsAffected > 0 ? eGroupId : -1)
 	}
-};
+
+	return(-1)
+}
 
 //!INSERT form_4900
 exports.add = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edipi} = req.headers.cert
+	const connection =  await oracledb.getConnection(dbConfig);
+	const equipmentIds = req.body.form.equipment_group.map(x => x.id)
+
+	let keys = Object.keys(req.body.form)
+	const form = {}
+	const cells = {}
+	let cols = ""
+	let vals = ""
+
+	for(const key of keys){
+		if(req.body.form[key]){
+			form[key] = req.body.form[key]
+		}
+	}
+
+	let result =  await connection.execute(`SELECT * FROM REQUESTED_ACTION WHERE UPPER(NAME) = UPPER(:0)`,[form.requested_action],dbSelectOptions)
+
+
+	if(result.rows.length > 0 && form.hra.losing.hra_num && form.hra.gaining.hra_num && equipmentIds.length > 0){
+		form.requested_action = result.rows[0].ID
+		form.losing_hra = form.hra.losing.hra_num
+		form.gaining_hra = form.hra.gaining.hra_num
+		form.equipment_group_id = await create4900EquipmentGroup(equipmentIds,connection)
+		delete form.hra
+		delete form.equipment_group
+
+		result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+
+		if(result.rows.length > 0 && form.equipment_group_id != -1){
+			result.rows = filter(result.rows,function(x){ return !BANNED_COLS_ENG4900.includes(x.COLUMN_NAME)})
+			const col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+			keys = Object.keys(form)
+
+			for(let i=0; i<keys.length; i++){
+				if(col_names.includes(keys[i])){
+					let comma =  i && cols ? ', ': ''
+					cols = cols + comma + keys[i]
+					vals = vals + comma + ':' + keys[i]
+					cells[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(form[keys[i]]) :
+					(typeof form[keys[i]] == 'boolean') ? (form[keys[i]] ? 1 : 2) :  form[keys[i]]
+				}
+
+				if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+					result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					if(result.rows.length > 0){
+						const user_rights_id = result.rows[0].ID
+						const comma =  cols ? ', ': ''
+						cols = cols + comma + 'updated_by'
+                        vals = vals + comma + ':' + 'updated_by'
+						cells['updated_by'] = user_rights_id
+					}
+				}
+			}
+
+			let query = `INSERT INTO FORM_4900 (${cols}) VALUES (${vals})`
+			result = await connection.execute(query,cells,{autoCommit:true})
+
+			if(result.rowsAffected > 0){
+				query = `${queryForSearch(req.user)} AND F.ROWID = :0`
+				result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
+				result.rows = propNamesToLowerCase(result.rows)
+
+				const form_groups = groupBy(result.rows, function(r) {
+					return r.form_id;
+				  });	
+
+				const search_return = FormsToMaterialTableFormat(form_groups)
+
+				connection.close()
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully added new form!',
+					data: search_return[0]
+				});
+			}
+
+			connection.close()
+			return res.status(200).json({
+				status: 400,
+				error: true,
+				message: 'Could not add new form!',
+				data: {},
+			});
+		}
+	}
+
+	// let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+
+		
+	// if(result.rows.length > 0){
+	// 	result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ENG4900.includes(c.COLUMN_NAME)})
+	// 	const col_names = result.rows.map(x=>x.COLUMN_NAME)
+	// 	keys = Object.keys(form)
+
+	// 	for(let i=0; i<keys.length; i++){
+	// 		if(col_names.includes(keys[i])){
+	// 			const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
+	// 			let comma =  i && cols ? ', ': ''
+	// 			cols = cols + comma + col_name + ' = :' + keys[i]
+	// 			cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+	// 			(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+	// 		}
+
+	// 		if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
+	// 			result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+	// 			if(result.rows.length > 0){
+	// 				const user_rights_id = result.rows[0].ID
+	// 				const comma =  cols ? ', ': ''
+	// 				cols = cols + comma + 'updated_by = :updated_by'
+	// 				cells.update['updated_by'] = user_rights_id
+	// 			}
+	// 		}
+	// 	}
+
+	// 	console.log(col_names)
+	// }
+	//console.log(req.body.form,form)
+
+	// req.body.form
+	// const {type} = req.body
+	// const {equipment_group, requested_action} = req.body.form
+	// const {losing, gaining} = req.body.form.hra
+	// const equipmentIds = equipment_group.map(x => x.id)
+
+	res.status(200).json({
+				status: 200,
+				message: 'data sent!'
+	});
+
 	// const connection =  await oracledb.getConnection(dbConfig);
 	// // const item_type = req.body.item_type ? req.body.item_type : 'no data' || ternary operator
 	// const { item_type } = req.body;
 
-	// try{
-	// 	result =  await connection.execute(`INSERT INTO form_4900 (item_type) values (:0)`,[item_type],{autoCommit:true})
-	// 	console.log(result)
-	// 	res.status(200).json({
-	// 		status: 200,
-	// 		error: false,
-	// 		message: 'Successfully add new data!',
-	// 		data: req.body
-	// 	});
-	// }catch(err){
-	// 	console.log(err);
-	// 	res.status(400).json({
-	// 		status: 400,
-	// 		message: 'Error add new data!'
-	// 	});
-	// }
+	try{
+	// 	let result =  await connection.execute(`SELECT * FROM REQUESTED_ACTION WHERE UPPER(NAME) = UPPER(:0)`,[requested_action],dbSelectOptions)
+
+	// 	if(result.rows.length > 0 && losing.hra_num && gaining.hra_num && equipmentIds.length > 0){
+	// 		const req_act_id = result.rows[0].ID
+
+	// 		console.log(req_act_id,losing.hra_num,gaining.hra_num,equipmentIds)
+	// 	}
+		
+
+	}catch(err){
+		console.log(err);
+		// res.status(400).json({
+		// 	status: 400,
+		// 	message: 'Error add new data!'
+		// });
+	}
 };
 
-//!UPDATE form_4900 DATA
-exports.update = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
-	// const connection =  await oracledb.getConnection(dbConfig);
-	// const { item_type } = req.body;
 
-	// if (!item_type) {
-	// 	res.status(300).json({
-	// 		status: 300,
-	// 		error: true,
-	// 		message: 'item_type needed for update!'
-	// 	});
-	// } else {
-	// 	try{
-	// 		console.log(req.body)
-	// 		let result =  await connection.execute(`UPDATE form_4900 SET item_type = :0 where id = :1`,[item_type, req.params.id],{autoCommit:true})
-	// 		console.log(result)
-	// 		res.status(200).json({
-	// 			status: 200,
-	// 			error: false,
-	// 			message: 'Successfully update data with id: ' + req.params.id,
-	// 			data: req.body
-	// 		});
-	// 	}catch(err){
-	// 		console.log(err);
-	// 	}
-	// }
+//!UPDATE FROM_4900 DATA
+exports.update = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
+	//let columnErrors = {rows:{},errorFound:false}
+	const {edipi} = req.headers.cert
+
+	try{
+		const {changes, undo} = req.body.params
+
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				//columnErrors.rows[row] = {}
+				const {newData,oldData} = changes[row];
+				const cells = newData && oldData ? {new:objectDifference(oldData,newData,'tableData'),old:oldData} : newData
+				//console.log(cells)
+
+				const keys = cells.new ?  Object.keys(cells.new) : []
+				cells.update = {}
+				let cols = ''
+				const cell_id = cells.old ? cells.old.form_id : -1
+
+				if(cell_id != -1){
+					let result = await connection.execute(`SELECT * FROM FORM_4900 WHERE ID = :0`,[cell_id],dbSelectOptions)
+					//const editable = result.rows.length > 0 ? (result.rows[0].STATUS >= 8 ? true : false) : true
+					result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+	
+					if(result.rows.length > 0){
+						result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ENG4900.includes(c.COLUMN_NAME)})
+						let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())	
+	
+						if(keys.length > 0){
+							for(let i=0; i<keys.length; i++){
+								if(col_names.includes(keys[i])){
+									let comma =  i && cols ? ', ': ''
+									cols = cols + comma + keys[i] + ' = :' + keys[i]
+									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+								}
+	
+								if(i == keys.length - 1 && typeof edipi != 'undefined'){
+									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+
+									if(result.rows.length > 0){
+										const user_rights_id = result.rows[0].ID
+										const comma =  cols ? ', ': ''
+										cols = cols + comma + 'updated_by = :updated_by'
+										cells.update['updated_by'] = user_rights_id
+									}
+								}
+							}
+				
+							let query = `UPDATE FORM_4900 SET ${cols} 
+							WHERE ID = ${cells.old.form_id}`
+						
+							//console.log(query,cells.update)
+							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+							
+							if(result.rowsAffected > 0){
+								query = `${queryForSearch(req.user)} AND F.ROWID = :0`
+								result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
+								result.rows = propNamesToLowerCase(result.rows)
+				
+								const form_groups = groupBy(result.rows, function(r) {
+									return r.form_id;
+								  });	
+				
+								const search_return = FormsToMaterialTableFormat(form_groups)
+				
+								console.log(form_groups,result.rows)
+								connection.close()
+								return res.status(200).json({
+									status: 200,
+									error: false,
+									message: 'Successfully added new form!',
+									data: search_return[0]
+								});
+							}
+						}
+	
+						//connection.close()
+	
+						// return (
+						// 	res.status(200).json({
+						// 		status: 200,
+						// 		error: false,
+						// 		message: 'Successfully update data with id: ', //+ req.params.id,
+						// 		data: null,//req.body,
+						// 		//columnErrors: columnErrors
+						// 	})
+						// )
+					}
+				}
+			}
+		}
+		//if(columnErrors.errorFound){
+			//connection.close()//don't save changes if error is found.
+		//}else if(undo){
+		connection.close()
+		//}
+		
+		return (
+			res.status(200).json({
+				status: 400,
+				error: true,
+				message: 'Could not update data', //+ req.params.id,
+				data: null,//req.body,
+				//columnErrors: columnErrors
+			})
+		)
+	}catch(err){
+		connection.close()
+		console.log(err);
+		res.status(400).json({
+			status: 400,
+			error: true,
+			//columnErrors:columnErrors,
+			message: 'Cannot delete data with id: ' //+ req.params.id
+		});
+	}
 };
 
 //!DELETE form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
@@ -628,6 +857,40 @@ exports.destroy = async function(req, res) {
 	// }
 };
 
+const savePdfToDatabase = async (filename) => {
+	console.log(filename)
+	const connection =  await oracledb.getConnection(dbConfig);
+	result = await connection.execute('CALL WRITE_BLOB_TO_FILE (:0)',[filename],{autoCommit:true})
+	console.log(result)
+	connection.close()
+}
+
+//!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
+exports.upload = async function(req, res) {
+	if (!req.files) {
+        return res.status(500).send({ msg: "file is not found" })
+	}
+	
+    // accessing the file
+	const myFile = req.files.file;
+	
+	//  mv() method places the file inside public directory
+    myFile.mv(path.join(__dirname,`../public/${myFile.name}`), async function (err) {
+        if (err) {
+            console.log(err)
+            return res.status(500).send({ msg: "Error occured" });
+		}
+
+		const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
+		console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
+
+		//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
+	});
+	
+	// returing the response with file path and name
+	return res.send({name: myFile.name, path: `/${myFile.name}`});
+};
+
 //!SELECT form_4900 BY ID
 // exports.testPdfBuild = async function(req, res) {
 
@@ -648,7 +911,7 @@ exports.destroy = async function(req, res) {
 // 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 // 				result.rows[0].equipment_group = eg_result.rows
 
-// 				pdfFill.handleData(result.rows[0])
+// 				pdfFill.create4900(result.rows[0])
 
 // 				return res.status(200).json({
 // 					status: 200,

@@ -1,16 +1,24 @@
 //var exec = require('child_process').execFile;
 //const XLSX = require('xlsx')
 //const xml2js = require('xml2js');
+const { PDFDocument } = require('pdf-lib')
+const util = require('util')
 const fs = require('fs');
 //const parser = new xml2js.Parser({ attrkey: "ATTR" });
 const path = require('path')
 const moment = require('moment')
 //const dir = path.join(__dirname,'./BulkPdf')
-const { PDFDocument } = require('pdf-lib')
-const util = require('util')
-const data4844 = require('./eng4844-form-data.json')
-const data48441 = require('./eng48441-form-data.json')
-const data4844_48441 = require('./eng4844_48441-form-data.json')
+const findIndex = require('lodash/findIndex');
+
+const SIGN_DATE_FIELD_NAME = {
+    ROR_PROP:"b Date",
+    LOSING:"b Date_2",
+    GAINING:"b Date_3",
+    PBO_LOSING:"f Date",
+    PBO_GAINING:"f Date_2",
+    LOGISTICS_RECEIVED:"b Date_4",
+    LOGISTICS_POSTED_BY:"b Date_5"
+}
 
 function formatPhoneNumber(phoneNumberString) {
     var cleaned = ('' + phoneNumberString).replace(/\D/g, '');
@@ -19,6 +27,167 @@ function formatPhoneNumber(phoneNumberString) {
         return '(' + match[1] + ') ' + match[2] + '-' + match[3];
     }
     return null;
+}
+
+const eng4900Signature = async (pdf,person) => {
+
+    const field_keys = Object.keys(SIGN_DATE_FIELD_NAME)
+    const idx = findIndex(field_keys,function(k){return k == person.toUpperCase()})
+
+    if(idx == -1 ) return false
+
+    const newKeys = field_keys.filter(function(value, index, arr){ 
+        return index <= idx && index > 0;//ignore ror_prop signature.
+    });
+
+    const readFile = util.promisify(fs.readFile)
+
+    function getStuff() {
+        return readFile(path.join(__dirname, pdf))
+    }
+
+    const file = await getStuff()
+    const pdfDoc = await PDFDocument.load(file)
+    const form = pdfDoc.getForm()
+    let flag = true
+
+    for(const key of newKeys){
+        const pdfField = form.getTextField(SIGN_DATE_FIELD_NAME[key])
+        const fieldText = pdfField.getText()
+        const isFieldReadOnly = pdfField.isReadOnly()    
+
+        flag = flag && (fieldText ? fieldText.length == 10 : false) && isFieldReadOnly
+    }
+    
+    return flag
+}
+
+var fillEng4900PDF = async function(data){
+    const readFile = util.promisify(fs.readFile)
+    function getStuff() {
+        return readFile(path.join(__dirname,'./forms/eng4900.pdf'))
+    }
+
+    const file = await getStuff()
+    const pdfDoc = await PDFDocument.load(file)
+    const form = pdfDoc.getForm()
+
+    for(const field of data){
+
+        if(field.type == 'textfield' || field.type == 'date'){
+            const pdfField = form.getTextField(field.name)
+            if(field.data){
+                pdfField.setText(field.data.toString())
+            }
+
+            pdfField.enableReadOnly()
+        }
+
+        if(field.type == 'checkbox'){
+            const pdfField = form.getCheckBox(field.name)
+            if(field.data){
+                pdfField.check()
+            }
+
+            pdfField.enableReadOnly()
+        }
+    }
+
+    const pdfBytes = await pdfDoc.save()
+
+    await fs.promises.writeFile(path.join(__dirname,'./output/output_eng4900.pdf'), pdfBytes, () => {
+        console.log('PDF created!')
+    })
+}
+
+var create4900Json = async function(form_data){
+
+    //   fs.writeFile('eng4900-form-data.json',JSON.stringify(form_data,null,2),function (err) {
+    //     if (err) return console.log(err);
+    //     console.log('eng4900-form-data saved!');
+    //   })
+
+    let data = [
+        {name: "inv_app_id", type:"textfield", data: 'IA4900-' + form_data.form_id},
+        {name: "Issue", type:"checkbox", data: form_data.requested_action == "Issue"},
+        {name: "Transfer", type:"checkbox", data: form_data.requested_action == "Transfer"},
+        {name: "Repair", type:"checkbox", data: form_data.requested_action == "Repair"},
+        {name: "Excess", type:"checkbox", data: form_data.requested_action == "Excess"},
+        {name: "FOI", type:"checkbox", data: form_data.requested_action == "FOI"},
+        {name: "Temporary Loan", type:"checkbox", data: false},
+        {name: "Expiration Date", type:"date", data: ""},
+        {name: "2a Name", type:"textfield", data: form_data.losing_hra_first_name + ' ' + form_data.losing_hra_last_name},
+        {name: "b Office Symbol_1", type:"textfield", data: form_data.losing_hra_os_alias},
+        {name: "c. Hand Receipt Account Number_1", type:"textfield", data: form_data.losing_hra_num},
+        {name: "d. Work Phone Number_1", type:"textfield", data: formatPhoneNumber(form_data.losing_hra_work_phone)},
+        {name: "3a Name", type:"textfield", data: form_data.gaining_hra_first_name + ' ' +form_data.gaining_hra_last_name},
+        {name: "b. Office Symbol_2", type:"textfield", data: form_data.gaining_hra_os_alias},
+        {name: "c. Hand Receipt Account Number_2", type:"textfield", data: form_data.gaining_hra_num},
+        {name: "d. Work Phone Number_2", type:"textfield", data: formatPhoneNumber(form_data.gaining_hra_work_phone)},
+        {name: "13a. ror_prop", type:"textfield", data: ""},
+    ]
+
+
+    for(let i=0;i<form_data.equipment_group.length;i++){
+        const num = i + 1
+        const equipment = form_data.equipment_group[i]
+        const equipment_template = [
+            {name: `4. Item No_Row_${num}`, type:"textfield", data: ""},
+            {name: `5 Bar Tag NoRow${num}`, type:"textfield", data: equipment.bar_tag_num},
+            {name: `6 CatalogRow${num}`, type:"textfield", data: equipment.catalog_num},
+            {name: `7 Nomenclature include make modelRow${num}`, type:"textfield", data: equipment.item_type},
+            {name: `8 Cond CodeRow${num}`, type:"textfield", data:  equipment.condition},
+            {name: `9 Serial NumberRow${num}`, type:"textfield", data: equipment.serial_num},
+            {name: `10 ACQ DateRow${num}`, type:"date", data: moment(equipment.acquisition_date).format('yyyy-MM-DD')},
+            {name: `11 ACQ PriceRow${num}`, type:"textfield", data: equipment.acquisition_price},
+            {name: `12 Document Number Control IDRow${num}`, type:"textfield", data: ""}
+        ]
+        
+        data = [...data,...equipment_template]
+    }
+
+    await fillEng4900PDF(data)
+}
+
+module.exports = {
+    create4900 : async (data) => {
+        try{
+            await create4900Json(data)
+            return true
+        }catch(err){
+            console.log(err)
+            return false
+        }
+    },
+    ValidateEng4900Signature: async (pdf, person) => await eng4900Signature(pdf, person),
+    // create4844: async (data) => {
+    //     try {
+    //         await create4844Json(data)
+    //         return true
+    //     } catch (err) {
+    //         console.log(err)
+    //         return false
+    //     }
+    // },
+    // create48441: async (data) => {
+    //     try {
+    //         await create48441Json(data)
+    //         return true
+    //     } catch (err) {
+    //         console.log(err)
+    //         return false
+    //     }
+
+    // },
+    // create4844_48441: async (data) => {
+    //     try {
+    //         await create4844_48441Json(data)
+    //         return true
+    //     } catch (err) {
+    //         console.log(err)
+    //         return false
+    //     }
+    // }
 }
 
 var fillENG4844PDF = async function (data) {
@@ -52,10 +221,10 @@ var fillENG4844PDF = async function (data) {
 
 var create4844Json = async function (form_data_4844) {
 
-    fs.writeFile('eng4844-form-data.json', JSON.stringify(form_data_4844, null, 2), function (err) {
-        if (err) return console.log(err);
-        console.log('eng4844-form-data saved!');
-    })
+    // fs.writeFile('eng4844-form-data.json', JSON.stringify(form_data_4844, null, 2), function (err) {
+    //     if (err) return console.log(err);
+    //     console.log('eng4844-form-data saved!');
+    // })
 
     let data = [
         { name: "4844_ID", type: "textfield", data: 'IA4844-' + form_data_4844.ID },
@@ -119,10 +288,10 @@ var fillENG48441PDF = async function (data) {
 
 var create48441Json = async function (form_data_48441) {
 
-    fs.writeFile('eng48441-form-data.json', JSON.stringify(form_data_48441, null, 2), function (err) {
-        if (err) return console.log(err);
-        console.log('eng48441-form-data saved!');
-    })
+    // fs.writeFile('eng48441-form-data.json', JSON.stringify(form_data_48441, null, 2), function (err) {
+    //     if (err) return console.log(err);
+    //     console.log('eng48441-form-data saved!');
+    // })
 
     let data = [
         { name: "4844_1_ID", type: "textfield", data: 'IA4844-1-' + form_data_48441.ID },
@@ -180,10 +349,10 @@ var fillENG4844_48441PDF = async function (data) {
 
 var create4844_48441Json = async function (form_data_4844_48441) {
 
-    fs.writeFile('eng4844_48441-form-data.json', JSON.stringify(form_data_4844_48441, null, 2), function (err) {
-        if (err) return console.log(err);
-        console.log('eng4844-48441-form-data saved!');
-    })
+    // fs.writeFile('eng4844_48441-form-data.json', JSON.stringify(form_data_4844_48441, null, 2), function (err) {
+    //     if (err) return console.log(err);
+    //     console.log('eng4844-48441-form-data saved!');
+    // })
 
     let data = [
         { name: "4844_ID", type: "textfield", data: 'IA4844-' + form_data_4844_48441.ID },
@@ -233,6 +402,103 @@ var create4844_48441Json = async function (form_data_4844_48441) {
     fillENG4844_48441PDF(data)
 
 }
+
+// const data4844 = {
+//     "ID": 1,
+//     "DATE_CREATED": "20211008",
+//     "DOCUMENT_NUM": "DN987654",
+//     "ACQUISITION_DATE": "20211008",
+//     "PURCHASE_ORDER_NUM": "PO01234",
+//     "VENDOR": "DELL",
+//     "COST_ACCOUNT": "CA9876",
+//     "REMARKS": "1234567890123456789012345",
+//     "BAR_TAG_NUM": 12345,
+//     "CATALOG_NUM": "357159",
+//     "OLD_TAG_NUM": 12345,
+//     "NOUN_NOMENCLATURE": "LAPTOP",
+//     "SERIAL_NUM": "ABCD12345",
+//     "LOCATION": "The Hallway END",
+//     "ROOM": 123456,
+//     "HRA": 907,
+//     "AUTHORIZATION": "123456789012345",
+//     "FUNDING": "C",
+//     "CONDITION": "A",
+//     "UTILIZATION": "M",
+//     "VALUE": 2500,
+//     "ACCESSORY_NOMENCLATURE": "1234567890123456789012345",
+//     "ACCESSORY_VALUE": 1234567890123,
+//     "DATE": "20211008",
+//     "FIRST_NAME": "DAVID",
+//     "LAST_NAME": "ROBAR"
+//   }
+
+// const data48441 = {
+//     "ID": 1,
+//     "CATALOG_NUM_1": "2021100823654",
+//     "MAJOR_NOUN": "Laptop",
+//     "NOMENCLATURE": "Laptop",
+//     "MANUFACTURER": "Dell",
+//     "PART_NUM": "5260",
+//     "MODEL": "1234567890",
+//     "COLOR": "Black & Brown",
+//     "LENGTH": 968,
+//     "WIDTH": 123,
+//     "HEIGHT": 150,
+//     "VALUE_1": "123.42",
+//     "CLASSIFICATION": "NE",
+//     "PILIFERABLE_CODE": "Y",
+//     "REPORTABLE_ITEM_CONTROL_CODE": "0",
+//     "EQUIPMENT_CONTROL_CODE": "90",
+//     "LINE_ITEM_NUM": "123456",
+//     "LOGISTICS_CONTROL_CODE": "A"
+//   }
+
+// const data4844_48441 = {
+//     "ID": 1,
+//     "DATE_CREATED": "20211008",
+//     "DOCUMENT_NUM": "DN987654",
+//     "ACQUISITION_DATE": "20211008",
+//     "PURCHASE_ORDER_NUM": "PO01234",
+//     "VENDOR": "DELL",
+//     "COST_ACCOUNT": "CA9876",
+//     "REMARKS": "1234567890123456789012345",
+//     "BAR_TAG_NUM": 12345,
+//     "CATALOG_NUM": "357159",
+//     "OLD_TAG_NUM": 12345,
+//     "NOUN_NOMENCLATURE": "LAPTOP",
+//     "SERIAL_NUM": "ABCD12345",
+//     "LOCATION": "The Hallway END",
+//     "ROOM": 123456,
+//     "HRA": 907,
+//     "AUTHORIZATION": "123456789012345",
+//     "FUNDING": "C",
+//     "CONDITION": "A",
+//     "UTILIZATION": "M",
+//     "VALUE": 2500,
+//     "ACCESSORY_NOMENCLATURE": "1234567890123456789012345",
+//     "ACCESSORY_VALUE": 1234567890123,
+//     "DATE": "20211008",
+//     "FIRST_NAME": "DAVID",
+//     "LAST_NAME": "ROBAR",
+//     "CATALOG_NUM_1": "2021100823654",
+//     "MAJOR_NOUN": "Laptop",
+//     "NOMENCLATURE": "Laptop",
+//     "MANUFACTURER": "Dell",
+//     "PART_NUM": "5260",
+//     "MODEL": "1234567890",
+//     "COLOR": "Black & Brown",
+//     "LENGTH": 968,
+//     "WIDTH": 123,
+//     "HEIGHT": 150,
+//     "VALUE_1": "123.42",
+//     "CLASSIFICATION": "NE",
+//     "PILIFERABLE_CODE": "Y",
+//     "REPORTABLE_ITEM_CONTROL_CODE": "0",
+//     "EQUIPMENT_CONTROL_CODE": "90",
+//     "LINE_ITEM_NUM": "123456",
+//     "LOGISTICS_CONTROL_CODE": "A"
+// }
+
 /*
 var createFilledEng4900 = async function (form_data) {
     console.log("updateXmlDirectory() start");
@@ -340,55 +606,3 @@ var createXlsx = async function (form_data) {
 // XLSX.writeFile(wb, dir + "/data/data_to_pdf.xlsx");
 
 // console.log('xlsx created successfuly.')
-
-// fillPDF()
-//}
-
-//create4844Json(data4844);
-//create48441Json(data48441);
-//(data4844_48441);
-
-module.exports = function () {
-    return {
-        create4844: async (data) => {
-            try {
-                await create4844Json(data)
-                return true
-            } catch (err) {
-                console.log(err)
-                return false
-            }
-
-        }
-    }
-}();
-
-module.exports = function () {
-    return {
-        create48441: async (data) => {
-            try {
-                await create48441Json(data)
-                return true
-            } catch (err) {
-                console.log(err)
-                return false
-            }
-
-        }
-    }
-}();
-
-module.exports = function () {
-    return {
-        create4844_48441: async (data) => {
-            try {
-                await create4844_48441Json(data)
-                return true
-            } catch (err) {
-                console.log(err)
-                return false
-            }
-
-        }
-    }
-}();
