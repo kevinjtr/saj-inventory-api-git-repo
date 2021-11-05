@@ -1,5 +1,5 @@
 module.exports = {
-    BLANKS_DEFAULT : 'includeBlanks',
+    BLANKS_DEFAULT : 'displayBlanks',
     searchOptions : {
         'includes':'LIKE',
         'excludes':'NOT LIKE',
@@ -7,13 +7,13 @@ module.exports = {
         'notEquals':'!='
     },
     searchBlanks : {
-        'includeBlanks':'',
-        'excludeBlanks':'!=',
+        'displayBlanks':'',
+        'hideBlanks':'!=',
         'onlyBlanks':'='
     },
     blankAndOr : {
-        'includeBlanks':'OR',
-        'excludeBlanks':'AND',
+        'displayBlanks':'OR',
+        'hideBlanks':'AND',
         'onlyBlanks':'OR',
     },
     blankNull : {

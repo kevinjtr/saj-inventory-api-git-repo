@@ -151,13 +151,14 @@ exports.search = async function(req, res) {
 	}
 };
 
+
+
 //!INSERT EMPLOYEE
 exports.add = async function(req, res) { 
 	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				//console.log(row)
