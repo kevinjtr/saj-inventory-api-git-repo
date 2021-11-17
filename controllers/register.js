@@ -7,6 +7,8 @@ const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
+const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
+const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
 
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
@@ -164,23 +166,90 @@ exports.registrationDropDownData = async function(req, res) {
 }
 };
 
-//!INSERT EMPLOYEE
+//INSERT EMPLOYEE
 exports.add = async function(req, res) { 
+//exports.add = async function(req, res) { 
+	console.log('you hit the api!')
+	console.log(req.body)
+	
+	//await connection.execute('Insert') 
+	//const {edipi} = req.headers.cert
+
+	/* try{
+
+		const connection =  await oracledb.getConnection(dbConfig);
+		let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE_REGISTRATION'`,{},dbSelectOptions)
+		let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+		let cols = ''
+		let vals = ''
+		const keys = Object.keys(dataIn);
+					for(let i=0; i<keys.length; i++){
+						if(col_names.includes(keys[i])){
+							const comma = i && cols ? ', ': ''
+							cols = cols + comma + keys[i]
+							vals = vals + comma + ' :'+ keys[i]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(dataIn[keys[i]]) :
+							(typeof dataIn[keys[i]] == 'boolean') ? (dataIn[keys[i]] ? 1 : 2) :  dataIn[keys[i]]
+						}
+					}
+		
+		const employee = {
+			first_name: '',
+			last_name: '',
+			title: '',
+			email: '',
+			work_phone: '',
+			division: '',
+			district: '' ,
+			office_symbol: '',
+			user_type: '',
+			hras: '',
+		}; 
+		employee.first_name = dataIn.first_name;
+		employee.last_name = dataIn.last_name;
+		employee.title = dataIn.title;
+		employee.email = dataIn.email;
+		employee.work_phone = dataIn.work_phone;
+		employee.division = Number(dataIn.division);
+		employee.district = Number(dataIn.district);
+		employee.office_symbol = Number(dataIn.office_symbol);
+		employee.user_type = Number(dataIn.user_type);
+		let query = `INSERT INTO EMPLOYEE_REGISTRATION (${}) VALUES (${employee.first_name, employee.last_name })`
+			console.log(query)
+
+			result = await connection.execute(query,employee,{autoCommit:AUTO_COMMIT.ADD})
+
+		res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully added new data!',
+			data: null//req.body
+		});
+	}
+	catch(err){
+		console.log(err);
+		res.status(200).json({
+			status: 400,
+			error: true,
+			message: 'Error adding new data'
+		});
+	}  */
 	const connection =  await oracledb.getConnection(dbConfig);
+	//await connection.execute('Insert') 
 	const {edipi} = req.headers.cert
 	try{
-		const {changes} = req.body.params
-		for(const row in changes){
-			if(changes.hasOwnProperty(row)) {
+		const {newData} = req.body.params
+		//for(const row in changes){
+			//if(changes.hasOwnProperty(row)) {
 				//console.log(row)
-				let {newData} = changes[row];
+				//let {newData} = changes[row];
 				const keys = Object.keys(newData);
 				let cols = ''
 				let vals = ''
 				let insert_obj = {}
 
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE_REGISTRATION'`,{},dbSelectOptions)
-
+				//console.log(result)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
@@ -193,6 +262,7 @@ exports.add = async function(req, res) {
 							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
 							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 						}
+
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'){
 							result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
@@ -219,13 +289,14 @@ exports.add = async function(req, res) {
 				// 	}
 				// }
 
-				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
-				//console.log(query)
+				let query = `INSERT INTO EMPLOYEE_REGISTRATION (${cols}) VALUES (${vals})`
+				console.log(query)
+				console.log(insert_obj)
 
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 				//console.log(result)
-			}
-		}
+			//}
+	//	}
 
 		res.status(200).json({
 			status: 200,
@@ -240,7 +311,7 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data!'
 		});
-	}
+	}  
 };
 
 

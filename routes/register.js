@@ -8,4 +8,5 @@ module.exports = function(app) {
 	//app.route('/register/officeSymbol').get(controller.officeSymbol);
 	//app.route('/register/userType').get(controller.userType);
 	app.route('/register/registrationDropDownData').get(controller.registrationDropDownData);
+	app.route('/register/add').post(controller.add);
 };
