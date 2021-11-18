@@ -5,11 +5,12 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
+const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
-
+const {employee_officeSymbol} = require('../config/queries')
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
     // extendedMetaData: true,               // get extra metadata
@@ -170,7 +171,7 @@ exports.registrationDropDownData = async function(req, res) {
 exports.add = async function(req, res) { 
 //exports.add = async function(req, res) { 
 	console.log('you hit the api!')
-	console.log(req.body)
+	//console.log(req.body)
 	
 	//await connection.execute('Insert') 
 	//const {edipi} = req.headers.cert
@@ -236,7 +237,9 @@ exports.add = async function(req, res) {
 	}  */
 	const connection =  await oracledb.getConnection(dbConfig);
 	//await connection.execute('Insert') 
-	const {edipi} = req.headers.cert
+	const {cn} = req.headers.cert
+	const cac_info = cn.split('.')
+
 	try{
 		const {newData} = req.body.params
 		//for(const row in changes){
@@ -248,6 +251,47 @@ exports.add = async function(req, res) {
 				let vals = ''
 				let insert_obj = {}
 
+				const sql_binds_array = (elements) => {
+					let vals = ""
+					for(let i=0; i<elements.length; i++){
+						vals = `${vals}${(i ? `, :` : `:`)}${i}`
+					}
+					return vals
+				}
+
+				if(newData.hras.length > 0){
+					let query = `SELECT h.*,e.* FROM HRA h LEFT JOIN (${employee_officeSymbol}) e 
+					on h.employee_id = e.id
+					WHERE HRA_NUM in (${sql_binds_array(newData.hras)})`
+
+					let result = await connection.execute(query,newData.hras,dbSelectOptions)
+
+					if(result.rows.length > 0){
+						const hra_record = propNamesToLowerCase(result.rows)[0]//grabbing first element for now.
+
+						//console.log(cac_info[0].toUpperCase() == hra_record.last_name.toUpperCase() , cac_info[1].toUpperCase() == hra_record.first_name.toUpperCase())
+						if(cac_info[0].toUpperCase() == hra_record.last_name.toUpperCase() && cac_info[1].toUpperCase() == hra_record.first_name.toUpperCase())
+						{
+							const edipi = cac_info.length > 3 ? cac_info[3] : cac_info[2]
+
+							console.log(edipi)
+							query = `SELECT * FROM user_rights where edipi = :0`
+
+							result = await connection.execute(query,[edipi],dbSelectOptions)
+
+							if(result.rows != 0){
+								//user is not registered.
+								
+							}
+							
+						}
+						
+
+					}
+					
+				}
+				
+
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE_REGISTRATION'`,{},dbSelectOptions)
 				//console.log(result)
 				if(result.rows.length > 0){
@@ -255,7 +299,7 @@ exports.add = async function(req, res) {
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
 					for(let i=0; i<keys.length; i++){
-						if(col_names.includes(keys[i])){
+						if((col_names.includes(keys[i])) && (keys[i] != "hras")){
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + keys[i]
 							vals = vals + comma + ' :'+ keys[i]
@@ -275,7 +319,9 @@ exports.add = async function(req, res) {
 							}
 						}
 					}
+					if(col_names.includes("hras")){
 
+					}
 				}
 
 				//console.log(keys)
@@ -290,8 +336,8 @@ exports.add = async function(req, res) {
 				// }
 
 				let query = `INSERT INTO EMPLOYEE_REGISTRATION (${cols}) VALUES (${vals})`
-				console.log(query)
-				console.log(insert_obj)
+				//console.log(query)
+				//console.log(insert_obj)
 
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 				//console.log(result)
