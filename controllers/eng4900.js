@@ -857,10 +857,11 @@ exports.destroy = async function(req, res) {
 	// }
 };
 
-const savePdfToDatabase = async (filename) => {
-	console.log(filename)
+const savePdfToDatabase = async (file) => {
+	//const str = await fs.promises.readFileSync(filepath, 'utf8');
+
 	const connection =  await oracledb.getConnection(dbConfig);
-	result = await connection.execute('CALL WRITE_BLOB_TO_FILE (:0)',[filename],{autoCommit:true})
+	let result = await connection.execute('insert into pdf_storage (blobdata, filename) values (:ncbv, :name)',{ncbv: { type: oracledb.DB, val: file }, name: file.name},{autoCommit:true})
 	console.log(result)
 	connection.close()
 }
@@ -881,9 +882,23 @@ exports.upload = async function(req, res) {
             return res.status(500).send({ msg: "Error occured" });
 		}
 
-		const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
-		console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
 
+		//const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
+		//console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
+
+		const connection =  await oracledb.getConnection(dbConfig);
+		let result = await connection.execute('select * from pdf_storage',{},{...dbSelectOptions,fetchInfo: {
+			blobdata: {
+			  type: oracledb.BUFFER
+			}
+		  }})
+
+		  await fs.promises.writeFile(path.join(__dirname,'../output/test_download.pdf'), result.rows[0].BLOBDATA, () => {
+			console.log('PDF created!')
+		})
+
+		console.log(result.rows[0].BLOBDATA)
+		//await savePdfToDatabase(myFile)
 		//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
 	});
 	
