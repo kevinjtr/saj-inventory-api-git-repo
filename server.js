@@ -57,6 +57,7 @@ const changeHistoryRoutes = require('./routes/change-history');
 const annualInventoryRoutes = require('./routes/annual-inventory');
 const dbPopulateRoutes = require('./routes/db-populate.js');
 const user = require('./routes/user');
+const register = require('./routes/register');
 
 usersRoutes(app);
 handleError(app);
@@ -73,6 +74,7 @@ changeHistoryRoutes(app)
 annualInventoryRoutes(app)
 dbPopulateRoutes(app)
 user(app)
+register(app)
 
 if(process.env.HTTPS === 'true') {
 	const fs = require('fs');
