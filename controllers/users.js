@@ -51,10 +51,13 @@ exports.login = async (req, res) => {
 		}
 
 		//console.log(result,user)
-		jwt.sign({ user: user }, process.env.SECRET_KEY, (err, token) => {
+		const token_exp = Math.floor(Date.now() / 1000) + (60 * 30)//30mins
+
+		jwt.sign({ user: user, exp: token_exp }, process.env.SECRET_KEY, (err, token) => {
 			res.json({
 				token: token,
-				user: user.level
+				user: user.level,
+				exp: token_exp
 			});
 		});
 	}catch(err){
