@@ -130,6 +130,7 @@ module.exports = {
       return diffs;
   
     },
+    includes_: (x, y) => typeof x == "string" && x.indexOf(y) > -1,
     containsAll: (needles, haystack) => { 
       return needles.every(i => haystack.includes(i))
     },

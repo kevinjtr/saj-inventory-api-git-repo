@@ -5,5 +5,5 @@ module.exports = function(app) {
 	const usersController = require('../controllers/users');
 
 	//!GET
-	app.route('/dbpopulate').get(usersController.verifyUser,controller.index);
+	app.route('/dbpopulate').get(usersController.verifyToken,controller.index);
 };

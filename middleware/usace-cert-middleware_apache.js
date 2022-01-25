@@ -22,9 +22,9 @@ const usaceCertMiddleware = function (req, res, next) {
         certObj ={};
       }
 
-      if(typeof certObj != 'undefined' && Object.keys(certObj).length > 0) {
-        certTools.UpdateUserAccessHistory(certObj)
-      }
+      // if(typeof certObj != 'undefined' && Object.keys(certObj).length > 0) {
+      //   certTools.UpdateUserAccessHistory(certObj)
+      // }
       
       req.headers.cert = certObj;
     }

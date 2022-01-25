@@ -7,15 +7,15 @@ module.exports = function(app) {
 	//!GET
 	//app.route('/eng4900').get(controller.index);
 
-	app.route('/eng4900/:id').get(usersController.verifyUser,controller.getById);
-	app.route('/eng4900/pdf/:id').get(usersController.verifyUser,controller.getPdfById);
-	app.route('/eng4900/search2').post(usersController.verifyUser,controller.search2);
-	app.route('/eng4900/upload').post(usersController.verifyUser, controller.upload);
+	app.route('/eng4900/:id').get(usersController.verifyToken,controller.getById);
+	app.route('/eng4900/pdf/:id').get(usersController.verifyToken,controller.getPdfById);
+	app.route('/eng4900/search2').post(usersController.verifyToken,controller.search2);
+	app.route('/eng4900/upload').post(usersController.verifyToken, controller.upload);
 
 	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);
 	//!POST
-	app.route('/eng4900/add').post(usersController.verifyUser, controller.add);
-	app.route('/eng4900/update').post(usersController.verifyUser, controller.update);
+	app.route('/eng4900/add').post(usersController.verifyToken, controller.add);
+	app.route('/eng4900/update').post(usersController.verifyToken, controller.update);
 	//app.route('/eng4900').post(controller.add);
 	//!PATCH
 	//app.route('/eng4900/:id').patch(usersController.verifyToken, controller.update);

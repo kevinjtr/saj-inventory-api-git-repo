@@ -4,7 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
-const {propNamesToLowerCase,objectDifference} = require('../tools/tools');
+const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
@@ -79,14 +79,18 @@ exports.search = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
+
+	console.log(req.body)
 	try{
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
 			const db_col_name = `LOWER(TO_CHAR(${parameter}))`
 
 			if(db_col_name != undefined){
-				const db_col_value = req.body[parameter]
+				const db_col_value = req.body[parameter].toString()
 				const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
+
+				
 
 				if(db_col_value.includes(';')){
 					const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
@@ -158,6 +162,7 @@ exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
 	try{
+		console.log(req.body.params)
 		const {changes} = req.body.params
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {

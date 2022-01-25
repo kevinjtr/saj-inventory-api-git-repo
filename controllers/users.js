@@ -6,7 +6,7 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const {user_rights} = require('../config/queries')
 const {propNamesToLowerCase} = require('../tools/tools')
-
+const certTools = require('../middleware/utils/cert-tools');
 // 	// here the query is executed
 //    });
 //const connection = require('../connect');
@@ -14,7 +14,6 @@ const {propNamesToLowerCase} = require('../tools/tools')
 	It uses promises.
  */
 const jwt = require('jsonwebtoken');
-
 
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
@@ -39,6 +38,10 @@ exports.login = async (req, res) => {
 			let result =  await connection.execute(`${user_rights} where edipi = :0`,[edipi],dbSelectOptions)
 
 			if(result.rows.length > 0){
+				if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
+					certTools.UpdateUserAccessHistory(req.headers.cert)
+				}
+
 				result.rows = propNamesToLowerCase(result.rows)
 
 				//console.log(result)
@@ -47,22 +50,36 @@ exports.login = async (req, res) => {
 					name: result.rows[0]['updated_by_full_name'],
 					level: result.rows[0]['user_level'] == 1 ? 'admin' : 'user'
 				};
+
+				//console.log(result,user)
+				const token_exp = Math.floor(Date.now() / 1000) + (60 * 30)//30mins
+
+				jwt.sign({ user: user, exp: token_exp}, process.env.SECRET_KEY, (err, token) => {
+					res.json({
+						token: token,
+						user: user.level,
+						exp: token_exp
+					});
+				});
+
+				return;
 			}	
 		}
 
-		//console.log(result,user)
-		const token_exp = Math.floor(Date.now() / 1000) + (60 * 30)//30mins
-
-		jwt.sign({ user: user, exp: token_exp }, process.env.SECRET_KEY, (err, token) => {
-			res.json({
-				token: token,
-				user: user.level,
-				exp: token_exp
-			});
+		res.status(400).json({
+			token: '',
+			user: '',
+			exp: ''
 		});
+		
 	}catch(err){
 		if (err) throw err;
-		//logger.error(err)
+
+		res.status(400).json({
+			token: '',
+			user: '',
+			exp: ''
+		});
 	}
 
 	// connection.query('SELECT * FROM users where email = ?', email, function(err, results) {
@@ -93,56 +110,56 @@ exports.login = async (req, res) => {
 // 	});
 // };
 //!REGISTER USER
-exports.register = async (req, res) => {
-	// Mock user
-	const { full_name, email, password } = req.body;
-	const connection =  await oracledb.getConnection(dbConfig);
-	try{
-		let result =  await connection.execute('INSERT into users (full_name, email, password) values (:0, :1, :2)',[ full_name, email, password ],{autoCommit:true})
-		result.rows = result.rows.map(function(r){
-			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			return r;
-		})
-		res.status(200).json({
-			status: 200,
-			message: 'Succesfully Create New Users',
-			data: {
-				full_name: req.body.full_name,
-				email: req.body.email
-			}
-		});
+// exports.register = async (req, res) => {
+// 	// Mock user
+// 	const { full_name, email, password } = req.body;
+// 	const connection =  await oracledb.getConnection(dbConfig);
+// 	try{
+// 		let result =  await connection.execute('INSERT into users (full_name, email, password) values (:0, :1, :2)',[ full_name, email, password ],{autoCommit:true})
+// 		result.rows = result.rows.map(function(r){
+// 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+// 			return r;
+// 		})
+// 		res.status(200).json({
+// 			status: 200,
+// 			message: 'Succesfully Create New Users',
+// 			data: {
+// 				full_name: req.body.full_name,
+// 				email: req.body.email
+// 			}
+// 		});
 		
-	}catch(err){
-		console.log(err);
-		res.status(400).json({
-			status: 400,
-			message: 'Error Create New Users'
-		});
-	}
+// 	}catch(err){
+// 		console.log(err);
+// 		res.status(400).json({
+// 			status: 400,
+// 			message: 'Error Create New Users'
+// 		});
+// 	}
 
-	// connection.query(
-	// 	'INSERT into users (full_name, email, password) values (?, ?, ?)',
-	// 	[ full_name, email, password ],
-	// 	function(err) {
-	// 		if (err) {
-	// 			console.log(err);
-	// 			res.status(400).json({
-	// 				status: 400,
-	// 				message: 'Error Create New Users'
-	// 			});
-	// 		} else {
-	// 			res.status(200).json({
-	// 				status: 200,
-	// 				message: 'Succesfully Create New Users',
-	// 				data: {
-	// 					full_name: req.body.full_name,
-	// 					email: req.body.email
-	// 				}
-	// 			});
-	// 		}
-	// 	}
-	// );
-};
+// 	// connection.query(
+// 	// 	'INSERT into users (full_name, email, password) values (?, ?, ?)',
+// 	// 	[ full_name, email, password ],
+// 	// 	function(err) {
+// 	// 		if (err) {
+// 	// 			console.log(err);
+// 	// 			res.status(400).json({
+// 	// 				status: 400,
+// 	// 				message: 'Error Create New Users'
+// 	// 			});
+// 	// 		} else {
+// 	// 			res.status(200).json({
+// 	// 				status: 200,
+// 	// 				message: 'Succesfully Create New Users',
+// 	// 				data: {
+// 	// 					full_name: req.body.full_name,
+// 	// 					email: req.body.email
+// 	// 				}
+// 	// 			});
+// 	// 		}
+// 	// 	}
+// 	// );
+// };
 
 /* When the user from the front-end wants to use a function,
  The below code is an example of using the word authenticate to see if the
@@ -180,24 +197,30 @@ exports.verifyUser = async (req, res, next) => {
 	//console.log(connection.on())
 };
 
-exports.verifyToken = async function verifyToken(req, res, next) {
+exports.verifyToken = async (req, res, next) => {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
 
-	//! Check if bearer is undefined
 	if (typeof bearerToken !== 'undefined') {
 		req.token = bearerToken;
 		//! Next middleware
-		jwt.verify(req.token, process.env.SECRET_KEY, (err) => {
+		
+		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 			if (err) {
 				res.send('Access denied!!');
 			} else {
-				console.log('Succesfully!');
+				console.log(decode)
+				req.user = decode.user.id
 				next();
 			}
 		});
-	} else {
-		//! Forbidden
-		res.send('Please login to access app!!');
+
+		return;
 	}
+	//else {
+		//! Forbidden
+		//res.send('Please login to access app!!');
+	//}
+
+	res.send('Please login to access app!!');
 };
