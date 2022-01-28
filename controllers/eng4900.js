@@ -149,7 +149,7 @@ const newQuerySelById = `SELECT
 		f.temporary_loan
 		from form_4900 f, requested_action ra,
 		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0 
+		where ra.id = f.requested_action and (f.losing_hra = l_hra.losing_hra_num or (f.losing_hra is NULL and l_hra.losing_hra_num  is null)) and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0 
 		UNION ALL (
 			SELECT
 			f.id as form_id,
@@ -184,11 +184,9 @@ const newQuerySelById2 = `SELECT eg.*,eq.*, TO_CHAR(eq.acquisition_date,'mm/dd/y
 //!SELECT * FROM form_4900
 exports.index = async function(req, res) {
 
-    // console.log('here at index form_4900')
 	// const connection =  await oracledb.getConnection(dbConfig);
 
 	// try{
-    //     console.log('extract form_4900')
 	// 	let result =  await connection.execute('SELECT * FROM form_4900',{},dbSelectOptions)
 		
 	// 	result.rows = result.rows.map(function(r){
@@ -196,10 +194,9 @@ exports.index = async function(req, res) {
 	// 		return r;
 	// 	})
 
-    //     console.log('rows fetched: ',result.rows.length)
+
 	// 	response.ok(result.rows, res);
 	// }catch(err){
-	// 	console.log(err)
 	// 	//logger.error(err)
 	// }
 };
@@ -208,7 +205,7 @@ exports.index = async function(req, res) {
 exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		console.log(newQuerySelById)
+		console.log('select by ID')
 		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
 
 		
@@ -218,7 +215,6 @@ exports.getById = async function(req, res) {
 			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
 			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
 
-			//console.log(g_keys)
 			const hra = {gaining:{},losing:{}}
 
 			for(const key of g_keys){
@@ -366,7 +362,7 @@ const FormsToMaterialTableFormat = (form_groups) => {
 
 	const form_return = []
 
-	console.log(form_groups)
+	//console.log(form_groups)
 	for(const id in form_groups){
 		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, requested_action} = form_groups[id][0]
 		
@@ -520,8 +516,8 @@ exports.search2 = async function(req, res) {
 						//query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,4,5))) `
 					}
 
-					if(i == 2)
-						console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
+					//if(i == 2)
+						//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
 						//console.log(`QUERY-${tab_name}`,query)
 
 					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
@@ -675,14 +671,14 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 								(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
 								// if(i == keys.length - 1 && typeof edipi != 'undefined'){
-								// 	result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+								// 	result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 								// 	console.log(result.rows)
 								// 	if(result.rows.length > 0){
-								// 		const user_rights_id = result.rows[0].ID
+								// 		const registered_users_id = result.rows[0].ID
 								// 		comma = cols ? ', ': ''
 								// 		cols = cols + comma + 'updated_by'
 								// 		vals = vals + comma + ':' + 'updated_by'
-								// 		insert_obj['updated_by'] = user_rights_id
+								// 		insert_obj['updated_by'] = registered_users_id
 								// 	}
 								// }
 							}
@@ -758,13 +754,13 @@ exports.add = async function(req, res) {
 				}
 
 				if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-					result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 					if(result.rows.length > 0){
-						const user_rights_id = result.rows[0].ID
+						const registered_users_id = result.rows[0].ID
 						const comma =  cols ? ', ': ''
 						cols = cols + comma + 'updated_by'
                         vals = vals + comma + ':' + 'updated_by'
-						cells['updated_by'] = user_rights_id
+						cells['updated_by'] = registered_users_id
 					}
 				}
 			}
@@ -848,13 +844,13 @@ exports.update = async function(req, res) {
 								}
 	
 								if(i == keys.length - 1 && typeof edipi != 'undefined'){
-									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+									result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 
 									if(result.rows.length > 0){
-										const user_rights_id = result.rows[0].ID
+										const registered_users_id = result.rows[0].ID
 										const comma =  cols ? ', ': ''
 										cols = cols + comma + 'updated_by = :updated_by'
-										cells.update['updated_by'] = user_rights_id
+										cells.update['updated_by'] = registered_users_id
 									}
 								}
 							}
@@ -1013,9 +1009,9 @@ exports.upload = async function(req, res) {
 // exports.testPdfBuild = async function(req, res) {
 
 // 	const connection =  await oracledb.getConnection(dbConfig);
-// 	console.log('here')
+
 // 	try{
-// 		console.log(newQuerySelById)
+
 // 		let result = await connection.execute(newQuerySelById,[25],dbSelectOptions)
 
 		
@@ -1054,7 +1050,6 @@ exports.upload = async function(req, res) {
 // 			data: null
 // 		});
 // 	}catch(err){
-// 		console.log(err)
 // 		return res.status(400).json({
 // 			status: 400,
 // 			error: true,

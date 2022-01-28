@@ -1,5 +1,5 @@
 const csv = require('../tools/csv-parser/csv-to-json');
-const {user_rights_all_cols} = require('../config/queries')
+const {registered_users_all_cols} = require('../config/queries')
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
@@ -13,7 +13,7 @@ exports.index = async function(req, res) {
 
 	if (typeof edipi !== 'undefined') {
 
-		let result =  await connection.execute(user_rights_all_cols,{},dbSelectOptions)
+		let result =  await connection.execute(registered_users_all_cols,{},dbSelectOptions)
         connection.close()
 
         if(result.rows.length > 0){//user is registered.

@@ -202,12 +202,12 @@ exports.add = async function(req, res) {
 			
 			const {user_type} = newData
 					//Verify if user is registered.
-					 let query = `select * from user_rights where edipi = :0`
+					 let query = `select * from registered_users where edipi = :0`
 					let result = await connection.execute(query,[cac_info.edipi],dbSelectOptions)
 	
-					let user_rights_rows = result.rows
+					let registered_users_rows = result.rows
 					
-					if(user_rights_rows.length > 0){
+					if(registered_users_rows.length > 0){
 						//User is registered.
 						/* return res.status(200).json({
 							status: 200,
@@ -231,7 +231,7 @@ exports.add = async function(req, res) {
 	
 							if(result.rows.length > 0){//HRA account was found.
 								const hra_record = propNamesToLowerCase(result.rows)[0]//grabbing first element.
-								let insertQuery = `INSERT INTO USER_RIGHTS (EDIPI, FULL_NAME, EMPLOYEE_ID, USER_LEVEL) VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 2)`
+								let insertQuery = `INSERT INTO registered_users (EDIPI, FULL_NAME, EMPLOYEE_ID, USER_LEVEL) VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 2)`
 								let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights granted" : "Error inserting user rights"		
 							}

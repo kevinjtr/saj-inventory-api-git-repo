@@ -381,13 +381,13 @@ exports.add = async function(req, res) {
 									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
 									if(i == keys.length - 1 && typeof edipi != 'undefined'){
-										result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+										result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 										if(result.rows.length > 0){
-											const user_rights_id = result.rows[0].ID
+											const registered_users_id = result.rows[0].ID
 											comma = cols ? ', ': ''
 											cols = cols + comma + 'updated_by'
 											vals = vals + comma + ':' + 'updated_by'
-											insert_obj['updated_by'] = user_rights_id
+											insert_obj['updated_by'] = registered_users_id
 										}
 									}
 								}
@@ -500,12 +500,12 @@ exports.update = async function(req, res) {
 								}
 
 								if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-									result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+									result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 									if(result.rows.length > 0){
-										const user_rights_id = result.rows[0].ID
+										const registered_users_id = result.rows[0].ID
 										const comma =  cols ? ', ': ''
 										cols = cols + comma + 'updated_by = :updated_by'
-										cells.update['updated_by'] = user_rights_id
+										cells.update['updated_by'] = registered_users_id
 									}
 								}
 							}
@@ -565,12 +565,12 @@ exports.destroy = async function(req, res) {
 				let cols = ''
 
 				if(typeof edipi != 'undefined'){
-					let result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+					let result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 					if(result.rows.length > 0){
-						const user_rights_id = result.rows[0].ID
+						const registered_users_id = result.rows[0].ID
 						//comma =  cols ? ', ': ''
 						//cols = cols + comma + 'updated_by = :updated_by'
-						cols = `, UPDATED_BY = ${user_rights_id}`
+						cols = `, UPDATED_BY = ${registered_users_id}`
 					}
 				}
 

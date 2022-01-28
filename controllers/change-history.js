@@ -5,7 +5,7 @@ const dbConfig = require('../dbconfig.js');
 //const connection = require('../connect');
 const {propNamesToLowerCase} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {eng4900_losingHra,eng4900_gainingHra,user_rights} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,registered_users} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
 
 const employee_ = `SELECT
@@ -66,7 +66,7 @@ exports.equipment = async function(req, res) {
         FROM equipment_history eh
         LEFT JOIN employee e
 		on eh.user_employee_id = e.id
-		LEFT JOIN (${user_rights}) ur
+		LEFT JOIN (${registered_users}) ur
 		on ur.id = eh.updated_by`
     
 		let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
@@ -123,7 +123,7 @@ exports.hra = async function(req, res) {
             FROM hra_history hh
             LEFT JOIN (${employee_}) e 
 			on hh.employee_id = e.id
-			LEFT JOIN (${user_rights}) ur
+			LEFT JOIN (${registered_users}) ur
 			on ur.id = hh.updated_by
             ORDER BY hh.UPDATED_DATE desc`,{},dbSelectOptions)
 
@@ -176,7 +176,7 @@ exports.employee = async function(req, res) {
 			EH.UPDATED_BY,
 			ur.UPDATED_BY_FULL_NAME
 		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
-		LEFT JOIN (${user_rights}) ur
+		LEFT JOIN (${registered_users}) ur
 		on ur.id = eh.updated_by
         ORDER BY EH.UPDATED_DATE desc`,{},dbSelectOptions)
 

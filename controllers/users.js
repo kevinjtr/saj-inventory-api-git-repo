@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
-const {user_rights} = require('../config/queries')
+const {registered_users} = require('../config/queries')
 const {propNamesToLowerCase} = require('../tools/tools')
 const certTools = require('../middleware/utils/cert-tools');
 // 	// here the query is executed
@@ -21,7 +21,105 @@ const dbSelectOptions = {
     // prefetchRows:     100,                // internal buffer allocation size for tuning
     // fetchArraySize:   100                 // internal buffer allocation size for tuning
 	};
-	
+
+const EDIT_ROUTES = ['add','update','destroy','upload']
+
+const includesAnyEditRoutes = (str) => {
+	let flag = false
+	EDIT_ROUTES.map(elem => {
+		if(str.includes(elem))
+			flag = true
+	})
+	return flag
+}
+
+const tokenIsAuthorized = (decoded_token, path) => {
+	const {user} = decoded_token
+	const route_to_access = path.split('/').filter(Boolean)[0];
+
+	if(includesAnyEditRoutes(path)){//is edit route
+		if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
+			if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
+				return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
+			}
+		}		
+	}
+
+	if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){//is view route
+		if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
+			return REGISTERED_USERS_VIEW[user.level][route_to_access].view
+		}
+	}
+
+	console.log('SOMETHING WENT WRONG WHILE VERIFYING TOKEN ACCESS!')
+	return false
+}
+
+const REGISTERED_USERS_VIEW = {
+	admin:{
+		home:{view:true, edit:true},
+		equipment:{view:true, edit:true},
+		annualInventory:{view:true, edit:true},
+		hra:{view:true, edit:true},
+		employee:{view:true, edit:true},
+		eng4900:{view:true, edit:true},
+		changeHistory:{view:true, edit:true},
+	},
+	user_1:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:false},
+		annualInventory: {view:false, edit:false},
+		hra: {view:false, edit:false},
+		employee: {view:false, edit:false},
+		eng4900: {view:false, edit:false},
+		changeHistory: {view:false, edit:false},
+	},
+	user_2:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:false},
+		annualInventory: {view:true, edit:true},
+		hra: {view:false, edit:false},
+		employee: {view:false, edit:false},
+		eng4900: {view:true, edit:true},
+		changeHistory: {view:false, edit:false},
+	},
+	user_3:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:false},
+		annualInventory: {view:true, edit:true},
+		hra: {view:false, edit:false},
+		employee: {view:true, edit:true},
+		eng4900: {view:true, edit:true},
+		changeHistory: {view:false, edit:false},
+	},
+	user_3:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:false},
+		annualInventory: {view:true, edit:true},
+		hra: {view:true, edit:true},
+		employee: {view:true, edit:true},
+		eng4900: {view:true, edit:true},
+		changeHistory: {view:true, edit:false},
+	},
+	hra_1:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:false},
+		annualInventory: {view:true, edit:true},
+		hra: {view:true, edit:false},
+		employee: {view:true, edit:false},
+		eng4900: {view:true, edit:true},
+		changeHistory: {view:true, edit:false},
+	},
+	hra_2:{
+		home: {view:true, edit:false},
+		equipment: {view:true, edit:true},
+		annualInventory: {view:true, edit:true},
+		hra: {view:true, edit:true},
+		employee: {view:true, edit:true},
+		eng4900: {view:true, edit:true},
+		changeHistory: {view:true, edit:true},
+	},
+}
 
 //!LOGIN USERS
 exports.login = async (req, res) => {
@@ -35,7 +133,7 @@ exports.login = async (req, res) => {
 		}
 
 		if(edipi){
-			let result =  await connection.execute(`${user_rights} where edipi = :0`,[edipi],dbSelectOptions)
+			let result =  await connection.execute(`${registered_users} where edipi = :0`,[edipi],dbSelectOptions)
 
 			if(result.rows.length > 0){
 				if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
@@ -58,6 +156,7 @@ exports.login = async (req, res) => {
 					res.json({
 						token: token,
 						user: user.level,
+						user_name: user.name,
 						exp: token_exp
 					});
 				});
@@ -181,7 +280,7 @@ exports.verifyUser = async (req, res, next) => {
 
 	//console.log(req.headers.cert)
 	if (typeof edipi !== 'undefined') {
-		let result =  await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0',[edipi],dbSelectOptions)
+		let result =  await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 		connection.close()
 
 		if(result.rows.length > 0){
@@ -201,6 +300,7 @@ exports.verifyToken = async (req, res, next) => {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
 
+	
 	if (typeof bearerToken !== 'undefined') {
 		req.token = bearerToken;
 		//! Next middleware
@@ -209,7 +309,13 @@ exports.verifyToken = async (req, res, next) => {
 			if (err) {
 				res.send('Access denied!!');
 			} else {
-				console.log(decode)
+				
+				if(tokenIsAuthorized(decode, req.path)){
+					console.log('is authorized')
+				}else{
+					console.log('not authorized')
+				}
+					
 				req.user = decode.user.id
 				next();
 			}
