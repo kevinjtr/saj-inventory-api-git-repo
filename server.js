@@ -9,13 +9,13 @@ const path = require('path');
 const csv = require('./tools/csv-parser/csv-to-json')
 const fileUpload = require('express-fileupload');
 
-let  usaceCertMiddleware;
+let usaceCertMiddleware;
 
-if(process.env.NODE_ENV=== 'development') {
-  app.use(cors());
-  usaceCertMiddleware = require('./middleware/usace-cert-middleware');
-}else{
-  usaceCertMiddleware = require('./middleware/usace-cert-middleware_apache');
+if (process.env.NODE_ENV === 'development') {
+	app.use(cors());
+	usaceCertMiddleware = require('./middleware/usace-cert-middleware');
+} else {
+	usaceCertMiddleware = require('./middleware/usace-cert-middleware_apache');
 }
 
 
@@ -59,6 +59,7 @@ const dbPopulateRoutes = require('./routes/db-populate.js');
 const user = require('./routes/user');
 const register = require('./routes/register');
 const problem = require('./routes/problem')
+const problemReportViewerRoutes = require('./routes/problem-report-viewer');
 
 usersRoutes(app);
 handleError(app);
@@ -77,28 +78,29 @@ dbPopulateRoutes(app)
 user(app)
 register(app)
 problem(app)
+problemReportViewerRoutes(app)
 
-if(process.env.HTTPS === 'true') {
+if (process.env.HTTPS === 'true') {
 	const fs = require('fs');
 	const https = require('https');
 	const httpsOptions = {
-	  key: fs.readFileSync(path.join(__dirname, 'private/server.key')),
-	  cert: fs.readFileSync(path.join(__dirname, 'private/server.cert')),
-	  requestCert: true, 
-	  rejectUnauthorized: false
+		key: fs.readFileSync(path.join(__dirname, 'private/server.key')),
+		cert: fs.readFileSync(path.join(__dirname, 'private/server.cert')),
+		requestCert: true,
+		rejectUnauthorized: false
 	};
 	const httpsServer = https.createServer(httpsOptions, app);
 	httpsServer.timeout = 240000;
 	httpsServer.listen(port);
 	console.log(`Server is listening on https://localhost:${port}`);
 	//csv.run()
-  } else {
+} else {
 	const http = require('http');
-	const httpServer = http.createServer(app);    
+	const httpServer = http.createServer(app);
 	httpServer.timeout = 240000;
 	httpServer.listen(port);
 	console.log(`Server is listening on http://localhost:${port}`);
-	}
-	
+}
+
 //app.listen(port);
 //console.log('Started');
