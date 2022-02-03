@@ -59,7 +59,6 @@ const dbPopulateRoutes = require('./routes/db-populate.js');
 const user = require('./routes/user');
 const register = require('./routes/register');
 const problem = require('./routes/problem')
-const problemReportViewerRoutes = require('./routes/problem-report-viewer');
 
 usersRoutes(app);
 handleError(app);
@@ -78,7 +77,6 @@ dbPopulateRoutes(app)
 user(app)
 register(app)
 problem(app)
-problemReportViewerRoutes(app)
 
 if (process.env.HTTPS === 'true') {
 	const fs = require('fs');

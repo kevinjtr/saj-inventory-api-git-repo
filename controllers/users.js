@@ -42,6 +42,8 @@ const tokenIsAuthorized = (decoded_token, path) => {
 			if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
 				return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
 			}
+
+			return user.level == "admin"
 		}		
 	}
 
@@ -49,6 +51,8 @@ const tokenIsAuthorized = (decoded_token, path) => {
 		if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
 			return REGISTERED_USERS_VIEW[user.level][route_to_access].view
 		}
+
+		return user.level == "admin"
 	}
 
 	console.log('SOMETHING WENT WRONG WHILE VERIFYING TOKEN ACCESS!')
@@ -57,6 +61,7 @@ const tokenIsAuthorized = (decoded_token, path) => {
 
 const REGISTERED_USERS_VIEW = {
 	admin:{
+		admin:{view:true, edit:true},
 		home:{view:true, edit:true},
 		equipment:{view:true, edit:true},
 		annualInventory:{view:true, edit:true},
@@ -66,6 +71,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory:{view:true, edit:true},
 	},
 	employee_1:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:false, edit:false},
@@ -75,6 +81,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory: {view:false, edit:false},
 	},
 	employee_2:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -84,6 +91,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory: {view:false, edit:false},
 	},
 	employee_3:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -93,6 +101,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory: {view:false, edit:false},
 	},
 	employee_4:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -102,6 +111,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory: {view:true, edit:false},
 	},
 	hra_1:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -111,6 +121,7 @@ const REGISTERED_USERS_VIEW = {
 		changeHistory: {view:true, edit:false},
 	},
 	hra_2:{
+		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:true},
 		annualInventory: {view:true, edit:true},
@@ -307,13 +318,14 @@ exports.verifyUser = async (req, res, next) => {
 exports.verifyToken = async (req, res, next) => {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
-
 	
 	if (typeof bearerToken !== 'undefined') {
 		req.token = bearerToken;
 		//! Next middleware
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
+
+			console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {
