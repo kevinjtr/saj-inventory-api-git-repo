@@ -996,7 +996,7 @@ exports.upload = async function(req, res) {
 			console.log('PDF created!')
 		})
 
-		console.log(result.rows[0].BLOBDATA)
+		//console.log(result.rows[0].BLOBDATA)
 		//await savePdfToDatabase(myFile)
 		//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
 	});

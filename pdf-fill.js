@@ -106,6 +106,11 @@ var create4900Json = async function(form_data){
     //     if (err) return console.log(err);
     //     console.log('eng4900-form-data saved!');
     //   })
+    const keys = Object.keys(form_data)
+
+    for(const key of keys){//remove null values.
+        form_data[key] = form_data[key] ? form_data[key] : ""
+    }
 
     let data = [
         {name: "inv_app_id", type:"textfield", data: 'IA4900-' + form_data.form_id},
@@ -116,17 +121,16 @@ var create4900Json = async function(form_data){
         {name: "FOI", type:"checkbox", data: form_data.requested_action == "FOI"},
         {name: "Temporary Loan", type:"checkbox", data: false},
         {name: "Expiration Date", type:"date", data: ""},
-        {name: "2a Name", type:"textfield", data: form_data.losing_hra_first_name + ' ' + form_data.losing_hra_last_name},
+        {name: "2a Name", type:"textfield", data: (form_data.losing_hra_first_name + ' ' + form_data.losing_hra_last_name).trim()},
         {name: "b Office Symbol_1", type:"textfield", data: form_data.losing_hra_os_alias},
         {name: "c. Hand Receipt Account Number_1", type:"textfield", data: form_data.losing_hra_num},
         {name: "d. Work Phone Number_1", type:"textfield", data: formatPhoneNumber(form_data.losing_hra_work_phone)},
-        {name: "3a Name", type:"textfield", data: form_data.gaining_hra_first_name + ' ' +form_data.gaining_hra_last_name},
+        {name: "3a Name", type:"textfield", data: (form_data.gaining_hra_first_name + ' ' +form_data.gaining_hra_last_name).trim()},
         {name: "b. Office Symbol_2", type:"textfield", data: form_data.gaining_hra_os_alias},
         {name: "c. Hand Receipt Account Number_2", type:"textfield", data: form_data.gaining_hra_num},
         {name: "d. Work Phone Number_2", type:"textfield", data: formatPhoneNumber(form_data.gaining_hra_work_phone)},
         {name: "13a. ror_prop", type:"textfield", data: ""},
     ]
-
 
     for(let i=0;i<form_data.equipment_group.length;i++){
         const num = i + 1
@@ -138,7 +142,7 @@ var create4900Json = async function(form_data){
             {name: `7 Nomenclature include make modelRow${num}`, type:"textfield", data: equipment.item_type},
             {name: `8 Cond CodeRow${num}`, type:"textfield", data:  equipment.condition},
             {name: `9 Serial NumberRow${num}`, type:"textfield", data: equipment.serial_num},
-            {name: `10 ACQ DateRow${num}`, type:"date", data: moment(equipment.acquisition_date).format('yyyy-MM-DD')},
+            {name: `10 ACQ DateRow${num}`, type:"date", data: equipment.acquisition_date ? moment(equipment.acquisition_date).format('yyyy-MM-DD') : ""},
             {name: `11 ACQ PriceRow${num}`, type:"textfield", data: equipment.acquisition_price},
             {name: `12 Document Number Control IDRow${num}`, type:"textfield", data: ""}
         ]

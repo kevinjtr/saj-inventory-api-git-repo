@@ -65,7 +65,7 @@ const REGISTERED_USERS_VIEW = {
 		eng4900:{view:true, edit:true},
 		changeHistory:{view:true, edit:true},
 	},
-	user_1:{
+	employee_1:{
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:false, edit:false},
@@ -74,7 +74,7 @@ const REGISTERED_USERS_VIEW = {
 		eng4900: {view:false, edit:false},
 		changeHistory: {view:false, edit:false},
 	},
-	user_2:{
+	employee_2:{
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -83,7 +83,7 @@ const REGISTERED_USERS_VIEW = {
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:false, edit:false},
 	},
-	user_3:{
+	employee_3:{
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -92,7 +92,7 @@ const REGISTERED_USERS_VIEW = {
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:false, edit:false},
 	},
-	user_3:{
+	employee_4:{
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
 		annualInventory: {view:true, edit:true},
@@ -141,15 +141,18 @@ exports.login = async (req, res) => {
 				}
 
 				result.rows = propNamesToLowerCase(result.rows)
+				const {id, updated_by_full_name, user_level_alias} = result.rows[0]
 
+				//console.log(result.rows[0])
 				//console.log(result)
 				user = {
-					id: result.rows[0]['id'],
-					name: result.rows[0]['updated_by_full_name'],
-					level: result.rows[0]['user_level'] == 1 ? 'admin' : 'user'
+					id: id,
+					name: updated_by_full_name,
+					level: user_level_alias,
+					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1
 				};
 
-				//console.log(result,user)
+				//console.log(user)
 				const token_exp = Math.floor(Date.now() / 1000) + (60 * 30)//30mins
 
 				jwt.sign({ user: user, exp: token_exp}, process.env.SECRET_KEY, (err, token) => {
@@ -157,7 +160,8 @@ exports.login = async (req, res) => {
 						token: token,
 						user: user.level,
 						user_name: user.name,
-						exp: token_exp
+						exp: token_exp,
+						access: user.access
 					});
 				});
 
@@ -168,7 +172,9 @@ exports.login = async (req, res) => {
 		res.status(400).json({
 			token: '',
 			user: '',
-			exp: ''
+			user_name: '',
+			exp: '',
+			access: {}
 		});
 		
 	}catch(err){
@@ -177,7 +183,9 @@ exports.login = async (req, res) => {
 		res.status(400).json({
 			token: '',
 			user: '',
-			exp: ''
+			user_name: '',
+			exp: '',
+			access: {}
 		});
 	}
 
