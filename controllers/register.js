@@ -216,12 +216,13 @@ exports.add = async function(req, res) {
 						}); */
 					} 
 					const return_messages = {}
+					
 					if(newData.user_type === 2){
 						//User is not registered
 						for(let i=0;i<newData.hras.length;i++){//user_type = 2 [HRA]
 							//User wants to register as an HRA.
 							const hra_num = newData.hras[i]
-	
+							
 							let query = `SELECT h.*,e.* FROM HRA h LEFT JOIN (${employee_officeSymbol}) e 
 							on h.employee_id = e.id
 							WHERE HRA_NUM = ${Number(hra_num)} and UPPER(e.first_name) = '${cac_info.first_name.toUpperCase()}' and 
@@ -238,7 +239,7 @@ exports.add = async function(req, res) {
 								
 								else{
 									// HRA INFO AND CAC INFO DO NOT MATCH
-									let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type, hras) VALUES ('${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num})`
+									let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type, hras) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num})`
 									let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 									return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights pending" : "Error inserting employee registration"
 								}
@@ -258,7 +259,7 @@ exports.add = async function(req, res) {
 				
 					//User wants to register as non HRA. user_type = 4 [Regular Employee] - Admin can make him any user_type.
 					
-						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type) VALUES ('${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type})`
+						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type})`
 				
 						let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 						
