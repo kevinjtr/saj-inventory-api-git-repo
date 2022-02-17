@@ -7,6 +7,9 @@ const dbConfig = require('../dbconfig.js');
 const {registered_users} = require('../config/queries')
 const {propNamesToLowerCase} = require('../tools/tools')
 const certTools = require('../middleware/utils/cert-tools');
+const path = require('path')
+const multer  = require('multer')
+const upload = multer({ dest: path.join(__dirname,'../public/') })
 // 	// here the query is executed
 //    });
 //const connection = require('../connect');
@@ -164,7 +167,7 @@ exports.login = async (req, res) => {
 				};
 
 				//console.log(user)
-				const token_exp = Math.floor(Date.now() / 1000) + (60 * 30)//30mins
+				const token_exp = Math.floor(Date.now() / 1000) + (60 * 60 * 12)//12hrs
 
 				jwt.sign({ user: user, exp: token_exp}, process.env.SECRET_KEY, (err, token) => {
 					res.json({
@@ -325,19 +328,20 @@ exports.verifyToken = async (req, res, next) => {
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 
-			console.log(decode)
+			//console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
 					console.log('is authorized')
+					next();
 				}else{
 					console.log('not authorized')
 				}
 					
 				req.user = decode.user.id
-				next();
+				
 			}
 		});
 
@@ -350,3 +354,81 @@ exports.verifyToken = async (req, res, next) => {
 
 	res.send('Please login to access app!!');
 };
+
+exports.verifyTokenAndBufferUpload = async function post(req, res, next) {
+	try {
+		
+	// const form = formidable({ multiples: true, uploadDir: __dirname });
+
+	// form.parse(req, (err, fields, files) => {
+	// console.log('fields:', fields);
+	// console.log('files:', files);
+	// });
+
+	//   const maxFileSize = 1024 * 1024 * 50; // 50MB; OCI limit is 1 GB unless streaming
+	//   let contentBuffer = [];
+	//   let totalBytesInBuffer = 0;
+	//   let contentType = req.headers['content-type'] || 'application/octet';
+	//   let fileName = req.headers['x-file-name'];
+  
+	//   if (fileName === '') {
+	// 	res.status(400).json({error: `The file name must be 
+	// 						  passed to the via x-file-name header`});
+	// 	return;
+	//   }
+
+	//console.log('here')
+	//   const form = new IncomingForm();
+	//   form.multiples = false
+	//   form.maxFileSize = 10 * 1024 * 1024 //10mb
+	//   form.uploadDir = path.join(__dirname,'../public')
+
+	//   form.parse(req, (err, fields, files) => {
+	// 	  console.log(files)
+	// 	if (err) {
+	// 		res.status(400).json({error: `something went wrong`});
+	// 	  return;
+	// 	}
+	// 	res.json({ fields, files });
+	//   });
+  
+	//   req.on('data', chunk => {
+	// 	  console.log('on data')
+	// 	contentBuffer.push(chunk);
+	// 	totalBytesInBuffer += chunk.length;
+  
+	// 	if (totalBytesInBuffer > maxFileSize) {
+	// 		console.log('error')
+	// 	  req.pause();
+  
+	// 	  res.header('Connection', 'close');
+	// 	  res.status(413).json({error: `The file size exceeded the 
+	// 							limit of ${maxFileSize} bytes`});
+  
+	// 	  req.connection.destroy();
+	// 	}
+	//   });
+  
+	//   req.on('end', async function() {
+	// 	contentBuffer = Buffer.concat(contentBuffer, totalBytesInBuffer);
+		
+	// 	try {
+	// 		req.upload = {fileName: fileName, contentType: contentType, contentBuffer: contentBuffer}
+	// 	  //const fileId = await files.create(fileName, contentType, contentBuffer);
+  
+	// 	  console.log('here before next.')
+	// 	  next();
+	// 	//   res.status(201).json({fileId: fileId});
+	// 	} catch (err) {
+	// 	  console.log(err);
+  
+	// 	  res.header('Connection', 'close');
+	// 	  res.status(500).json({error: 'Oops, something broke!'});
+  
+	// 	  req.connection.destroy();
+	// 	}
+	//   });
+	} catch (err) {
+		res.send('error on the api side');
+	}
+  }
