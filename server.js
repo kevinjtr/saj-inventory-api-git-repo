@@ -29,7 +29,9 @@ app.use(
 app.use(bodyParser.json());
 app.use(morgan('dev'));
 app.use(usaceCertMiddleware);
-app.use(fileUpload());
+app.use(fileUpload({
+	limits: { fileSize: 5 * 1024 * 1024 },//5mb
+  }));
 //app.use(cors());
 
 // app.use((req, res, next) => {

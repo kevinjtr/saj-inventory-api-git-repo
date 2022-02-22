@@ -19,6 +19,7 @@ const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js')
 const BANNED_COLS_FORM_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
 const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
+const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
 
 const printElements = (elements) => {
 	let str = ""
@@ -45,9 +46,54 @@ const andOR_multiple = {
 	'notEquals':and_
 }
 
+const queryForSearch = (id) => `SELECT 
+f.id as form_id,
+f.status,
+f.file_storage_id,
+fs.status as status_alias,
+ra.alias as REQUESTED_ACTION,
+f.LOSING_HRA as losing_hra_num,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
+l_hra.losing_hra_first_name,
+l_hra.losing_hra_last_name,
+l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
+l_hra.losing_hra_office_symbol,
+l_hra.losing_hra_work_phone,
+f.GAINING_HRA as gaining_hra_num,
+g_hra.gaining_hra_first_name,
+g_hra.gaining_hra_last_name,
+g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
+g_hra.gaining_hra_office_symbol,
+g_hra.gaining_hra_work_phone,
+f.DATE_CREATED,
+f.FOLDER_LINK,
+f.DOCUMENT_SOURCE,
+eg.form_equipment_group_ID as equipment_group_id,
+e.id as EQUIPMENT_ID, 
+	e.BAR_TAG_NUM , 
+	e.CATALOG_NUM , 
+	e.BAR_TAG_HISTORY_ID , 
+	e.MANUFACTURER , 
+	e."MODEL", 
+	e.CONDITION , 
+	e.SERIAL_NUM , 
+	e.ACQUISITION_DATE , 
+	e.ACQUISITION_PRICE , 
+	e.DOCUMENT_NUM, 
+	e.ITEM_TYPE , 
+	e.USER_EMPLOYEE_ID
+	from form_4900 f
+	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
+	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
+	LEFT JOIN requested_action ra on ra.id = f.requested_action
+	LEFT JOIN (${eng4900_gainingHra}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
+	LEFT JOIN ( ${eng4900_losingHra}) l_hra on f.losing_hra = l_hra.losing_hra_num
+	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
+
 const queryForSearchLosingAndGainingHra = (id) => `SELECT 
 f.id as form_id,
 f.status,
+f.file_storage_id,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
@@ -87,6 +133,7 @@ where eg.form_equipment_group_id = f.form_equipment_group_id and e.id = eg.form_
  const queryForSearchGainingHra = (id) => `SELECT 
 f.id as form_id,
 f.status,
+f.file_storage_id,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
 CASE WHEN f.GAINING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
@@ -128,6 +175,7 @@ const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM FORM_EQU
 const newQuerySelById = `SELECT
 		f.id as form_id,
 		f.status,
+		f.file_storage_id,
 		ra.alias as REQUESTED_ACTION,
 		f.LOSING_HRA as losing_hra_num,
 		l_hra.losing_hra_first_name,
@@ -154,6 +202,7 @@ const newQuerySelById = `SELECT
 			SELECT
 			f.id as form_id,
 			f.status,
+			f.file_storage_id,
 			ra.alias as REQUESTED_ACTION,
 			f.LOSING_HRA as losing_hra_num,
 			null as losing_hra_first_name,
@@ -280,32 +329,21 @@ exports.getPdfById = async function(req, res) {
 	try{
 		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
 
-		if (result.rows.length > 0) {
+		if(result.rows.length > 0){
+			console.log('here1')
 			result.rows = propNamesToLowerCase(result.rows)
+			const {file_storage_id} = result.rows[0]
 
-			const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
-			const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
-			const hra = {gaining:{},losing:{}}
+			if(file_storage_id){//Found a stored PDF.
+				console.log('here2')
+				let fileStorageResult = await connection.execute("SELECT * FROM file_storage WHERE ID = :0",[file_storage_id],dbSelectOptions)
 
-			for(const key of g_keys){
-				hra.gaining[key.replace('gaining_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
-			}
+				if(fileStorageResult.rows.length > 0){
+					console.log('here3')
+					fileStorageResult.rows = propNamesToLowerCase(fileStorageResult.rows)
+					const {file_name, folder} = fileStorageResult.rows[0]
 
-			for(const key of l_keys){
-				hra.losing[key.replace('losing_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
-			}
-
-			result.rows[0].equipment_group = []
-			result.rows[0].hra = hra
-			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].form_equipment_group_id],dbSelectOptions)
-
-			if(eg_result.rows.length > 0){
-				eg_result.rows = propNamesToLowerCase(eg_result.rows)
-				result.rows[0].equipment_group = eg_result.rows	
-				const result_pdf = await create4900(result.rows[0])
-				
-				if(result_pdf){
-					var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+					let file = path.join(__dirname , `../file_storage/${folder}/${file_name}`);    
 
 					fs.readFile(file , function (err,data){
 						res.contentType("application/pdf");
@@ -316,40 +354,79 @@ exports.getPdfById = async function(req, res) {
 					return(res)
 				}
 				
-				// .then(()=>{
-
-				// 	var file = path.join(__dirname , '../output/output_eng4900.pdf');    
-
-				// 	fs.readFile(file , function (err,data){
-				// 		res.contentType("application/pdf");
-				// 		res.send(data);
-				// 	});
-				// }).catch((err) => {
-				// 	res.status(400)
-				// 	  .json({message: 'an error has occured.', err: err});
-				//   });
-	
-				//res.contentType("application/pdf");
-				
-
-				// res.download(file, function (err) {
-				// 	if (err) {
-				// 		console.log("Error on sending file.");
-				// 		console.log(err);
-				// 	} else {
-				// 		console.log("Success on seding file.");
-				// 	}    
-				// });
-				//console.log(`returning ${result.rows.length} rows`)
-				// return res.status(200).json({
-				// 	status: 200,
-				// 	error: false,
-				// 	message: 'Successfully get single data!',//return form and bartags.
-				// 	data: result.rows[0]
-				// });
 			}
 
-			return res.status(400).json({message: 'an error has occured.', error: true});
+			if (result.rows.length > 0) {
+				result.rows = propNamesToLowerCase(result.rows)
+	
+				const g_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('gaining_')})
+				const l_keys = filter(Object.keys(result.rows[0]),function(k){ return k.includes('losing_')})
+				const hra = {gaining:{},losing:{}}
+	
+				for(const key of g_keys){
+					hra.gaining[key.replace('gaining_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
+				}
+	
+				for(const key of l_keys){
+					hra.losing[key.replace('losing_','').replace('os_alias','office_symbol_alias')] = result.rows[0][key]
+				}
+	
+				result.rows[0].equipment_group = []
+				result.rows[0].hra = hra
+				let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].form_equipment_group_id],dbSelectOptions)
+	
+				if(eg_result.rows.length > 0){
+					eg_result.rows = propNamesToLowerCase(eg_result.rows)
+					result.rows[0].equipment_group = eg_result.rows	
+					const result_pdf = await create4900(result.rows[0])
+					
+					if(result_pdf){
+						var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+	
+						fs.readFile(file , function (err,data){
+							res.contentType("application/pdf");
+							res.send(data);
+							
+						});
+	
+						return(res)
+					}
+					
+					// .then(()=>{
+	
+					// 	var file = path.join(__dirname , '../output/output_eng4900.pdf');    
+	
+					// 	fs.readFile(file , function (err,data){
+					// 		res.contentType("application/pdf");
+					// 		res.send(data);
+					// 	});
+					// }).catch((err) => {
+					// 	res.status(400)
+					// 	  .json({message: 'an error has occured.', err: err});
+					//   });
+		
+					//res.contentType("application/pdf");
+					
+	
+					// res.download(file, function (err) {
+					// 	if (err) {
+					// 		console.log("Error on sending file.");
+					// 		console.log(err);
+					// 	} else {
+					// 		console.log("Success on seding file.");
+					// 	}    
+					// });
+					//console.log(`returning ${result.rows.length} rows`)
+					// return res.status(200).json({
+					// 	status: 200,
+					// 	error: false,
+					// 	message: 'Successfully get single data!',//return form and bartags.
+					// 	data: result.rows[0]
+					// });
+				}
+	
+				return res.status(400).json({message: 'an error has occured.', error: true});
+			}
 		}
 
 	}catch(err){
@@ -388,7 +465,7 @@ exports.search2 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
-	console.log(req.user)
+	//console.log(req.user)
 	try{
 		if(edit_rights){
 			const {fields,options, tab, init} = req.body;
@@ -802,7 +879,81 @@ exports.add = async function(req, res) {
 		data: {},
 	});
 };
+  
+// const FORM_4900_STATUS = {
+// 1:"Form created",
+// 2:"Completed Individual/Vendor ROR Property",
+// 3:"Losing HRA signature required",
+// 4:"Completed losing HRA signature",
+// 5:"Gaining HRA signature required",
+// 6:"Completed gaining HRA signature",
+// 7:"Sent to Logistics",
+// 8:"Sent to PBO",
+// 9:"Completed",
+// }
+  
+// const isFormCompleted = (rowData) => {
+// const {status} = rowData
 
+// if(status){
+// 	return (FORM_4900_STATUS[status] == "Completed")
+// }
+
+// return false
+// }
+  
+// const doTransaction = async (connection, user_id, rowData) => {
+// const {form_id} = rowData
+
+// let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`
+
+// let result = await connection.execute(sql,{},dbSelectOptions)
+
+// if(!isFormCompleted(rowData) && result.rows.length > 0){
+// 	result.rows = propNamesToLowerCase(result.rows)
+// 	const {requested_action, status_alias} = result.rows
+// 	//const requetsted_action_id = REQUESTED_ACTIONS[requested_action]
+
+// 	switch (requested_action) {
+// 		case "Issue":
+// 			if(status_alias == "Completed"){
+// 				const bar_tags = result.rows.map(x => bar_tag_num)
+// 				const bar_tags_print = printElements(bar_tags)
+// 				result = await connection.execute(`INSERT INTO EQUIPMENT (SELECT * FORM_EQUIPMENT WHERE BAR_TAG_NUM IN (${bar_tags_print}))`)
+// 				return result.rowsAffected > 0
+// 			}
+
+// 			break;
+// 		case "Transfer":
+// 		if(status_alias == "Completed"){
+// 			const bar_tags = result.rows.map(x => bar_tag_num)
+// 			const bar_tags_print = printElements(bar_tags)
+
+// 			await connection.execute('SELECT * FROM EQUIPMENT WHERE HRA_NUM = :hra_num and BAR_TAG_NUM in (bar_tags_print)')
+
+// 			result = await connection.execute(`INSERT INTO EQUIPMENT (SELECT * FORM_EQUIPMENT WHERE BAR_TAG_NUM IN (${bar_tags_print}))`)
+// 			return result.rowsAffected > 0
+// 		}
+
+// 			break;
+// 		case "Repair":
+// 			//do nothing.
+// 			break;
+// 		case "Excess":
+// 			//do nothing.
+// 			break;
+// 		case "FOI":
+// 			//do nothing.
+// 			break;
+// 		default:
+// 			console.log(`Sorry, we are out of ${requested_action}.`);
+// 		}	
+
+// 	return true
+// }
+
+// return false
+// }
 
 //!UPDATE FROM_4900 DATA
 exports.update = async function(req, res) {
@@ -817,6 +968,7 @@ exports.update = async function(req, res) {
 			if(changes.hasOwnProperty(row)) {
 				//columnErrors.rows[row] = {}
 				const {newData,oldData} = changes[row];
+				//await doTransaction(connection, req.user, newData)
 				const cells = newData && oldData ? {new:objectDifference(oldData,newData,'tableData'),old:oldData} : newData
 				//console.log(cells)
 
@@ -956,55 +1108,324 @@ exports.destroy = async function(req, res) {
 	// }
 };
 
-const savePdfToDatabase = async (file) => {
-	//const str = await fs.promises.readFileSync(filepath, 'utf8');
+// const savePdfToDatabase = async (file) => {
+// 	//const str = await fs.promises.readFileSync(filepath, 'utf8');
 
-	const connection =  await oracledb.getConnection(dbConfig);
-	let result = await connection.execute('insert into pdf_storage (blobdata, filename) values (:ncbv, :name)',{ncbv: { type: oracledb.DB, val: file }, name: file.name},{autoCommit:true})
-	console.log(result)
-	connection.close()
+// 	const connection =  await oracledb.getConnection(dbConfig);
+// 	let result = await connection.execute('insert into pdf_storage (blobdata, filename) values (:ncbv, :name)',{ncbv: { type: oracledb.DB, val: file }, name: file.name},{autoCommit:true})
+// 	console.log(result)
+// 	connection.close()
+// }
+
+const isFileValid = (filename, type=null) => {
+	const nameArray = filename.toLowerCase().split(".")
+	const ext = nameArray.length > 0 ? nameArray[nameArray.length - 1] : "error"
+	const validTypes = !type ? ["jpg", "jpeg", "png", "pdf"] : [type];
+
+	if (validTypes.indexOf(ext) === -1) {
+	  return false;
+	}
+	return true;
+  };
+
+
+const saveFileInfoToDatabase = async (connection, filename, folder) => {
+	try{
+		let selectResult = await connection.execute(`select id from file_storage where file_name = :0`, [filename], dbSelectOptions);
+		let sql =""
+		let binds = ""
+	
+		if(selectResult.rows.length > 0){
+			//update previous record.
+			binds = {
+				file_name: filename,
+				id: {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
+			};
+	
+			sql = `update file_storage (file_name) values (:file_name) where id = ${selectResult.rows[0].ID} returning id into :id`
+	
+			console.log('updated previous file_storage record.')
+		}else{
+			//create new record.
+			binds = {
+				file_name: filename,
+				folder: folder,
+				id: {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
+			};
+	
+			sql = `insert into file_storage (file_name, folder) values (:file_name, :folder) returning id into :id`
+			console.log('created a new file_storage record.')
+		}
+	
+		let insertUpdateResult = await connection.execute(sql, binds,{autoCommit:true});
+	
+		return insertUpdateResult.outBinds.id[0]
+	}catch(err){
+		console.log(err)
+		return (-1)
+	}
+}
+
+const formUpdate = async (connection, changes) => {
+	try{
+		for(const row in changes){
+			if(changes.hasOwnProperty(row)) {
+				const {id} = changes[row];
+				const cells = {new: changes[row]}
+				let result = await connection.execute(`SELECT * FROM FORM_4900 WHERE ID = :0`,[id],dbSelectOptions)
+
+				if(result.rows.length > 0){
+					result.rows = propNamesToLowerCase(result.rows)
+					cells.old = result.rows[0]
+					const keys = cells.new ?  Object.keys(cells.new) : []
+					cells.update = {}
+					let cols = ''
+					const cell_id = cells.old ? cells.old.id : -1
+
+					if(cell_id != -1){
+						result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'FORM_4900'`,{},dbSelectOptions)
+
+						if(result.rows.length > 0){
+							result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ENG4900.includes(c.COLUMN_NAME)})
+							let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())	
+		
+							if(keys.length > 0){
+								for(let i=0; i<keys.length; i++){
+									if(col_names.includes(keys[i])){
+										let comma =  i && cols ? ', ': ''
+										cols = cols + comma + keys[i] + ' = :' + keys[i]
+										cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+										(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
+									}
+		
+									if(i == keys.length - 1 && typeof edipi != 'undefined'){
+										result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
+
+										if(result.rows.length > 0){
+											const registered_users_id = result.rows[0].ID
+											const comma =  cols ? ', ': ''
+											cols = cols + comma + 'updated_by = :updated_by'
+											cells.update['updated_by'] = registered_users_id
+										}
+									}
+								}
+					
+								let query = `UPDATE FORM_4900 SET ${cols} WHERE ID = ${cells.old.id}`
+							
+								//console.log(query,cells.update)
+								result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
+								
+								return (result.rowsAffected > 0)
+							}
+						}
+					}
+				}
+			}
+		}
+		
+	return false
+		
+	}catch(err){
+		console.log(err)
+		return false
+	}
+}
+
+const ParseHeaders = async (string_to_parse) => {
+	let parsed_result = {}
+
+	try{
+		parsed_result = JSON.parse(string_to_parse)
+	}catch(err){
+		//do nothing.
+	}
+
+	return parsed_result
 }
 
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.upload = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
+	const changes = await ParseHeaders(req.headers.changes)
+
 	if (!req.files) {
         return res.status(500).send({ msg: "file is not found" })
 	}
 	
     // accessing the file
 	const myFile = req.files.file;
-	
-	//  mv() method places the file inside public directory
-    myFile.mv(path.join(__dirname,`../public/${myFile.name}`), async function (err) {
-        if (err) {
-            console.log(err)
-            return res.status(500).send({ msg: "Error occured" });
+
+	if(isFileValid(myFile.name,'pdf') && req.params.id >= 0 && Object.keys(changes).length){
+		const {id} = req.params
+		let result = await connection.execute(`select * from form_4900 where id = ${id} and file_storage_id is not null`,{},dbSelectOptions)
+		let new_filename = ""
+
+		if(result.rows.length != 0){
+			new_filename = result.rows[0].FILE_NAME
+		}else{
+			new_filename = Math.floor(Date.now() / 1000) + "-" + myFile.name
 		}
 
+		console.log(new_filename)
 
-		//const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
-		//console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
+		myFile.mv(pdfUploadPath + new_filename, async function(err) {
+			if (err)
+			  return res.status(500).send(err);
+		
+			 const file_id = await saveFileInfoToDatabase(connection, new_filename, 'pdf')
+			 const newData = JSON.parse(req.headers.changes)
+			 const form_4900_changes = {0:{...newData, id: id, file_storage_id: file_id}}
 
-		const connection =  await oracledb.getConnection(dbConfig);
-		let result = await connection.execute('select * from pdf_storage',{},{...dbSelectOptions,fetchInfo: {
-			blobdata: {
-			  type: oracledb.BUFFER
-			}
-		  }})
+			 console.log('Updating FORM_4900 Record...')
 
-		  await fs.promises.writeFile(path.join(__dirname,'../output/test_download.pdf'), result.rows[0].BLOBDATA, () => {
-			console.log('PDF created!')
-		})
+			 const formUpdateResult = await formUpdate(connection, form_4900_changes)
 
-		//console.log(result.rows[0].BLOBDATA)
-		//await savePdfToDatabase(myFile)
-		//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
-	});
+			 console.log(formUpdateResult ? "sucessfully updated form_4900" : "error updating form_4900")
+
+			//update eng4900 file_storage_id and status
+			res.send('File uploaded!');
+		  });
+	}else{
+		res.status(500).send({ msg: "file type is not valid" });
+	}
+
+	//res.status(500).send({ msg: "something bad happened." });
+
+
+	//console.log(myFile)
+// 	const connection = await oracledb.getConnection(dbConfig);
+
+// 	const binds = {
+// 		file_name: myFile.name,
+// 		content_type: myFile.mimetype,
+// 		content_buffer: myFile.data,
+// 		id: {
+// 			type: oracledb.NUMBER,
+// 			dir: oracledb.BIND_OUT
+// 		}
+// 		};
+		
+// 	let result = await connection.execute(createSql, binds,{autoCommit:true});
+
+// 	const getSql =
+//  `select file_name "file_name",
+//     dbms_lob.getlength(blob_data) "file_length",
+//     content_type "content_type",
+//     blob_data "blob_data"
+//   from file_storage
+//   where id = :id`
+
+// 	const binds2 = {
+// 		id: result.outBinds.id[0]
+// 	};
+// 	const opts = {
+// 		fetchInfo: {
+// 		blob_data: {
+// 			type: oracledb.BUFFER
+// 		}
+// 		}
+// 	};
+// 	result = await connection.execute(getSql, binds2, opts);
+// 	console.log(result.rows[0])
+// 	return res.send(result.rows[0])
+
+
 	
-	// returing the response with file path and name
-	return res.send({name: myFile.name, path: `/${myFile.name}`});
+// 	//  mv() method places the file inside public directory
+//     // myFile.mv(path.join(__dirname,`../public/${myFile.name}`), async function (err) {
+//     //     if (err) {
+//     //         console.log(err)
+//     //         return res.status(500).send({ msg: "Error occured" });
+// 	// 	}
+
+
+// 	// 	//const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
+// 	// 	//console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
+
+// 	// 	const connection =  await oracledb.getConnection(dbConfig);
+// 	// 	let result = await connection.execute('select * from pdf_storage',{},{...dbSelectOptions,fetchInfo: {
+// 	// 		blobdata: {
+// 	// 		  type: oracledb.BUFFER
+// 	// 		}
+// 	// 	  }})
+
+// 	// 	  await fs.promises.writeFile(path.join(__dirname,'../output/test_download.pdf'), result.rows[0].BLOBDATA, () => {
+// 	// 		console.log('PDF created!')
+// 	// 	})
+
+// 	// 	//console.log(result.rows[0].BLOBDATA)
+// 	// 	//await savePdfToDatabase(myFile)
+// 	// 	//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
+// 	// });
+	
+// 	// returing the response with file path and name
+// 	//return res.send('file upload done.');
 };
 
+
+
+// exports.upload = async function(req, res) {
+
+// 	const form = formidable({ multiples: true, uploadDir: __dirname });
+
+// 	form.parse(req, (err, fields, files) => {
+// 	console.log('fields:', fields);
+// 	console.log('files:', files);
+// 	});
+
+// 	// const form = new IncomingForm({
+// 	// 	multiples: false,
+// 	// 	maxFileSize : 10 * 1024 * 1024, //10mb
+// 	// 	uploadDir: path.join(__dirname,'../public')
+// 	// });
+
+// 	// form.parse(req, (err, fields, files) => {
+// 	// 	console.log(files)
+// 	//   if (err) {
+// 	// 	  res.status(400).json({error: `something went wrong`});
+// 	// 	return;
+// 	//   }
+// 	//   res.json({ fields, files });
+// 	// });
+
+// 	// const connection = await oracledb.getConnection(dbConfig);
+
+// 	// console.log(req.upload)
+
+// 	// if(Object.keys(req.upload).length > 0){
+// 	// 	const binds = {
+// 	// 		file_name: fileName,
+// 	// 		content_type: contentType,
+// 	// 		content_buffer: contentBuffer,
+// 	// 		id: {
+// 	// 		  type: oracledb.NUMBER,
+// 	// 		  dir: oracledb.BIND_OUT
+// 	// 		}
+// 	// 	  };
+		  
+// 	// 	  result = await connection.execute(createSql, binds);
+
+// 	// 	  console.log(result)
+// 	// }
+
+// 	// res.message('upload was done')
+// }
+
+// async function create(fileName, contentType, contentBuffer) {
+//   const binds = {
+//     file_name: fileName,
+//     content_type: contentType,
+//     content_buffer: contentBuffer,
+//     id: {
+//       type: oracledb.NUMBER,
+//       dir: oracledb.BIND_OUT
+//     }
+//   };
+  
+//   result = await connection.execute(createSql, binds);
+  
+//   return result.outBinds.id[0];
+// }
 //!SELECT form_4900 BY ID
 // exports.testPdfBuild = async function(req, res) {
 
