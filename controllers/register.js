@@ -202,23 +202,39 @@ exports.add = async function(req, res) {
 			
 			const {user_type} = newData
 					//Verify if user is registered.
-					 let query = `select * from registered_users where edipi = :0`
+					let query = `select * from registered_users where edipi = :0`
 					let result = await connection.execute(query,[cac_info.edipi],dbSelectOptions)
 	
 					let registered_users_rows = result.rows
 					
 					if(registered_users_rows.length > 0){
 						//User is registered.
-						/* return res.status(200).json({
+						return res.status(200).json({
 							status: 200,
 							error: false,
-							message: 'user is registered',
-						}); */
+							message: 'User has already been registered.  Please sign in using CAC authentication.',
+						}); 
+					} 
+
+					//Verify if user has a pending request
+					let pending_query = `select * from employee_registration where edipi = :0`
+					let pending_result = await connection.execute(pending_query,[cac_info.edipi],dbSelectOptions)
+					
+					let pending_users_rows = pending_result.rows
+
+					if(pending_users_rows.length > 0){
+						//User is pending registration.
+						return res.status(200).json({
+							status: 200,
+							error: false,
+							message: 'Unable to submit registration.  Your previous registration request is awaiting approval.',
+						}); 
 					} 
 					const return_messages = {}
 					
 					if(newData.user_type === 2){
 						//User is not registered
+						
 						for(let i=0;i<newData.hras.length;i++){//user_type = 2 [HRA]
 							//User wants to register as an HRA.
 							const hra_num = newData.hras[i]
@@ -232,17 +248,24 @@ exports.add = async function(req, res) {
 	
 							if(result.rows.length > 0){//HRA account was found.
 								const hra_record = propNamesToLowerCase(result.rows)[0]//grabbing first element.
-								let insertQuery = `INSERT INTO registered_users (EDIPI, FULL_NAME, EMPLOYEE_ID, USER_LEVEL) VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 2)`
-								let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
-								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights granted" : "Error inserting user rights"		
+								let mergeQuery = `MERGE INTO REGISTERED_USERS ru
+								USING (SELECT 1 FROM DUAL) m
+								ON (ru.edipi = ${cac_info.edipi})
+								WHEN NOT MATCHED THEN
+								INSERT (ru.edipi,ru.full_name,ru.employee_id,ru.user_level) 
+								VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 11)
+								`
+								//let insertQuery = `INSERT /*+ ignore_row_on_dupkey_index(registered_users(EDIPI)) */ INTO registered_users (EDIPI, FULL_NAME, EMPLOYEE_ID, USER_LEVEL) VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 11)`
+								let insertResult = await connection.execute(mergeQuery,{},{autoCommit:AUTO_COMMIT.ADD})
+								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights granted" : "Error inserting user rights"	
 							}
 								
-								else{
-									// HRA INFO AND CAC INFO DO NOT MATCH
-									let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type, hras) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num})`
-									let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
-									return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights pending" : "Error inserting employee registration"
-								}
+							else{
+								// HRA INFO AND CAC INFO DO NOT MATCH
+								let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type, hras) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num})`
+								let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
+								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights pending" : "Error inserting employee registration"
+							}
 								
 	
 						}
@@ -267,7 +290,7 @@ exports.add = async function(req, res) {
 							return res.status(200).json({
 								status: 200,
 								error: false,
-								message: 'Record created in the employee registration table',
+								message: 'Your registration request has been submitted and is now pending approval.',
 							});
 						}
 		}
@@ -284,7 +307,7 @@ exports.add = async function(req, res) {
 		res.status(200).json({
 			status: 400,
 			error: true,
-			message: 'Error adding new data.'
+			message: 'An error happened in the registration process.'
 		});
 	}  
 };
