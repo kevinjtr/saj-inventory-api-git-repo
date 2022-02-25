@@ -94,13 +94,13 @@ exports.update = async function (req, res) {
 
                             if (i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')) {
                                 console.log(edipi)
-                                result = await connection.execute('SELECT * FROM USER_RIGHTS WHERE EDIPI = :0', [edipi], dbSelectOptions)
+                                result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
                                 console.log(result.rows)
                                 if (result.rows.length > 0) {
-                                    const user_rights_id = result.rows[0].ID
+                                    const registered_users_id = result.rows[0].ID
                                     const comma = cols ? ', ' : ''
                                     cols = cols + comma + 'updated_by = :updated_by'
-                                    cells.update['updated_by'] = user_rights_id
+                                    cells.update['updated_by'] = registered_users_id
                                 }
                             }
                         }
