@@ -90,85 +90,6 @@ e.id as EQUIPMENT_ID,
 	LEFT JOIN ( ${eng4900_losingHra}) l_hra on f.losing_hra = l_hra.losing_hra_num
 	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
 
-const queryForSearchLosingAndGainingHra = (id) => `SELECT 
-f.id as form_id,
-f.status,
-f.file_storage_id,
-ra.alias as REQUESTED_ACTION,
-f.LOSING_HRA as losing_hra_num,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
-l_hra.losing_hra_first_name,
-l_hra.losing_hra_last_name,
-l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
-l_hra.losing_hra_office_symbol,
-l_hra.losing_hra_work_phone,
-f.GAINING_HRA as gaining_hra_num,
-g_hra.gaining_hra_first_name,
-g_hra.gaining_hra_last_name,
-g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
-g_hra.gaining_hra_office_symbol,
-g_hra.gaining_hra_work_phone,
-f.DATE_CREATED,
-f.FOLDER_LINK,
-f.DOCUMENT_SOURCE,
-eg.form_equipment_group_ID as equipment_group_id,
-e.id as EQUIPMENT_ID, 
-	e.BAR_TAG_NUM , 
-	e.CATALOG_NUM , 
-	e.BAR_TAG_HISTORY_ID , 
-	e.MANUFACTURER , 
-	e."MODEL", 
-	e.CONDITION , 
-	e.SERIAL_NUM , 
-	e.ACQUISITION_DATE , 
-	e.ACQUISITION_PRICE , 
-	e.DOCUMENT_NUM, 
-	e.ITEM_TYPE , 
-	e.USER_EMPLOYEE_ID
-	from form_4900 f, form_equipment_group eg, form_equipment e, requested_action ra,
-	( ${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-where eg.form_equipment_group_id = f.form_equipment_group_id and e.id = eg.form_equipment_id and ra.id = f.requested_action
- and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num `
-
- const queryForSearchGainingHra = (id) => `SELECT 
-f.id as form_id,
-f.status,
-f.file_storage_id,
-ra.alias as REQUESTED_ACTION,
-f.LOSING_HRA as losing_hra_num,
-CASE WHEN f.GAINING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
-null as losing_hra_first_name,
-null as losing_hra_last_name,
-null as losing_hra_full_name,
-null as losing_hra_office_symbol,
-null as losing_hra_work_phone,
-f.GAINING_HRA as gaining_hra_num,
-g_hra.gaining_hra_first_name,
-g_hra.gaining_hra_last_name,
-g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
-g_hra.gaining_hra_office_symbol,
-g_hra.gaining_hra_work_phone,
-f.DATE_CREATED,
-f.FOLDER_LINK,
-f.DOCUMENT_SOURCE,
-eg.form_equipment_group_ID as equipment_group_id,
-e.id as EQUIPMENT_ID, 
-	e.BAR_TAG_NUM , 
-	e.CATALOG_NUM , 
-	e.BAR_TAG_HISTORY_ID , 
-	e.MANUFACTURER , 
-	e."MODEL", 
-	e.CONDITION , 
-	e.SERIAL_NUM , 
-	e.ACQUISITION_DATE , 
-	e.ACQUISITION_PRICE , 
-	e.DOCUMENT_NUM, 
-	e.ITEM_TYPE , 
-	e.USER_EMPLOYEE_ID
-	from form_4900 f, form_equipment_group eg, form_equipment e, requested_action ra,
-	(${eng4900_gainingHra}) g_hra 
-where eg.form_equipment_group_id = f.form_equipment_group_id and e.id = eg.form_equipment_id and ra.id = f.requested_action
- and f.losing_hra is null and f.gaining_hra = g_hra.gaining_hra_num `
 
 const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM FORM_EQUIPMENT E LEFT JOIN CONDITION C ON E.CONDITION = C.ID`   
 
@@ -230,7 +151,6 @@ const newQuerySelById = `SELECT
 const newQuerySelById2 = `SELECT eg.*,eq.*, TO_CHAR(eq.acquisition_date,'mm/dd/yyyy') as acquisition_date_print FROM FORM_EQUIPMENT_GROUP eg,
 							(${equipment_condition}) eq WHERE eq.id = eg.form_equipment_id and eg.form_equipment_group_id = :0`
 
-
 const FORM_4900_STATUS = {
 	1:"Form created",
 	2:"Completed Individual/Vendor ROR Property",
@@ -254,87 +174,157 @@ const isFormCompleted = (rowData) => {
 }
 		
 const doTransaction = async (connection, user_id, rowData) => {
-	const return_result = {error: false, message: ""}
+	let return_result = {error: false, message: "no action was done."}
 	const {form_id} = rowData
 
-	let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`
+	try{
+		let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`//returns array of equipments.
+		let result = await connection.execute(sql,{},dbSelectOptions)
 
-	let result = await connection.execute(sql,{},dbSelectOptions)
+		if(isFormCompleted(rowData) && result.rows.length > 0){
+			console.log('HERE dT-1')
+			result.rows = propNamesToLowerCase(result.rows)
+			
+			const {requested_action, status_alias, losing_hra_num, gaining_hra_num} = result.rows[0]
+			const bar_tags = result.rows.map(x => x.bar_tag_num)
+			const bar_tags_print = printElements(bar_tags)
 
-	if(!isFormCompleted(rowData) && result.rows.length > 0){
-		result.rows = propNamesToLowerCase(result.rows)
-		const {requested_action, status_alias, losing_hra_num, gaining_hra_num} = result.rows
-		const bar_tags = result.rows.map(x => x.bar_tag_num)
-		const bar_tags_print = printElements(bar_tags)
-
-		//const requetsted_action_id = REQUESTED_ACTIONS[requested_action]
-		let equipment_result = await connection.execute(`SELECT * FROM EQUIPMENT where BAR_TAG_NUM in (${bar_tags_print})`,{},dbSelectOptions)
-
-		switch (requested_action) {
-			case "Issue":
-				if(status_alias == "Completed"){
-					if(equipment_result.rows.length == 0){
-						result = await connection.execute(`INSERT INTO EQUIPMENT (SELECT * FORM_EQUIPMENT WHERE BAR_TAG_NUM IN (${bar_tags_print}))`,{},{autoCommit:false})
-						if(result.rowsAffected != bar_tags.length){
-							return_result = {...return_result, error:true,  message: `One or more equipments could not be added.`}
-						}
-					}else{
-						equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
-						const bar_tags_found = equipment_result.rows.map(x => bar_tag_num)
-						return_result = {...return_result, error:true,  message: `1 - equipment/s: ${bar_tags_found} already exists.`}
-					}
-				}
-				break;
-			case "Transfer":
-				if(status_alias == "Completed"){
-					if(equipment_result.rows.length > 0){
-						equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
-						equipment_result.rows.map((equipment, i) => {
-
-							if(equipment.hra_num != losing_hra_num){
-								//equipment is no longer tied to the losing HRA.
-								return_result = {...return_result, error:true, message: 
-									return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i} - bartag: ${equipment.bar_tag_num} is no longer tied to the losing_hra (${losing_hra_num})`
-								}
-							}else if(equipment.hra_num != gaining_hra_num){
-								//equipment is tied to the gaining HRA.
-								return_result = {...return_result, error:true, message: 
-									return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i} - bartag: ${equipment.bar_tag_num} is tied to the gaining_hra (${gaining_hra_num})`
-								}
-							}
-
-						})
-
-						if(!return_result.error){
-							result = await connection.execute(`UPDATE EQUIPMENT SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print}))`,{},{autoCommit:false})
-
+			let equipment_result = await connection.execute(`SELECT * FROM EQUIPMENT where BAR_TAG_NUM in (${bar_tags_print})`,{},dbSelectOptions)
+	
+			if(status_alias == "Completed"){
+				switch (requested_action) {
+					case "Issue":
+						console.log('HERE dT-2-i')
+						if(equipment_result.rows.length == 0){
+							console.log('HERE dT-3-i')
+							result = await connection.execute(`INSERT INTO EQUIPMENT (SELECT * FROM FORM_EQUIPMENT WHERE BAR_TAG_NUM IN (${bar_tags_print}))`,{},{autoCommit:false})
 							if(result.rowsAffected != bar_tags.length){
-								return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered.`}
-							}	
+								return_result = {...return_result, error:true,  message: `One or more equipments could not be added.`}
+							}else{
+								return_result = {...return_result,  message: `all equipments were added.`}
+							}
+						}else{
+							// equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
+							// const bar_tags_found = equipment_result.rows.map(x => bar_tag_num) 
+							return_result = {...return_result, error:true,  message: `1 - equipment/s: ${bar_tags_print} already exists.`}
 						}
 						
-					}else{
-						if(result.rowsAffected != bar_tags.length){
-							return_result = {...return_result, error:true,  message: `No equipments where found.`}
-						}	
-					}
-				}
-
-				break;
-			case "Repair":
-				//do nothing.
-				break;
-			case "Excess":
-				//do nothing.
-				break;
-			case "FOI":
-				//do nothing.
-				break;
-			default:
-				return_result = {...return_result, error:true,  message: `Requested Action was not found.`}
-			}	
-
-		return return_result
+						break;
+					case "Transfer":
+						console.log('HERE dT-2-t')
+						if(equipment_result.rows.length > 0){
+							console.log('HERE dT-3-t')
+							equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
+							equipment_result.rows.map((equipment, i) => {
+	
+								if(equipment.hra_num == gaining_hra_num){
+									//equipment is already tied to the gaining HRA.
+									return_result = {...return_result, error:true, message: 
+										return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i+1} - bartag: ${equipment.bar_tag_num} is already tied to the gaining_hra (${gaining_hra_num})`
+									}
+								}else if(equipment.hra_num != losing_hra_num){
+									//equipment is no longer tied to the losing HRA.
+									return_result = {...return_result, error:true, message: 
+										return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i+1} - bartag: ${equipment.bar_tag_num} is no longer tied to the losing_hra (${losing_hra_num})`
+									}
+								}
+							})
+	
+							if(!return_result.error){
+								result = await connection.execute(`UPDATE EQUIPMENT SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+	
+								if(result.rowsAffected != bar_tags.length){
+									return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered.`}
+								}else{
+									return_result = {...return_result,  message: `all equipments were transfered.`}
+								}
+							}
+							
+						}else{
+								return_result = {...return_result, error:true,  message: `No equipments where found.`}
+						}
+		
+						break;
+					case "Repair":
+						//do nothing.
+						break;
+					case "Excess":
+						console.log('HERE dT-2-e')
+						if(equipment_result.rows.length > 0){
+							console.log('HERE dT-3-e')
+							equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
+							equipment_result.rows.map((equipment, i) => {
+								if(equipment.hra_num != losing_hra_num){
+									//equipment is no longer tied to the losing HRA.
+									return_result = {...return_result, error:true, message: 
+										return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i+1} - bartag: ${equipment.bar_tag_num} is no longer tied to the losing_hra (${losing_hra_num})`
+									}
+								}
+							})
+		
+							if(!return_result.error){
+								console.log('HERE dT-4-e')
+								result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+		
+								if(result.rowsAffected != bar_tags.length){
+									console.log('HERE dT-5-e')
+									return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
+								}else{
+									console.log('HERE dT-5-e')
+									return_result = {...return_result,  message: `all equipments were discarted.`}
+								}
+							}
+							
+						}else{
+							console.log('HERE dT-3-e')
+								return_result = {...return_result, error:true,  message: `No equipments where found.`}
+						}
+						break;
+					case "FOI":
+						console.log('HERE dT-2-f')
+						if(equipment_result.rows.length > 0){
+							console.log('HERE dT-3-f')
+							equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
+							equipment_result.rows.map((equipment, i) => {
+	
+								if(equipment.hra_num == gaining_hra_num){
+									//equipment is already tied to the gaining HRA.
+									return_result = {...return_result, error:true, message: 
+										return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i+1} - bartag: ${equipment.bar_tag_num} is already tied to FOI (${gaining_hra_num})`
+									}
+								}else if(equipment.hra_num != losing_hra_num){
+									//equipment is no longer tied to the losing HRA.
+									return_result = {...return_result, error:true, message: 
+										return_result.message += (return_result.message.length > 0 ?  ", " : "") + `${i+1} - bartag: ${equipment.bar_tag_num} is no longer tied to the losing_hra (${losing_hra_num})`
+									}
+								}
+							})
+	
+							if(!return_result.error){
+								result = await connection.execute(`UPDATE EQUIPMENT SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+	
+								if(result.rowsAffected != bar_tags.length){
+									return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered to FOI.`}
+								}else{
+									return_result = {...return_result,  message: `all equipments were transfered to FOI.`}
+								}
+							}
+							
+						}else{
+								return_result = {...return_result, error:true,  message: `No equipments where found.`}
+						}
+						break;
+					default:
+						return_result = {...return_result, error:true,  message: `Requested Action was not found.`}
+				}	
+			}else {
+				return_result = {...return_result, error:true,  message: `form is not completed.`}
+			}
+	
+			return return_result
+		}
+	}catch(err){
+		return_result = {...return_result, error:true, message:"an error has occured."}
 	}
 
 	return return_result
@@ -446,11 +436,11 @@ const formUpdate = async (connection, edipi, changes, auto_commit=true) => {
 			}
 		}
 		
-	return false
+	return false//no rows affected.
 		
 	}catch(err){
 		console.log(err)
-		return false
+		return false//no rows affected.
 	}
 }
 	
@@ -701,7 +691,6 @@ exports.search2 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
-	//console.log(req.user)
 	try{
 		if(edit_rights){
 			const {fields,options, tab, init} = req.body;
@@ -768,15 +757,6 @@ exports.search2 = async function(req, res) {
 				}
 			}
 
-			// for(const parameter in options.includes){
-			// 	const isStringColumn = eng4900DatabaseColNames[parameter].type == "string"
-			// 	const db_col_name = isStringColumn ? `LOWER(${eng4900DatabaseColNames[parameter].name})` : eng4900DatabaseColNames[parameter].name
-
-
-			// 	const operator = eqOperator[options.includes[parameter]]
-			// 	console.log('eqOperator: '+operator)
-			// }
-
 			for(const parameter in options.blanks){
 				//if(option.blanks[parameter] != BLANKS_DEFAULT){
 					//parameter = parameter.replace(/[0-9]/g,'')
@@ -787,40 +767,44 @@ exports.search2 = async function(req, res) {
 				query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
 				//}
 			}
-			//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
+
 			const tabsReturnObject = {}		
 
 			if(init){
 				for(let i=0;i<TABS.length;i++){
 					const tab_name = TABS[i]
 
-					let query = queryForSearchLosingAndGainingHra(req.user)
-					let query2 = queryForSearchGainingHra(req.user)
+					
+					//let query = queryForSearchLosingAndGainingHra(req.user)
+					//let query2 = queryForSearchGainingHra(req.user)
+
+					let query = queryForSearch(req.user)
+					//let query2 = queryForSearchGainingHra(req.user)
 
 					if(tab_name == "my_forms"){
-						query += `AND (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2)) `
+						query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
 
-						query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,4,5))) `
+						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
 					}
 
 					if(tab_name == "hra_forms"){
-						query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2)) `
-						query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,4,5))) `
+						query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
+						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
 						//query2 += `UNION ALL (${queryForSearchGainingHra(req.user)} AND (f.LOSING IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION = 1)) `
 					}
 		
 					if(tab_name == "sign_forms"){//Change: needs to be self.
-						query += `AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2)) 
-								UNION ALL (${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2))) `
+						query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2)) 
+								UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) `
 
-						query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,4,5))) `
+						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) `
 					}
 
 					if(tab_name == "completed_forms"){
-						query += `AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
-						UNION ALL (${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2))) `
+						query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
+						UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
 						
-						query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,4,5))) `
+						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
 
 
 						//query += `AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS = 10 F.REQUESTED_ACTION in (2)) 
@@ -829,7 +813,7 @@ exports.search2 = async function(req, res) {
 						//query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,4,5))) `
 					}
 
-					//if(i == 2)
+					//if(i == 1)
 						//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
 						//console.log(`QUERY-${tab_name}`,query)
 
@@ -855,35 +839,31 @@ exports.search2 = async function(req, res) {
 				});
 			}
 
-			let query = `${queryForSearchLosingAndGainingHra(req.user)}
-							${query_search != '' ? ' AND': ''} ${query_search} `
-
-			//query += `${query_search != '' ? 'AND': ''} ${query_search}`
-			let query2 = `${queryForSearchGainingHra(req.user)}
-							${query_search != '' ? ' AND': ''} ${query_search} `
+			let query = `${queryForSearch(req.user)} `
 
 			if(tab == "my_forms"){//self
-				query += `AND (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.REQUESTED_ACTION in (2)) `
+				query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.REQUESTED_ACTION in (2,4) ${query_search != '' ? ' AND': ''} ${query_search}) `
 				//query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) `
 			}
 
 			if(tab == "hra_forms"){//auth
-				query += `AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION in (2)) `
-				query += `UNION ALL (${query2} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION in (1,3,4,5))) `
+				query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION in (2,4) ${query_search != '' ? ' AND': ''} ${query_search}) `
+				query += `UNION ALL (${query} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION in (1,3,5)) ${query_search != '' ? ' AND': ''} ${query_search}) `
 				//query += `AND ((f.LOSING_HRA IN (${hra_num_form_auth(req.user)} )) OR (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.REQUESTED_ACTION = 1)) `
 			}
 
 			if(tab == "sign_forms"){//self
-				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
-						${query} AND (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3)`
+				query = `${query} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5) UNION ALL 
+						${query} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3) `
 			}
 
 			if(tab == "completed_forms"){//both self and auth
-				query = `${query} AND (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS >= 6) UNION ALL 
-				${query} AND (f.LOSING_HRA IN (${hra_num_form_all(req.user)} ) AND F.STATUS >= 6)`
-			}
-
-			//console.log('NEW QUERY',query)
+				query = `${query} WHERE (f.GAINING_HRA IN (${hra_num_form_all(req.user)}) AND F.STATUS >= 6) UNION ALL 
+				${query} WHERE (f.LOSING_HRA IN (${hra_num_form_all(req.user)} ) AND F.STATUS >= 6) `
+			}	
+			
+			console.log(query)
+			
 			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 			let {rows} = result
 
@@ -906,17 +886,17 @@ exports.search2 = async function(req, res) {
 			}
 		}
 
-		return res.status(200).json({
+		return res.status(400).json({
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: search_return,
+			data: {},
 			editable: edit_rights
 		});
 	}catch(err){
 		connection.close()
 		console.log(err)
-		res.status(200).json({
+		res.status(400).json({
 			status: 400,
 			error: true,
 			message: 'No data found!',
@@ -1018,6 +998,14 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 	}
 };
 
+const ra = {
+	"Issue":1,
+	"Transfer":2,
+	"Repair":3,
+	"Excess":4,
+	"FOI":5,
+}
+
 //!INSERT form_4900
 exports.add = async function(req, res) {
 	const {edipi} = req.headers.cert
@@ -1039,7 +1027,7 @@ exports.add = async function(req, res) {
 	let result =  await connection.execute(`SELECT * FROM REQUESTED_ACTION WHERE UPPER(NAME) = UPPER(:0)`,[form.requested_action],dbSelectOptions)
 	form.requested_action = result.rows[0].ID
 
-	if(result.rows.length > 0 && (form.hra.losing.hra_num || form.requested_action == 1) && form.hra.gaining.hra_num && req.body.form.equipment_group.length > 0){
+	if(result.rows.length > 0 && (form.hra.losing.hra_num || form.requested_action == ra["Issue"]) && (form.hra.gaining.hra_num || form.requested_action == ra["Excess"]) && req.body.form.equipment_group.length > 0){
 		//console.log('in')
 		form.losing_hra = form.hra.losing.hra_num
 		form.gaining_hra = form.hra.gaining.hra_num
@@ -1083,7 +1071,8 @@ exports.add = async function(req, res) {
 			result = await connection.execute(query,cells,{autoCommit:true})
 
 			if(result.rowsAffected > 0){
-				query = `${form.requested_action == 1 ? queryForSearchGainingHra(req.user) : queryForSearchLosingAndGainingHra(req.user)} AND F.ROWID = :0`
+				//query = `${form.requested_action == 1 ? queryForSearchGainingHra(req.user) : queryForSearchLosingAndGainingHra(req.user)} AND F.ROWID = :0`
+				query = `${queryForSearch(req.user)} WHERE F.ROWID = :0`
 				result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
 				result.rows = propNamesToLowerCase(result.rows)
 
@@ -1124,7 +1113,7 @@ exports.update = async function(req, res) {
 
 	const result_messages = {
 		fs_record_deleted: false,
-		equipment_transaction_result: {error: false},
+		equipment_result: {error: false},
 		form_4900_update_result: false
 	}
 
@@ -1175,19 +1164,17 @@ exports.update = async function(req, res) {
 						console.log("HERE 2 (formUpdate)",form_4900_changes)
 						result_messages.form_4900_update_result = await formUpdate(connection, edipi, {...form_4900_changes}, false)
 
-						let result_rollback = await connection.execute('ROLLBACK TO SAVEPOINT form_update')
-						console.log('rollback', result_rollback)
-
 						if(status_downgrade && status < 6){
 							console.log("HERE 3 (downgrade)")
 
-							//let file_storage_del_result = await connection.execute('DELETE from FILE_STORAGE WHERE ID = :0',[file_storage_id],{autoCommit:true})
-							//result_messages.fs_record_deleted = file_storage_del_result.rowsAffected > 0
+							//let file_storage_record_lookup = await connection.execute('DELETE from FILE_STORAGE WHERE ID = :0',[file_storage_id],{autoCommit:false})
+							let file_storage_del_result = await connection.execute('UPDATE FILE_STORAGE SET DELETED = 1 WHERE ID = :0',[file_storage_id],{autoCommit:false})
+							result_messages.fs_record_deleted = file_storage_del_result.rowsAffected > 0
 							//form_4900_changes = {0:{...form_4900_changes[0], file_storage_id: null}}//pdf signatures will be removed due to status downgrade.
 
 						}else if(status == 9){//form is completed.
 							console.log("HERE 4 (isComplete)")
-							//result_messages.equipment_transaction_result = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+							result_messages.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0]})
 						}
 
 						//const editable = form_4900_result.rows.length > 0 ? (form_4900_result.rows[0].STATUS >= 8 ? true : false) : true
@@ -1251,15 +1238,17 @@ exports.update = async function(req, res) {
 						// 		}
 						// 	}
 		
+						
+						//let result_rollback = await connection.execute('ROLLBACK TO SAVEPOINT form_update')
+						connection.rollback()
 						connection.close()
-
-						console.log(result_messages)//need to add pdf delete.
+						console.log(result_messages)
 	
 						return (
 							res.status(200).json({
 								status: 200,
-								error: false,
-								message: `Successfully updated data with id: ${cell_id}`, //+ req.params.id,
+								error: result_messages.equipment_result.error,
+								//message: `Successfully updated data with id: ${cell_id}`, //+ req.params.id,
 							})
 						)
 						// }
@@ -1581,3 +1570,83 @@ exports.upload = async function(req, res) {
 // 		});
 // 	}
 // };
+
+// const queryForSearchLosingAndGainingHra = (id) => `SELECT 
+// f.id as form_id,
+// f.status,
+// f.file_storage_id,
+// ra.alias as REQUESTED_ACTION,
+// f.LOSING_HRA as losing_hra_num,
+// CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
+// l_hra.losing_hra_first_name,
+// l_hra.losing_hra_last_name,
+// l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
+// l_hra.losing_hra_office_symbol,
+// l_hra.losing_hra_work_phone,
+// f.GAINING_HRA as gaining_hra_num,
+// g_hra.gaining_hra_first_name,
+// g_hra.gaining_hra_last_name,
+// g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
+// g_hra.gaining_hra_office_symbol,
+// g_hra.gaining_hra_work_phone,
+// f.DATE_CREATED,
+// f.FOLDER_LINK,
+// f.DOCUMENT_SOURCE,
+// eg.form_equipment_group_ID as equipment_group_id,
+// e.id as EQUIPMENT_ID, 
+// 	e.BAR_TAG_NUM , 
+// 	e.CATALOG_NUM , 
+// 	e.BAR_TAG_HISTORY_ID , 
+// 	e.MANUFACTURER , 
+// 	e."MODEL", 
+// 	e.CONDITION , 
+// 	e.SERIAL_NUM , 
+// 	e.ACQUISITION_DATE , 
+// 	e.ACQUISITION_PRICE , 
+// 	e.DOCUMENT_NUM, 
+// 	e.ITEM_TYPE , 
+// 	e.USER_EMPLOYEE_ID
+// 	from form_4900 f, form_equipment_group eg, form_equipment e, requested_action ra,
+// 	( ${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
+// where eg.form_equipment_group_id = f.form_equipment_group_id and e.id = eg.form_equipment_id and ra.id = f.requested_action
+//  and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num `
+
+//  const queryForSearchGainingHra = (id) => `SELECT 
+// f.id as form_id,
+// f.status,
+// f.file_storage_id,
+// ra.alias as REQUESTED_ACTION,
+// f.LOSING_HRA as losing_hra_num,
+// CASE WHEN f.GAINING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
+// null as losing_hra_first_name,
+// null as losing_hra_last_name,
+// null as losing_hra_full_name,
+// null as losing_hra_office_symbol,
+// null as losing_hra_work_phone,
+// f.GAINING_HRA as gaining_hra_num,
+// g_hra.gaining_hra_first_name,
+// g_hra.gaining_hra_last_name,
+// g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
+// g_hra.gaining_hra_office_symbol,
+// g_hra.gaining_hra_work_phone,
+// f.DATE_CREATED,
+// f.FOLDER_LINK,
+// f.DOCUMENT_SOURCE,
+// eg.form_equipment_group_ID as equipment_group_id,
+// e.id as EQUIPMENT_ID, 
+// 	e.BAR_TAG_NUM , 
+// 	e.CATALOG_NUM , 
+// 	e.BAR_TAG_HISTORY_ID , 
+// 	e.MANUFACTURER , 
+// 	e."MODEL", 
+// 	e.CONDITION , 
+// 	e.SERIAL_NUM , 
+// 	e.ACQUISITION_DATE , 
+// 	e.ACQUISITION_PRICE , 
+// 	e.DOCUMENT_NUM, 
+// 	e.ITEM_TYPE , 
+// 	e.USER_EMPLOYEE_ID
+// 	from form_4900 f, form_equipment_group eg, form_equipment e, requested_action ra,
+// 	(${eng4900_gainingHra}) g_hra 
+// where eg.form_equipment_group_id = f.form_equipment_group_id and e.id = eg.form_equipment_id and ra.id = f.requested_action
+//  and f.losing_hra is null and f.gaining_hra = g_hra.gaining_hra_num `
