@@ -12,7 +12,7 @@ module.exports = function(app) {
 
 	app.route('/equipment/:id').get(usersController.verifyToken,controller.getById);
 
-	app.route('/equipment/search').post(usersController.verifyToken,controller.search);
+	app.route('/equipment/search2').post(usersController.verifyToken,controller.search2);
 	//!POST
 	//app.route('/equipment').post(usersController.verifyToken, controller.add);
 	app.route('/equipment/add').post(usersController.verifyToken,controller.add);

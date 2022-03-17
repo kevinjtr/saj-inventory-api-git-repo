@@ -7,7 +7,7 @@ const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {rightPermision} = require('./validation/tools/user-database')
-const {equipment_employee,hra_employee, hra_num_form_auth} = require('../config/queries');
+const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_self, employee_officeSymbol} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
@@ -30,6 +30,25 @@ const andOR_multiple = {
 	'equals':or_,
 	'notEquals':and_
 }
+
+const equipment_fetch_type = (type, user_id) => {
+	switch(type) {
+		case 'my_equipment':
+			return `WHERE eq_emp.employee_id in (SELECT EMPLOYEE_ID FROM REGISTERED_USERS ru WHERE ru.ID = ${user_id}) `;
+		case 'my_hra_equipment':
+			return `WHERE eq_emp.hra_num in (${hra_num_form_self(user_id)}) `;
+		case 'hra_equipment':
+			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) `;
+		case 'equipment_search':
+			return ` `;
+		default:
+			return ` `
+	  }
+}
+
+const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employee}) hra_emp 
+						RIGHT JOIN (${equipment_employee}) eq_emp 
+						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(type, user_id)}`
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
@@ -72,7 +91,7 @@ exports.form = async function(req, res) {
 	let hra_num_groups = {}
 
 	try{
-		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth(1)}) hra_emp
+		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth(req.user)}) hra_emp
 												LEFT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
 
@@ -167,9 +186,9 @@ exports.search = async function(req, res) {
 	//console.log(edit_rights)
 	try{
 		const {fields,options} = req.body;
-		//console.log(options)
+
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
-		//console.log(searchCriteria)
+
 		for(const parameter of searchCriteria){
 			//parameter = parameter.replace(/[0-9]/g,'')
 			//console.log(parameter)
@@ -231,15 +250,6 @@ exports.search = async function(req, res) {
 			}
 		}
 
-		// for(const parameter in options.includes){
-		// 	const isStringColumn = eqDatabaseColNames[parameter].type == "string"
-		// 	const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
-
-
-		// 	const operator = eqOperator[options.includes[parameter]]
-		// 	console.log('eqOperator: '+operator)
-		// }
-
 		for(const parameter in options.blanks){
 			//if(option.blanks[parameter] != BLANKS_DEFAULT){
 				//parameter = parameter.replace(/[0-9]/g,'')
@@ -250,22 +260,17 @@ exports.search = async function(req, res) {
 			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
 			//}
 		}
-		//query_search = blankOptions ? query_search.concat(` ${or_} ${db_col_name} ${blankOptions} `) : query_search
+
 
 		const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
-		//x.replace('SELECT','Hello')
+
 
 		let query = `SELECT * from (${hra_employee}) hra_emp 
 						RIGHT JOIN (${newEquipmentEmployee}) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num 
 						${query_search != '' ? 'WHERE': ''} ${query_search} ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name `
 
-		// let queryPrint = `SELECT * from (hra_employee) hra_emp 
-		// RIGHT JOIN (equipment_employee) eq_emp 
-		// on eq_emp.hra_num = hra_emp.hra_num 
-		// ${query_search != '' ? 'WHERE': ''} ${query_search}`
 
-		//console.log(query)
 		let resultEquipment =  await connection.execute(`${query}`,{},dbSelectOptions)
 		
 		if (resultEquipment.rows.length > 0) {
@@ -306,6 +311,202 @@ exports.search = async function(req, res) {
 	}
 };
 
+//!SELECT form_4900 BY FIELDS DATA
+exports.search2 = async function(req, res) {
+	const TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search"]
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const tab_edits = {0:false,1:edit_rights,2:false,3:edit_rights}
+
+	const connection =  await oracledb.getConnection(dbConfig);
+	let query_search = '';
+
+	try{
+		if(edit_rights){
+			const {fields,options, tab, init} = req.body;
+			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
+	
+			for(const parameter of searchCriteria){
+
+				const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+				const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
+	
+				if(db_col_name != undefined){
+					const db_col_value = fields[parameter]
+					const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
+					const includesOperator = searchOptions[options.includes[parameter]]
+					const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
+	
+					if(db_col_value.includes(';')){
+						const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
+	
+						for(let i=0; i<search_values.length;i++){
+							const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
+							const operator = op_chooser(query_search)
+							const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
+							const condition = `${db_col_name} ${includesOperator} ${val} `
+	
+							if(i == 0 && !query_search){
+								query_search = query_search + '(' + condition + ' '
+	
+							}else if(i == 0 && query_search){
+								query_search = query_search + operator + ' ( ' + condition + ' '
+	
+							}else if(i != 0 && i != search_values.length - 1){
+								query_search = query_search + operator + ' ' + condition + ' '
+	
+							}else if(i == search_values.length - 1){
+								query_search = query_search  + operator + ' ' + condition + ') '
+							}
+						}
+						
+	
+					}else{
+						//const operator = isStringColumn ? 'LIKE' : '='
+						const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
+						//console.log(andOR_single[options.includes[parameter]],query_search)
+						query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+	
+						//console.log(val,query_search)
+						//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
+					}
+				}
+			}
+	
+			for(const parameter in options.blanks){
+				const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+				const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
+				const blankOperator = searchBlanks[options.blanks[parameter]]
+				const and_OR = blankAndOr[options.blanks[parameter]]
+				query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
+			}
+
+			const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
+			const tabsReturnObject = {}
+			let hras = []	
+			let employees = []
+
+			if(init){
+				for(let i=0;i<TABS.length;i++){
+					const tab_name = TABS[i]
+					let query = ""
+
+					switch(tab_name) {
+						case 'my_equipment':
+							query = equipmentQueryForSearch(tab_name, req.user)
+							break;
+						case 'my_hra_equipment':
+							query = equipmentQueryForSearch(tab_name, req.user)
+							break;
+						case 'hra_equipment':
+							query = equipmentQueryForSearch(tab_name, req.user)
+							break;
+						case 'equipment_search':
+							break;
+					  }
+
+					//if(i == 1)
+						//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
+
+					//console.log(query)
+
+					if(query){
+						let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+						let {rows} = result
+						rows = propNamesToLowerCase(rows)
+
+						tabsReturnObject[i] = rows
+					}else{
+						tabsReturnObject[i] = []
+					}
+					
+				}
+
+				let result =  await connection.execute(`${hra_employee}`,{},dbSelectOptions) //fetch by destrict
+				if(result.rows.length > 0){
+					let {rows} = result
+					rows = propNamesToLowerCase(rows)
+					hras = [...rows]
+				}
+
+				result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
+
+				console.log(employee_officeSymbol)
+
+				if(result.rows.length > 0){
+					let {rows} = result
+					rows = propNamesToLowerCase(rows)
+					employees = [...rows]
+				}
+
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully get single data!',
+					data: tabsReturnObject,
+					editable: tab_edits,
+					hras: hras,
+					employees: employees
+				});
+			}
+
+			let query = ""
+
+			switch(tab) {
+				case 'my_equipment':
+					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					break;
+				case 'my_hra_equipment':
+					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					break;
+				case 'hra_equipment':
+					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					break;
+				case 'equipment_search':
+					query = `${equipmentQueryForSearch(tab, req.user)} `
+					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
+					break;
+			  }
+
+			  if(query){
+				query += "ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name "
+				console.log(query)
+
+				let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+				let {rows} = result
+				rows = propNamesToLowerCase(rows)
+	
+				if(rows.length > 0){
+					return res.status(200).json({
+						status: 200,
+						error: false,
+						message: 'Successfully get single data!',
+						data: {[TABS.indexOf(tab)]: rows},
+						editable: tab_edits
+					});
+				}
+			  }
+		}
+
+		return res.status(200).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: {},
+			editable: tab_edits
+		});
+	}catch(err){
+		connection.close()
+		console.log(err)
+		res.status(200).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: {},
+			editable: tab_edits
+		});
+		//logger.error(err)
+	}
+};
 
 const ColumnItemExists = async (connection,table_name,rowObj,col_names) => {
 

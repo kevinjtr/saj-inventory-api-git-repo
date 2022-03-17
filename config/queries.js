@@ -1,18 +1,18 @@
 
 const equipment_count = {
 	employee:`SELECT COUNT(*) as EMPLOYEE_EQUIPMENT_COUNT, USER_EMPLOYEE_ID FROM EQUIPMENT GROUP BY USER_EMPLOYEE_ID`,
-	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM EQUIPMENT GROUP BY HRA_NUM`
+	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM EQUIPMENT GROUP BY HRA_NUM `
 }
 
 const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias FROM registered_users u
 LEFT JOIN EMPLOYEE e
 on u.employee_id = e.id
 LEFT JOIN USER_LEVEL ul
-on u.user_level = ul.id`
+on u.user_level = ul.id `
 
 const registered_users_all_cols = `SELECT u.*, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM registered_users u
 LEFT JOIN EMPLOYEE e
-on u.employee_id = e.id`
+on u.employee_id = e.id `
 
 const employee = `SELECT
 e.ID,
@@ -29,7 +29,7 @@ ON e.OFFICE_SYMBOL = o.id
 LEFT JOIN (${equipment_count.employee}) eec
 ON e.id = eec.user_employee_id
 LEFT JOIN (${registered_users}) ur
-on ur.id = e.updated_by`
+on ur.id = e.updated_by `
 
 module.exports = {
 	registered_users:registered_users,
@@ -60,7 +60,7 @@ module.exports = {
 	LEFT JOIN employee e
 	on eq.user_employee_id = e.id
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = eq.updated_by`,
+	on ur.id = eq.updated_by `,
 	hra_employee:`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,
@@ -76,7 +76,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`,
+	on ur.id = h.updated_by `,
 	// hra_employee_form_auth: (id) => (`SELECT 
 	// h.hra_num,
 	// e.first_name || ' ' || e.last_name as hra_full_name,
@@ -112,7 +112,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	hra_employee_form_auth: (id) => (`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,
@@ -128,7 +128,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	hra_employee_form_self: (id) => (`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,
@@ -144,7 +144,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	hra_num_form_all: (id) => (`SELECT 
 	h.hra_num
 	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
@@ -155,7 +155,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	hra_num_form_auth: (id) => (`SELECT 
 	h.hra_num
 	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
@@ -164,7 +164,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	hra_num_form_self: (id) => (`SELECT 
 	h.hra_num
 	FROM (SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
@@ -173,7 +173,7 @@ module.exports = {
 	LEFT JOIN (${equipment_count.hra}) hec
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by`),
+	on ur.id = h.updated_by `),
 	// hra_employee_form_auth:`SELECT 
 	// h.hra_num,
 	// e.first_name || ' ' || e.last_name as hra_full_name,
@@ -214,7 +214,7 @@ module.exports = {
 	e.WORK_PHONE as hra_work_phone
 	 FROM hra h
 	LEFT JOIN (${employee}) e 
-	on h.employee_id = e.id`,
+	on h.employee_id = e.id `,
 	// eng4900_losingHra:`(SELECT h.hra_num as losing_hra_num,
 	// 	e.first_name as losing_hra_first_name,
 	// 	e.last_name as losing_hra_last_name,
@@ -232,7 +232,7 @@ module.exports = {
 		e.office_symbol as losing_hra_office_symbol,
 		e.office_symbol_alias as losing_hra_os_alias
 		from hra h, (${employee}) e
-		WHERE h.employee_id = e.id`,
+		WHERE h.employee_id = e.id `,
 	// eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
 	// 	e.first_name as gaining_hra_first_name,
 	// 	e.last_name as gaining_hra_last_name,
@@ -253,5 +253,5 @@ module.exports = {
 		e.office_symbol as gaining_hra_office_symbol,
 		e.office_symbol_alias as gaining_hra_os_alias
 		from hra h, (${employee}) e
-        WHERE h.employee_id = e.id`
+        WHERE h.employee_id = e.id `
   };
