@@ -325,7 +325,7 @@ exports.verifyToken = async (req, res, next) => {
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 
-			console.log(decode)
+			//console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {
