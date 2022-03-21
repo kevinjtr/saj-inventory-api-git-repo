@@ -72,6 +72,7 @@ const REGISTERED_USERS_VIEW = {
 		employee:{view:true, edit:true},
 		eng4900:{view:true, edit:true},
 		changeHistory:{view:true, edit:true},
+		authorizedUsers:{view:true, edit:true},
 	},
 	employee_1:{
 		admin:{view:false, edit:false},
@@ -82,6 +83,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:false, edit:false},
 		eng4900: {view:false, edit:false},
 		changeHistory: {view:false, edit:false},
+		authorizedUsers:{view:false, edit:false},
 	},
 	employee_2:{
 		admin:{view:false, edit:false},
@@ -92,6 +94,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:false, edit:false},
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:false, edit:false},
+		authorizedUsers:{view:false, edit:false},
 	},
 	employee_3:{
 		admin:{view:false, edit:false},
@@ -102,6 +105,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:false, edit:false},
+		authorizedUsers:{view:false, edit:false},
 	},
 	employee_4:{
 		admin:{view:false, edit:false},
@@ -112,6 +116,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:true, edit:false},
+		authorizedUsers:{view:false, edit:false},
 	},
 	hra_1:{
 		admin:{view:false, edit:false},
@@ -122,6 +127,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:true, edit:false},
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:true, edit:false},
+		authorizedUsers:{view:true, edit:true},
 	},
 	hra_2:{
 		admin:{view:false, edit:false},
@@ -132,6 +138,7 @@ const REGISTERED_USERS_VIEW = {
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
 		changeHistory: {view:true, edit:true},
+		authorizedUsers:{view:true, edit:true},
 	},
 }
 
