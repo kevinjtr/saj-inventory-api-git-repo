@@ -7,12 +7,13 @@ const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {rightPermision} = require('./validation/tools/user-database')
-const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_self, employee_officeSymbol} = require('../config/queries');
+const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_self, employee_officeSymbol, EQUIPMENT, registered_users} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
 const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
+const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search"]
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -49,6 +50,70 @@ const equipment_fetch_type = (type, user_id) => {
 const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employee}) hra_emp 
 						RIGHT JOIN (${equipment_employee}) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(type, user_id)}`
+
+
+const getQueryForTab = (tab_name, user, fetch=true) => {
+
+	if(fetch){
+		return equipmentQueryForSearch(tab_name, user)
+	}
+
+	return ""
+}
+
+const searchEquipmentUpdatedData = async (id, connection, user) => {
+
+	let tabsReturnObject = {}
+	for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
+		const tab_name = ALL_EQUIPMENT_TABS[i]
+
+		let query = `SELECT * FROM (
+			SELECT * from (${hra_employee}) hra_emp 
+						RIGHT JOIN (
+							SELECT
+							eq.ID,
+							eq.BAR_TAG_NUM,
+							eq.CATALOG_NUM,
+							eq.BAR_TAG_HISTORY_ID,
+							eq.MANUFACTURER,
+							eq.MODEL,
+							eq.CONDITION,
+							eq.SERIAL_NUM,
+							eq.ACQUISITION_DATE,
+							eq.ACQUISITION_PRICE,
+							eq.DOCUMENT_NUM,
+							eq.ITEM_TYPE,
+							eq.HRA_NUM,
+							e.id as employee_id,
+							e.first_name || ' ' || e.last_name as employee_full_name,
+							e.first_name employee_first_name,
+							e.last_name employee_last_name,
+							e.TITLE as employee_title,
+							e.OFFICE_SYMBOL as employee_office_symbol,
+							e.WORK_PHONE as employee_work_phone
+							FROM EQUIPMENT eq
+							LEFT JOIN employee e
+							on eq.user_employee_id = e.id
+							LEFT JOIN (${registered_users}) ur
+							on ur.id = eq.updated_by 
+						) eq_emp 
+						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(tab_name, user)}
+						) WHERE ID = :0`
+
+		let result =  await connection.execute(`${query}`,[id],dbSelectOptions)
+		let {rows} = result
+
+		if(rows.length > 0){
+			rows = propNamesToLowerCase(rows)	
+			tabsReturnObject[i] = rows
+		}
+	}
+
+	return tabsReturnObject
+}
+
+
+
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
@@ -313,7 +378,6 @@ exports.search = async function(req, res) {
 
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
-	const TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search"]
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const tab_edits = {0:false,1:edit_rights,2:false,3:edit_rights}
 
@@ -381,33 +445,16 @@ exports.search2 = async function(req, res) {
 			}
 
 			const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
-			const tabsReturnObject = {}
+			let tabsReturnObject = {}
 			let hras = []	
 			let employees = []
 
 			if(init){
-				for(let i=0;i<TABS.length;i++){
-					const tab_name = TABS[i]
-					let query = ""
+				for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
+					const tab_name = ALL_EQUIPMENT_TABS[i]
+					const eq_search = tab_name != "equipment_search"
 
-					switch(tab_name) {
-						case 'my_equipment':
-							query = equipmentQueryForSearch(tab_name, req.user)
-							break;
-						case 'my_hra_equipment':
-							query = equipmentQueryForSearch(tab_name, req.user)
-							break;
-						case 'hra_equipment':
-							query = equipmentQueryForSearch(tab_name, req.user)
-							break;
-						case 'equipment_search':
-							break;
-					  }
-
-					//if(i == 1)
-						//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
-
-					//console.log(query)
+					let query = getQueryForTab(tab_name, req.user, eq_search)
 
 					if(query){
 						let result =  await connection.execute(`${query}`,{},dbSelectOptions)
@@ -430,8 +477,6 @@ exports.search2 = async function(req, res) {
 
 				result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
 
-				console.log(employee_officeSymbol)
-
 				if(result.rows.length > 0){
 					let {rows} = result
 					rows = propNamesToLowerCase(rows)
@@ -449,27 +494,26 @@ exports.search2 = async function(req, res) {
 				});
 			}
 
-			let query = ""
+			let query = getQueryForTab(tab, req.user)
 
 			switch(tab) {
 				case 'my_equipment':
-					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					query = `${query} AND ${query_search}`
 					break;
 				case 'my_hra_equipment':
-					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					query = `${query} AND ${query_search}`
 					break;
 				case 'hra_equipment':
-					query = `${equipmentQueryForSearch(tab, req.user)} AND ${query_search}`
+					query = `${query} AND ${query_search}`
 					break;
 				case 'equipment_search':
-					query = `${equipmentQueryForSearch(tab, req.user)} `
+					query = `${query} `
 					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
 					break;
 			  }
 
 			  if(query){
 				query += "ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name "
-				console.log(query)
 
 				let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 				let {rows} = result
@@ -480,7 +524,7 @@ exports.search2 = async function(req, res) {
 						status: 200,
 						error: false,
 						message: 'Successfully get single data!',
-						data: {[TABS.indexOf(tab)]: rows},
+						data: {[ALL_EQUIPMENT_TABS.indexOf(tab)]: rows},
 						editable: tab_edits
 					});
 				}
@@ -547,14 +591,13 @@ const dbColumnNamesReFormat = (cols,table_name) => {
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
-	const {edipi} = req.headers.cert
+	let tabsReturnObject = {}
 
 	try{
 		const {changes} = req.body.params
 		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				const {newData} = changes[row];
 				const keys = Object.keys(newData)
 				let cols = ''
@@ -581,57 +624,36 @@ exports.add = async function(req, res) {
 									insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
 									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
-									if(i == keys.length - 1 && typeof edipi != 'undefined'){
-										result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-										if(result.rows.length > 0){
-											const registered_users_id = result.rows[0].ID
+									if(i == keys.length - 1 && !keys.includes('updated_by')){
 											comma = cols ? ', ': ''
 											cols = cols + comma + 'updated_by'
 											vals = vals + comma + ':' + 'updated_by'
-											insert_obj['updated_by'] = registered_users_id
-										}
+											insert_obj['updated_by'] = req.user
 									}
 								}
 							}
 				
-							let query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
-						
-							//console.log(query,newData)
-							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-							//console.log(result)
+							let query = `INSERT INTO ${EQUIPMENT} (${cols}) VALUES (${vals}) returning id into :id`
+							insert_obj.id = {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
 
-							connection.close()
-							return res.status(200).json({
-								status: 200,
-								error: false,
-								message: 'Successfully added new data!',
-								columnErrors : columnErrors
-							});
+							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+
+							if(result.outBinds.id.length > 0){
+								tabsReturnObject = await searchEquipmentUpdatedData(result.outBinds.id[0], connection, req.user)
+
+								connection.close()
+								return res.status(200).json({
+									status: 200,
+									error: false,
+									message: 'Successfully added new data!',
+									columnErrors : columnErrors,
+									tabChanges: tabsReturnObject
+								});
+							}			
 						}
 					}
 
 				}
-				
-
-
-				// console.log(newData)
-				// for(let i=0; i<keys.length; i++){
-				// 	if(keys[i] != 'id'){
-				// 		const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
-				// 		const comma = i ? ', ': ''
-				// 		cols = cols + comma + col_name
-				// 		vals = vals + comma + ' :' + keys[i]
-				// 	}else{
-				// 		delete newData.id
-				// 	}
-				// }
-
-				// const query = `INSERT INTO EQUIPMENT (${cols}) VALUES (${vals})`
-				// //console.log(query)
-
-				// console.log(query)
-				// let result = await connection.execute(query,newData,{autoCommit:AUTO_COMMIT.ADD})
-				//console.log(result)
 			}
 		}
 		connection.close()
@@ -639,7 +661,8 @@ exports.add = async function(req, res) {
 			status: 200,
 			error: true,
 			message: 'Error adding new data!',
-			columnErrors: columnErrors
+			columnErrors: columnErrors,
+			tabChanges: tabsReturnObject
 		});
 	}catch(err){
 		connection.close()
@@ -647,7 +670,8 @@ exports.add = async function(req, res) {
 		res.status(400).json({
 			status: 400,
 			error:true,
-			message: 'Error adding new data!'
+			message: 'Error adding new data!',
+			tabChanges: tabsReturnObject
 		});
 	}
 };
@@ -656,14 +680,11 @@ exports.add = async function(req, res) {
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
-	const {edipi} = req.headers.cert
+	let tabsReturnObject = {}
 
 	try{
 		const {changes,undo} = req.body.params
-
-		//console.log(changes)
 		for(const row in changes){
-			//console.log(typeof row)
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
 				const {newData,oldData} = changes[row];
@@ -671,23 +692,16 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-
-				//console.log(cells.new)
 				
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
 					let col_names = dbColumnNamesReFormat(result.rows,'EQUIPMENT')
 
-					//console.log(col_names)
-
 					if(keys.length > 0){
-						//console.log('here0')
 						if(!undo){
 							columnErrors = await ColumnItemExists(connection,"EQUIPMENT",{row:row,data:cells.new},["bar_tag_num"])
 						}
-	
-						//console.log(columnErrors[row],Object.keys(columnErrors[row]).length == 0)
 	
 						if(!columnErrors.errorFound){
 							
@@ -700,43 +714,35 @@ exports.update = async function(req, res) {
 									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 								}
 
-								if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-									result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-									if(result.rows.length > 0){
-										const registered_users_id = result.rows[0].ID
-										const comma =  cols ? ', ': ''
-										cols = cols + comma + 'updated_by = :updated_by'
-										cells.update['updated_by'] = registered_users_id
-									}
+								if(i == keys.length - 1 && !keys.includes('updated_by')){
+									const comma =  cols ? ', ': ''
+									cols = cols + comma + 'updated_by = :updated_by'
+									cells.update['updated_by'] = req.user
 								}
 							}
 				
-							let query = `UPDATE EQUIPMENT SET ${cols}
+							let query = `UPDATE ${EQUIPMENT} SET ${cols}
 										WHERE ID = ${cells.old.id}`
 						
-							//console.log(query)
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-							//console.log(result)
+
+							if(result.rowsAffected > 0){
+								tabsReturnObject = await searchEquipmentUpdatedData(cells.old.id, connection, req.user)
+							}
 						}
 					}
 
 				}
-
-				//console.log(cells.new)
 			}
 		}
 
-		//if(columnErrors.errorFound){
-			//connection.close()//don't save changes if error is found.
-		//}else if(undo){
 		connection.close()
-		//}
 		
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully update data with id: ', //+ req.params.id,
-			data: [],//req.body,
+			tabChanges: tabsReturnObject,
 			columnErrors: columnErrors
 		});
 	}catch(err){
@@ -746,6 +752,7 @@ exports.update = async function(req, res) {
 			status: 400,
 			error: true,
 			columnErrors:columnErrors,
+			tabChanges: {},
 			message: 'Cannot delete data with id: ' //+ req.params.id
 		});
 	}
@@ -754,30 +761,20 @@ exports.update = async function(req, res) {
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	const {edipi} = req.headers.cert
+	let tabsReturnObject = {}
 
 	try{
 		const {changes} = req.body.params
-		let ids = ''
-		//console.log(changes)
+
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				const {id} = changes[row].oldData
-				let cols = ''
+				const {id} = changes[row].newData
+				let cols = `, UPDATED_BY = ${req.user}`
+				let result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1 ${cols} WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
 
-				if(typeof edipi != 'undefined'){
-					let result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-					if(result.rows.length > 0){
-						const registered_users_id = result.rows[0].ID
-						//comma =  cols ? ', ': ''
-						//cols = cols + comma + 'updated_by = :updated_by'
-						cols = `, UPDATED_BY = ${registered_users_id}`
-					}
+				if(result.rowsAffected > 0 && AUTO_COMMIT.DELETE){
+					tabsReturnObject = await searchEquipmentUpdatedData(id, connection, req.user)
 				}
-
-				let result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 ${cols} WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
-				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				//console.log(result)
 			}
 		}
 
@@ -785,7 +782,8 @@ exports.destroy = async function(req, res) {
 		res.status(200).json({
 			status: 200,
 			error: false,
-			message: `Successfully delete data with ids: ${ids}` //+ req.params.id
+			message: `Successfully delete data`, //+ req.params.id
+			tabChanges: tabsReturnObject
 		});
 	}catch(err){
 		connection.close()
@@ -793,7 +791,8 @@ exports.destroy = async function(req, res) {
 		res.status(400).json({
 			status: 400,
 			error: true,
-			message: `Cannot delete data with ids: ${ids}` //+ req.params.id
+			message: `Cannot delete data`, //+ req.params.id
+			tabChanges: tabsReturnObject
 		});
 	}
 };

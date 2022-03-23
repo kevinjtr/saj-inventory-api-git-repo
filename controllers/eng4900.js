@@ -9,17 +9,18 @@ const groupBy = require('lodash/groupBy');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_auth, hra_num_form_all, hra_employee_form_self, hra_employee_form_auth, hra_employee} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_auth, hra_num_form_all, hra_employee_form_self, hra_employee_form_auth, hra_employee, EQUIPMENT} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
 const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
-const BANNED_COLS_FORM_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
+const BANNED_COLS_FORM_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
 const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
+const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_forms"]
 
 const printElements = (elements) => {
 	let str = ""
@@ -161,12 +162,12 @@ const ra = {
 const requiresSignatureRemoval = (new_status, old_status, requested_action) => {
 	switch(requested_action) {
 		case "Excess":
-			return new_status < 4 && old_status > new_status;
+			return new_status < 5 && old_status > new_status; //completed losing signature. before: 4
 		case "Issue":
 		case "Transfer":
 		case "Repair":
 		case "FOI":
-			return new_status < 6 && old_status > new_status;
+			return new_status < 7 && old_status > new_status;//completed gaining signature. before: 6
 		default:
 		  return false;
 	  }
@@ -174,117 +175,102 @@ const requiresSignatureRemoval = (new_status, old_status, requested_action) => {
 
 const FORM_4900_STATUS = {
 	all : {
-		1:"Form created",
-		2:"Completed Individual/Vendor ROR Property",
-		3:"Losing HRA signature required",
-		4:"Completed losing HRA signature",
-		5:"Gaining HRA signature required",
-		6:"Completed gaining HRA signature",
-		7:"Sent to Logistics",
-		8:"Sent to PBO",
-		9:"Completed",
+		1:"Form Edit",
+		2:"Individual/Vendor signature required",
+		3:"Completed Individual/Vendor signature",
+		4:"Losing HRA signature required",
+		5:"Completed losing HRA signature",
+		6:"Gaining HRA signature required",
+		7:"Completed gaining HRA signature",
+		8:"Sent to Logistics",
+		9:"Sent to PBO",
+		10:"Completed",
 	},
 	gaining : {
-		1:"Form created",
-		2:"Completed Individual/Vendor ROR Property",
-		5:"Gaining HRA signature required",
-		6:"Completed gaining HRA signature",
-		7:"Sent to Logistics",
-		8:"Sent to PBO",
-		9:"Completed",
+		1:"Form Edit",
+		2:"Individual/Vendor signature required",
+		3:"Completed Individual/Vendor signature",
+		6:"Gaining HRA signature required",
+		7:"Completed gaining HRA signature",
+		8:"Sent to Logistics",
+		9:"Sent to PBO",
+		10:"Completed",
 	},
 	losing : {
-		1:"Form created",
-		2:"Completed Individual/Vendor ROR Property",
-		3:"Losing HRA signature required",
-		4:"Completed losing HRA signature",
-		7:"Sent to Logistics",
-		8:"Sent to PBO",
-		9:"Completed",
+		1:"Form Edit",
+		2:"Individual/Vendor signature required",
+		3:"Completed Individual/Vendor signature",
+		4:"Losing HRA signature required",
+		5:"Completed losing HRA signature",
+		8:"Sent to Logistics",
+		9:"Sent to PBO",
+		10:"Completed",
 	}
 }
 
-const REJECT_FORM = {id:10, label:"Form Reject (erase signatures)"}
+const REJECT_FORM = {id:11, label:"Form Reject"}
 
-const FORM_4900_STATUS_OPTIONS = {
-	all : [
-		{id:1, label:"Form created"},
-		{id:2, label:"Completed Individual/Vendor ROR Property"},
-		{id:3, label:"Losing HRA signature required"},
-		{id:4, label:"Completed losing HRA signature"},
-		{id:5, label:"Gaining HRA signature required"},
-		{id:6, label:"Completed gaining HRA signature"},
-		{id:7, label:"Sent to Logistics"},
-		{id:8, label:"Sent to PBO"},
-		{id:9, label:"Completed"},
-	],
-	gaining : [
-		{id:1, label:"Form created"},
-		{id:2, label:"Completed Individual/Vendor ROR Property"},
-		{id:5, label:"Gaining HRA signature required"},
-		{id:6, label:"Completed gaining HRA signature"},
-		{id:7, label:"Sent to Logistics"},
-		{id:8, label:"Sent to PBO"},
-		{id:9, label:"Completed"},
-	],
-	losing : [
-		{id:1, label:"Form created"},
-		{id:2, label:"Completed Individual/Vendor ROR Property"},
-		{id:3, label:"Losing HRA signature required"},
-		{id:4, label:"Completed losing HRA signature"},
-		{id:7, label:"Sent to Logistics"},
-		{id:8, label:"Sent to PBO"},
-		{id:9, label:"Completed"},
-	],
-}
+const get4900FilteredOptions = (status, type, requested_action_alias) => {
 
-const get4900StatusEntries = (status, type) => {
-	let form_options = [...FORM_4900_STATUS_OPTIONS[type]]
+	const ids = Object.keys(FORM_4900_STATUS[type])
+	const returnArray = []
 
-	if(status == 3 || status == 5){
-		form_options = filter(form_options,function(opt){ return opt.id == status || opt.id == status + 1})
-		form_options.map(opt => {
-			if(opt.id == 1){
-				opt.label +=  " (erase signatures)"
-			}
-
-			return opt
-		})
-
-		form_options = [REJECT_FORM,...form_options]
-
-		console.log(form_options)
-
-	}else if(status > 1){
-		form_options = filter(form_options,function(opt){ return opt.id == 1 || opt.id >= status})
-		form_options.map(opt => {
-			if(opt.id < status){
-				opt.label =  opt.label + " (erase signatures)"
-			}
-
-			return opt
-		})
+	if([2, 4, 6, 11].includes(status)){//before 3, 5, 10
+		returnArray.push(REJECT_FORM)
 	}
 
-	return form_options
+	for(const id_string of ids){
+		const id = Number(id_string)
+		const label = FORM_4900_STATUS[type][id]
+
+		if(status == 1){
+			//if(id != 1){
+				//returnArray.push({id:id, label:label + " (removes PDF signatures)"})
+			//}else{
+				if(requested_action_alias == "Issue"){//does not have a losing hra.
+					if([1,2,3,6].includes(id)){//contains a losing hra.
+						returnArray.push({id:id, label:label})
+					}
+				}else{
+					if([1,2,3,4].includes(id)){//contains a losing hra.
+						returnArray.push({id:id, label:label})
+					}
+				}
+			//}	
+		}else if(status == 2){//form sign. before: 3, 5
+			if([2, 3].includes(id)){//before: 3, 5
+				console.log(id)
+				returnArray.push({id:id, label:label})
+			}	
+		}else if([4, 6].includes(status)){//form sign. before: 3, 5
+			if([4, 5, 6, 7].includes(id)){//before: 3, 5
+				console.log(id)
+				returnArray.push({id:id, label:label})
+			}	
+		}else if([3,5].includes(status) || status >= 7){
+			if(id == 1){
+				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
+			}else if (id >= status){
+				returnArray.push({id:id, label:label})
+			}
+		}
+	}
+
+	return returnArray
 }
-
-
-
-
 
 const getFormStatusOptions = (requested_action, status) => {
 
 	switch(requested_action) {
 		case "Issue":
-			return get4900StatusEntries(status,"gaining")
+			return get4900FilteredOptions(status, "gaining", requested_action)
 		case "Excess":
-			return get4900StatusEntries(status,"losing")
+			return get4900FilteredOptions(status, "losing", requested_action)
 		case "Transfer":
 		case "Repair":
 		case "FOI":
 		default:
-			return get4900StatusEntries(status,"all")
+			return get4900FilteredOptions(status, "all", requested_action)
 	  }
 }
 		
@@ -297,10 +283,46 @@ const isFormCompleted = (rowData) => {
 	
 	return false
 }
+
+const formEquipmentInsertQuery = (req_action, hra_num, sql) => `
+INSERT INTO ${EQUIPMENT} (
+BAR_TAG_NUM , 
+CATALOG_NUM, 
+BAR_TAG_HISTORY_ID, 
+MANUFACTURER, 
+MODEL, 
+CONDITION, 
+SERIAL_NUM, 
+ACQUISITION_DATE, 
+ACQUISITION_PRICE, 
+DOCUMENT_NUM, 
+INDIVIDUAL_ROR_PROP,
+HRA_NUM,
+USER_EMPLOYEE_ID,
+ITEM_TYPE
+) (
+SELECT
+BAR_TAG_NUM , 
+CATALOG_NUM, 
+BAR_TAG_HISTORY_ID, 
+MANUFACTURER, 
+MODEL, 
+CONDITION, 
+SERIAL_NUM, 
+ACQUISITION_DATE, 
+ACQUISITION_PRICE, 
+DOCUMENT_NUM, 
+INDIVIDUAL_ROR_PROP,
+${hra_num} as HRA_NUM,
+${[2,3,5].includes(req_action) ? "USER_EMPLOYEE_ID," : "NULL as USER_EMPLOYEE_ID,"}
+ITEM_TYPE
+FROM FORM_EQUIPMENT WHERE ${sql})`
 		
 const doTransaction = async (connection, user_id, rowData) => {
 	let return_result = {error: false, message: "no action was done."}
 	const {form_id} = rowData
+
+	console.log(rowData)
 
 	try{
 		let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`//returns array of equipments.
@@ -314,7 +336,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 			const bar_tags = result.rows.map(x => x.bar_tag_num)
 			const bar_tags_print = printElements(bar_tags)
 
-			let equipment_result = await connection.execute(`SELECT * FROM EQUIPMENT where BAR_TAG_NUM in (${bar_tags_print})`,{},dbSelectOptions)
+			let equipment_result = await connection.execute(`SELECT * FROM ${EQUIPMENT} where BAR_TAG_NUM in (${bar_tags_print})`,{},dbSelectOptions)
 	
 			if(status_alias == "Completed"){
 				switch (requested_action) {
@@ -322,7 +344,10 @@ const doTransaction = async (connection, user_id, rowData) => {
 						console.log('HERE dT-2-i')
 						if(equipment_result.rows.length == 0){
 							console.log('HERE dT-3-i')
-							result = await connection.execute(`INSERT INTO EQUIPMENT (SELECT * FROM FORM_EQUIPMENT WHERE BAR_TAG_NUM IN (${bar_tags_print}))`,{},{autoCommit:false})
+
+							console.log(formEquipmentInsertQuery(requested_action, gaining_hra_num, `BAR_TAG_NUM IN (${bar_tags_print})`))
+							result = await connection.execute(formEquipmentInsertQuery(requested_action, gaining_hra_num, `BAR_TAG_NUM IN (${bar_tags_print})`),{},{autoCommit:false})
+
 							if(result.rowsAffected != bar_tags.length){
 								return_result = {...return_result, error:true,  message: `One or more equipments could not be added.`}
 							}else{
@@ -356,10 +381,10 @@ const doTransaction = async (connection, user_id, rowData) => {
 							})
 	
 							if(!return_result.error){
-								result = await connection.execute(`UPDATE EQUIPMENT SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
 	
 								if(result.rowsAffected != bar_tags.length){
-									return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered.`}
+									return_result = {...return_result, error:true,  message: `One or more equipments could not be found. No transfer was done.`}
 								}else{
 									return_result = {...return_result,  message: `all equipments were transfered.`}
 								}
@@ -371,7 +396,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 		
 						break;
 					case "Repair":
-						//do nothing.
+						return_result = {...return_result, error:false,  message: `Equipment database was not updated.`}
 						break;
 					case "Excess":
 						console.log('HERE dT-2-e')
@@ -389,15 +414,22 @@ const doTransaction = async (connection, user_id, rowData) => {
 		
 							if(!return_result.error){
 								console.log('HERE dT-4-e')
-								result = await connection.execute(`UPDATE EQUIPMENT SET DELETED = 1 WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
-		
-								if(result.rowsAffected != bar_tags.length){
-									console.log('HERE dT-5-e')
-									return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
-								}else{
+
+								console.log(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE BAR_TAG_NUM IN (${bar_tags_print})`)
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+
+								if(result.rowsAffected == bar_tags.length){
 									console.log('HERE dT-5-e')
 									return_result = {...return_result,  message: `all equipments were discarted.`}
+								}else{
+									console.log('HERE dT-5-e')
+									return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
 								}
+
+								//}else{
+									//console.log('HERE dT-5-e')
+									//return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
+								//}
 							}
 							
 						}else{
@@ -426,7 +458,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 							})
 	
 							if(!return_result.error){
-								result = await connection.execute(`UPDATE EQUIPMENT SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
 	
 								if(result.rowsAffected != bar_tags.length){
 									return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered to FOI.`}
@@ -456,12 +488,12 @@ const doTransaction = async (connection, user_id, rowData) => {
 }
 
 const get4900HraAndEquipments = async function(connection, user, edit_rights) {
-	const TABS = ["my_forms","hra_forms"]
+	const tabs = ["my_forms","hra_forms"]
 	const tabsReturnObject = {}	
 
 	try{
-		for(let i=0;i<TABS.length;i++){
-			const tab_name = TABS[i]
+		for(let i=0;i<tabs.length;i++){
+			const tab_name = tabs[i]
 			const hra = {}
 			let auth_hras = []
 
@@ -480,7 +512,7 @@ const get4900HraAndEquipments = async function(connection, user, edit_rights) {
 
 				for(let j=0;j<hra.losing.length;j++){
 					const {hra_num} = hra.losing[j]
-					result = await connection.execute(`SELECT * FROM EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
+					result = await connection.execute(`SELECT * FROM ${EQUIPMENT} WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
 					hra.losing[j].equipments = propNamesToLowerCase(result.rows)
 				}
 
@@ -856,9 +888,131 @@ const FormsToMaterialTableFormat = (form_groups) => {
 	return(form_return)
 }
 
+const getQueryForTab = (tab_name, user) => {
+	let query = queryForSearch(user)
+
+	//2 (ROR), 4 (L), 6 (G) signatures required.
+
+	//3 (ROR), 5 (L), 7 (G) signatures completed.
+
+	//10 completed.
+
+	//1	Issue		(ROR, G)
+	//2	Transfer	(ROR, L, G)
+	//3	Repair	 	(ROR, L, G)
+	//4	Excess	 	(ROR, L)
+	//5	FOI			(ROR, L, G)
+
+	if(tab_name == "my_forms"){
+		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
+		query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+	} else if(tab_name == "hra_forms"){
+		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
+		query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+	} else if(tab_name == "sign_forms"){//Change: needs to be self.
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2))
+				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+
+				UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 3, 4, 5))) 
+				
+				UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
+
+
+				// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
+				//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
+
+		// query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
+
+		//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
+	} else if(tab_name == "completed_forms"){
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2)) 
+		UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (2,3,4,5))) `
+		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
+		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
+		
+		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
+		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
+	}
+
+	return query
+}
+
+const searchEng4900UpdatedData = async (form_id, connection, user) => {
+
+	const tabsReturnObject = {}
+	for(let i=0;i<ALL_ENG4900_TABS.length;i++){
+		const tab_name = ALL_ENG4900_TABS[i]
+
+		let query = getQueryForTab(tab_name, user)
+		// let query = queryForSearch(user)
+
+		// if(tab_name == "my_forms"){
+		// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (4,10) AND F.REQUESTED_ACTION in (3,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
+
+		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (6,10) AND F.REQUESTED_ACTION in (1,4,6))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+		// }
+
+		// if(tab_name == "hra_forms"){
+		// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (4,10) AND F.REQUESTED_ACTION in (3,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
+		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (6,10) AND F.REQUESTED_ACTION in (1,4,6))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+		// }
+
+		// if(tab_name == "sign_forms"){//Change: needs to be self.
+		// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (3))
+		// 			UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 4 AND F.REQUESTED_ACTION in (3,5))) `
+					
+		// 			// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
+		// 			//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
+
+		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,4,6))) `
+
+		// 	//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
+		// }
+
+		// if(tab_name == "completed_forms"){
+		// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (3)) 
+		// 	UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (3,5))) `
+		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
+		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
+			
+		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,4,6))) `
+		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
+		// }
+
+		query = `SELECT * FROM (${query}) WHERE FORM_ID = :0`
+
+		//if(i == 1)
+			//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
+			//console.log(`QUERY-${tab_name}`,query)
+
+		let result =  await connection.execute(`${query}`,[form_id],dbSelectOptions)
+		let {rows} = result
+
+		if(rows.length > 0){
+			rows = propNamesToLowerCase(rows)
+
+			const form_groups = groupBy(rows, function(r) {
+				return r.form_id;
+			  });		
+	
+			tabsReturnObject[i] = FormsToMaterialTableFormat(form_groups)
+		}
+	}
+
+	Object.keys(tabsReturnObject).map(function(tab){
+		if(tabsReturnObject[tab].length > 0){
+			Object.keys(tabsReturnObject[tab]).map(function(elem){
+				const {requested_action, status} = tabsReturnObject[tab][elem]
+				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status)
+			})
+		}
+	})
+
+	return tabsReturnObject
+}
+
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
-	const TABS = ["my_forms","hra_forms","sign_forms","completed_forms"]
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
@@ -920,41 +1074,41 @@ exports.search2 = async function(req, res) {
 			const tabsReturnObject = {}		
 
 			if(init){
-				for(let i=0;i<TABS.length;i++){
-					const tab_name = TABS[i]
-					let query = queryForSearch(req.user)
+				for(let i=0;i<ALL_ENG4900_TABS.length;i++){
+					const tab_name = ALL_ENG4900_TABS[i]
+					let query = getQueryForTab(tab_name, req.user)
+					// let query = queryForSearch(req.user)
 
-					if(tab_name == "my_forms"){
-						query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
+					// if(tab_name == "my_forms"){
+					// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
 
-						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
-					}
+					// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
+					// }
 
-					if(tab_name == "hra_forms"){
-						query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
-						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
-					}
+					// if(tab_name == "hra_forms"){
+					// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) `
+					// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5))) `
+					// }
 		
-					if(tab_name == "sign_forms"){//Change: needs to be self.
-						query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2)) 
-								UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) `
+					// if(tab_name == "sign_forms"){//Change: needs to be self.
+					// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2)) 
+					// 			UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) `
 
-						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) `
-					}
+					// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) `
+					// }
 
-					if(tab_name == "completed_forms"){
-						query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
-						UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
+					// if(tab_name == "completed_forms"){
+					// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
+					// 	UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
 						
-						query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
-					}
+					// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
+					// }
 
 					//if(i == 1)
 						//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
 						//console.log(`QUERY-${tab_name}`,query)
 
 					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
-					
 					let {rows} = result
 		
 					rows = propNamesToLowerCase(rows)
@@ -988,30 +1142,31 @@ exports.search2 = async function(req, res) {
 				});
 			}
 
-			let query = `${queryForSearch(req.user)} `
+			let query = getQueryForTab(tab, req.user)
+			// let query = `${queryForSearch(req.user)} `
 
 			
-			if(tab == "my_forms"){
-				query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4) ) `
-				query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)) ) `				
-			}
+			// if(tab == "my_forms"){
+			// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4) ) `
+			// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)) ) `				
+			// }
 
-			if(tab == "hra_forms"){
-				query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4) ) `
-				query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)) ) `
-			}
+			// if(tab == "hra_forms"){
+			// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4) ) `
+			// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)) ) `
+			// }
 
-			if(tab == "sign_forms"){//Change: needs to be self.
-				query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2) ) 
-						UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4)) ) `
-				query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5)) ) `
-			}
+			// if(tab == "sign_forms"){//Change: needs to be self.
+			// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2) ) 
+			// 			UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4)) ) `
+			// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5)) ) `
+			// }
 
-			if(tab == "completed_forms"){
-				query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2) ) 
-				UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4)) ) `
-				query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5)) ) `
-			}
+			// if(tab == "completed_forms"){
+			// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2) ) 
+			// 	UNION ALL (${queryForSearch(req.user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(req.user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4)) ) `
+			// 	query += `UNION ALL (${queryForSearch(req.user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(req.user)}) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5)) ) `
+			// }
 
 			if(query_search){
 				query = `SELECT * FROM (${query}) WHERE ${query_search}`
@@ -1039,7 +1194,7 @@ exports.search2 = async function(req, res) {
 					status: 200,
 					error: false,
 					message: 'Successfully get single data!',
-					data: {[TABS.indexOf(tab)]: search_return},
+					data: {[ALL_ENG4900_TABS.indexOf(tab)]: search_return},
 					editable: edit_rights
 				});
 			}
@@ -1095,6 +1250,7 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 	try{
 		const changes = [...equipments]
 
+		console.log(changes)
 		//console.log(changes,edipi)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -1177,7 +1333,8 @@ exports.add = async function(req, res) {
 
 	if(result.rows.length > 0 && (form.hra.losing.hra_num || form.requested_action == ra["Issue"]) && (form.hra.gaining.hra_num || form.requested_action == ra["Excess"]) && req.body.form.equipment_group.length > 0){
 		form.losing_hra = form.hra.losing.hra_num
-		form.gaining_hra = form.hra.gaining.hra_num
+		form.gaining_hra = form.hra.gaining.hra_num		
+
 		const equipmentIds = await formEquipmentAdd(connection,req.body.form.equipment_group,edipi)
 
 		form.form_equipment_group_id = await create4900EquipmentGroup(equipmentIds,connection)
@@ -1253,6 +1410,14 @@ exports.add = async function(req, res) {
 	});
 };
 
+const isForm4900Updated = (obj) => obj.complete && !obj.error
+
+const isEquipmentUpdated = (obj) => obj.message && !obj.error
+
+const isFileRecordUpdated = (obj) => obj.deleted && !obj.error && obj.status_downgrade
+
+const isTransactionErrorFound = (db) => db.fs_record.error || db.equipment_result.error || db.form_4900.error
+
 //!UPDATE FROM_4900 DATA
 exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
@@ -1260,7 +1425,7 @@ exports.update = async function(req, res) {
 	const {edipi} = req.headers.cert
 
 	const db_update_results = {
-		fs_record: {deleted:false, status_downgrade:false, signature_removal: false},
+		fs_record: {deleted:false, status_downgrade:false, signature_removal: false, error:false},
 		equipment_result: {error: false},
 		form_4900: {complete:false,error:false}
 	}
@@ -1297,7 +1462,7 @@ exports.update = async function(req, res) {
 
 						from_record_result.rows =  propNamesToLowerCase(from_record_result.rows)
 						db_update_results.fs_record.status_downgrade = from_record_result.rows[0].status > status
-						const {file_storage_id, requested_action_alias} = from_record_result.rows[0]
+						const {file_storage_id, requested_action, requested_action_alias, losing_hra, gaining_hra} = from_record_result.rows[0]
 						const form_4900_changes = {0:{...newData, id: cell_id}}
 
 						console.log("HERE 2 (formUpdate)",form_4900_changes)
@@ -1310,22 +1475,47 @@ exports.update = async function(req, res) {
 							if(db_update_results.fs_record.signature_removal){
 								let file_storage_del_result = await connection.execute('UPDATE FILE_STORAGE SET DELETED = 1 WHERE ID = :0',[file_storage_id],{autoCommit:false})
 								db_update_results.fs_record.deleted = file_storage_del_result.rowsAffected > 0
-							}
+								db_update_results.fs_record.error = file_storage_del_result.rowsAffected == 0
+							}						
 
-						}else if(status == 9){//form is completed.
+						}else if(status == 10){//form is completed.
 							console.log("HERE 4 (isComplete)")
 							db_update_results.form_4900.complete = true
 							db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
 						}
 
+						
+						
+
+						if(!isTransactionErrorFound(db_update_results)){
+							//commit changes.
+							//await connection.commit()
+							console.log(db_update_results)
+							await connection.rollback()//DELETE THIS LINE.
+							const tabsReturnObject = await searchEng4900UpdatedData(cell_id, connection, req.user)
+
+							console.log(tabsReturnObject)
+
+							return(
+								res.status(200).json({
+									status: 200,
+									error: false,
+									//tabChanges:tabsReturnObject
+								})
+							)
+
+						}
+
+						//error is found.
 						await connection.rollback()
 						await connection.close()
-						console.log(db_update_results)
+						console.log(db_update_results)						
 	
 						return (
-							res.status(200).json({
-								status: 200,
-								error: db_update_results.form_4900.error,
+							res.status(400).json({
+								status: 400,
+								error: true,
+								tabChanges:{}
 							})
 						)
 					}
@@ -1336,11 +1526,11 @@ exports.update = async function(req, res) {
 		await connection.close()
 		
 		return (
-			res.status(200).json({
+			res.status(400).json({
 				status: 400,
 				error: true,
 				message: 'Could not update data',
-				data: null,
+				tabChanges:{}
 			})
 		)
 	}catch(err){
@@ -1349,7 +1539,8 @@ exports.update = async function(req, res) {
 		res.status(400).json({
 			status: 400,
 			error: true,
-			message: 'Cannot delete data with id: '
+			message: 'Cannot delete data with id: ',
+			tabChanges:{}
 		});
 	}
 };
@@ -1445,9 +1636,14 @@ exports.upload = async function(req, res) {
 				 const formUpdateResult = await formUpdate(connection, edipi, form_4900_changes)
 	
 				 console.log(formUpdateResult ? "sucessfully updated form_4900" : "error updating form_4900")
+
+
+
 	
 				//update eng4900 file_storage_id and status
-				res.send('File uploaded!');
+				res.send({msg:'File uploaded!',
+			
+			});
 			  });
 		}else{
 			res.status(400).send('Status Downgrade: File was not uploaded!');

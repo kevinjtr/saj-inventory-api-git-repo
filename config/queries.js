@@ -1,7 +1,9 @@
 
+const EQUIPMENT = "(SELECT * FROM EQUIPMENT WHERE DELETED != 1)"
+
 const equipment_count = {
-	employee:`SELECT COUNT(*) as EMPLOYEE_EQUIPMENT_COUNT, USER_EMPLOYEE_ID FROM EQUIPMENT GROUP BY USER_EMPLOYEE_ID`,
-	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM EQUIPMENT GROUP BY HRA_NUM `
+	employee:`SELECT COUNT(*) as EMPLOYEE_EQUIPMENT_COUNT, USER_EMPLOYEE_ID FROM ${EQUIPMENT} GROUP BY USER_EMPLOYEE_ID`,
+	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM ${EQUIPMENT} GROUP BY HRA_NUM `
 }
 
 const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias FROM registered_users u
@@ -32,6 +34,7 @@ LEFT JOIN (${registered_users}) ur
 on ur.id = e.updated_by `
 
 module.exports = {
+	EQUIPMENT:EQUIPMENT,
 	registered_users:registered_users,
 	registered_users_all_cols:registered_users_all_cols,
 	employee_officeSymbol: employee,
@@ -56,7 +59,7 @@ module.exports = {
 	e.TITLE as employee_title,
 	e.OFFICE_SYMBOL as employee_office_symbol,
 	e.WORK_PHONE as employee_work_phone
-	FROM equipment eq
+	FROM ${EQUIPMENT} eq
 	LEFT JOIN employee e
 	on eq.user_employee_id = e.id
 	LEFT JOIN (${registered_users}) ur

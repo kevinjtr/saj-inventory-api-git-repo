@@ -6,7 +6,7 @@ const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee,registered_users,EQUIPMENT} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {create4900} = require('../pdf-fill.js')
@@ -74,7 +74,7 @@ e.id as EQUIPMENT_ID,
 	e.DOCUMENT_NUM, 
 	e.ITEM_TYPE , 
 	e.USER_EMPLOYEE_ID
-	from form_4900 f, equipment_group eg, equipment e, requested_action ra,
+	from form_4900 f, equipment_group eg, EQUIPMENT e, requested_action ra,
 	( ${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 where eg.equipment_group_id = f.equipment_group_id and e.id = eg.equipment_id and ra.id = f.requested_action
  and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num `
@@ -134,7 +134,7 @@ exports.index = async function(req, res) {
         if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
             // const {equipment_gorup_id} = result.rows[0]
-            // const query_eq = `SELECT * FROM EQUIPMENT_GROUP EG LEFT JOIN EQUIPMENT E ON E.ID = EG.EQUIPMENT_ID WHERE EG.ID = :0`
+            // const query_eq = `SELECT * FROM EQUIPMENT_GROUP EG LEFT JOIN ${EQUIPMENT} E ON E.ID = EG.EQUIPMENT_ID WHERE EG.ID = :0`
 
             // let result2 =  await connection.execute(query_eq,[],dbSelectOptions)
 
@@ -175,6 +175,7 @@ exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	
 	try{
+		//ALL Equipments are fetched. Even deleted equipments.
         let result =  await connection.execute(`SELECT EQ.hra_num,
 		AI.fiscal_year,
 		EQ.bar_tag_num,
@@ -183,7 +184,34 @@ exports.getById = async function(req, res) {
 		EQ.employee_full_name
 		FROM ANNUAL_INVENTORY AI
 		LEFT JOIN (SELECT * FROM EQUIPMENT_GROUP eg
-		left join (${equipment_employee}) e
+		left join (
+			SELECT
+				eq.ID,
+				eq.BAR_TAG_NUM,
+				eq.CATALOG_NUM,
+				eq.BAR_TAG_HISTORY_ID,
+				eq.MANUFACTURER,
+				eq.MODEL,
+				eq.CONDITION,
+				eq.SERIAL_NUM,
+				eq.ACQUISITION_DATE,
+				eq.ACQUISITION_PRICE,
+				eq.DOCUMENT_NUM,
+				eq.ITEM_TYPE,
+				eq.HRA_NUM,
+				e.id as employee_id,
+				e.first_name || ' ' || e.last_name as employee_full_name,
+				e.first_name employee_first_name,
+				e.last_name employee_last_name,
+				e.TITLE as employee_title,
+				e.OFFICE_SYMBOL as employee_office_symbol,
+				e.WORK_PHONE as employee_work_phone
+				FROM EQUIPMENT eq
+				LEFT JOIN employee e
+				on eq.user_employee_id = e.id
+				LEFT JOIN (${registered_users}) ur
+				on ur.id = eq.updated_by
+		) e
 		on e.id = eg.equipment_id) EQ
 		ON AI.equipment_group = EQ.equipment_group_id
 		WHERE ai.id = :0
@@ -389,7 +417,7 @@ const createEquipmentGroup = async (hra_num,connection) => {
 		const eGroupId = result.rows[0].NEXTVAL
 		//console.log(eGroupId,result,hra_num)
 		result = await connection.execute(`INSERT INTO EQUIPMENT_GROUP (EQUIPMENT_GROUP_ID, EQUIPMENT_ID)
-		(SELECT :0, ID FROM EQUIPMENT WHERE HRA_NUM = :1)`,[eGroupId,hra_num],{autoCommit:AUTO_COMMIT.ADD})
+		(SELECT :0, ID FROM ${EQUIPMENT} WHERE HRA_NUM = :1)`,[eGroupId,hra_num],{autoCommit:AUTO_COMMIT.ADD})
 		//console.log(result)
 		return(result.rowsAffected > 0 ? eGroupId : -1)
 	}
