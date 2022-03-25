@@ -154,13 +154,13 @@ exports.login = async (req, res) => {
 		}
 
 		if(edipi){
+			if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
+				await certTools.UpdateUserAccessHistory(req.headers.cert)
+			}
+
 			let result =  await connection.execute(`${registered_users} where edipi = :0`,[edipi],dbSelectOptions)
 
 			if(result.rows.length > 0){
-				if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
-					certTools.UpdateUserAccessHistory(req.headers.cert)
-				}
-
 				result.rows = propNamesToLowerCase(result.rows)
 				const {id, updated_by_full_name, user_level_alias} = result.rows[0]
 
@@ -182,7 +182,8 @@ exports.login = async (req, res) => {
 						user: user.level,
 						user_name: user.name,
 						exp: token_exp,
-						access: user.access
+						access: user.access,
+						message: 'Login success.'
 					});
 				});
 
@@ -190,12 +191,13 @@ exports.login = async (req, res) => {
 			}	
 		}
 
-		res.status(400).json({
+		res.status(200).json({
 			token: '',
 			user: '',
 			user_name: '',
 			exp: '',
-			access: {}
+			access: {},
+			message: 'User is not registered.'
 		});
 		
 	}catch(err){
@@ -206,7 +208,8 @@ exports.login = async (req, res) => {
 			user: '',
 			user_name: '',
 			exp: '',
-			access: {}
+			access: {},
+			message: 'A server error occured.'
 		});
 	}
 
@@ -438,4 +441,17 @@ exports.verifyTokenAndBufferUpload = async function post(req, res, next) {
 	} catch (err) {
 		res.send('error on the api side');
 	}
-  }
+}
+
+exports.userAccessInsert = async (req, res) => {
+
+	if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
+		const success = await certTools.insertUserAccessHistory(req.headers.cert)
+
+		if(success){
+			return res.send('success: your credentials have been recorded.')
+		}
+	}
+
+	return res.send('error: your credentials have not been recorded.')
+}

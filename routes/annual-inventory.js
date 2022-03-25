@@ -11,7 +11,7 @@ module.exports = function(app) {
 
 	app.route('/annualinventory/:id').get(usersController.verifyToken,controller.getById);
 
-	app.route('/annualinventory/search').post(usersController.verifyToken,controller.search);
+	// app.route('/annualinventory/search').post(usersController.verifyToken,controller.search);
 	//!POST
 	//app.route('/equipment').post(usersController.verifyToken, controller.add);
 	app.route('/annualinventory/add').post(usersController.verifyToken,controller.add);

@@ -211,8 +211,7 @@ const FORM_4900_STATUS = {
 const REJECT_FORM = {id:11, label:"Form Reject"}
 
 const get4900FilteredOptions = (status, type, requested_action_alias) => {
-
-	const ids = Object.keys(FORM_4900_STATUS[type])
+	const ids = Object.keys(FORM_4900_STATUS["all"])
 	const returnArray = []
 
 	if([2, 4, 6, 11].includes(status)){//before 3, 5, 10
@@ -221,29 +220,36 @@ const get4900FilteredOptions = (status, type, requested_action_alias) => {
 
 	for(const id_string of ids){
 		const id = Number(id_string)
-		const label = FORM_4900_STATUS[type][id]
+		const label = FORM_4900_STATUS["all"][id]
 
 		if(status == 1){
 			//if(id != 1){
 				//returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			//}else{
-				if(requested_action_alias == "Issue"){//does not have a losing hra.
-					if([1,2,3,6].includes(id)){//contains a losing hra.
-						returnArray.push({id:id, label:label})
-					}
-				}else{
+				// if(requested_action_alias == "Issue"){//does not have a losing hra.
+				// 	if([1,2,3,6].includes(id)){//contains a losing hra.
+				// 		returnArray.push({id:id, label:label})
+				// 	}
+				// }else{
 					if([1,2,3,4].includes(id)){//contains a losing hra.
 						returnArray.push({id:id, label:label})
 					}
-				}
+				// }
 			//}	
 		}else if(status == 2){//form sign. before: 3, 5
-			if([2, 3].includes(id)){//before: 3, 5
+			if([2, 3, 4].includes(id)){//before: 3, 5
 				console.log(id)
 				returnArray.push({id:id, label:label})
 			}	
-		}else if([4, 6].includes(status)){//form sign. before: 3, 5
+		}else if(status == 4){//form sign. before: 3, 5
+
 			if([4, 5, 6, 7].includes(id)){//before: 3, 5
+				console.log(id)
+				returnArray.push({id:id, label:label})
+			}	
+		}else if(status == 6){//form sign. before: 3, 5
+			
+			if([6, 7].includes(id)){//before: 3, 5
 				console.log(id)
 				returnArray.push({id:id, label:label})
 			}	
