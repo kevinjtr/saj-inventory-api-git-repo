@@ -250,11 +250,16 @@ const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_gr
 	return(return_gorup_id)
 }
 
+const isHraAndFiscalYearNotDuplicated = async (connection, binds) => {
+	let result = await connection.execute(`SELECT * FROM ANNUAL_INV WHERE HRA_NUM = :hra_num and FISCAL_YEAR = :fiscal_year `,binds,dbSelectOptions)
+	console.log('isHraAndFiscalYearNotDuplicated',result.rows.length == 0)
+	return result.rows.length == 0
+}
+
 //!INSERT ANNUAL_INV
 exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
-	const {edipi} = req.headers.cert
 	let eGroupId = -1
 
 	try{
@@ -269,10 +274,11 @@ exports.add = async function(req, res) {
 				let insert_obj = {}
 				const isAllDataAvailable = containsAll(ACCEPTED_USER_INPUT_COLS.map(x=>x.toLowerCase()),keys)
 				const isDateWithinRange = isAllDataAvailable ? (newData.fiscal_year >= 1990 && newData.fiscal_year <= (new Date()).getFullYear() + 1) : false
+				const isHraAndFiscalYearValid = await isHraAndFiscalYearNotDuplicated(connection, {fiscal_year: newData.fiscal_year, hra_num: newData.hra_num})
 
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INV'`,{},dbSelectOptions)
 
-				if(result.rows.length > 0 && isAllDataAvailable && isDateWithinRange){
+				if(result.rows.length > 0 && isAllDataAvailable && isDateWithinRange && isHraAndFiscalYearValid){
 					result.rows = filter(result.rows,function(x){ return ACCEPTED_USER_INPUT_COLS.includes(x.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
@@ -283,7 +289,6 @@ exports.add = async function(req, res) {
 
 								if(isHraNum){
 									const EQ_GROUP_ID_COL_NAME = "annual_inv_equipment_group_id"
-									console.log('here0')
 									eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
 
 									if(eGroupId == -1){
@@ -317,8 +322,6 @@ exports.add = async function(req, res) {
                             }
                         }
 
-						console.log(insert_obj)
-
 						if(insert_obj.hra_num && insert_obj.fiscal_year){
 							let query = `MERGE INTO ANNUAL_INV
 							USING (SELECT 1 FROM DUAL) m
@@ -327,23 +330,30 @@ exports.add = async function(req, res) {
 							INSERT (${cols})
 							VALUES (${vals})`
 
-							console.log(query)
 							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
 							if(result.rowsAffected != 0){
-								connection.close()
-
-								return res.status(200).json({
-									status: 200,
-									error: false,
-									message: 'Successfully added new data!',
-									columnErrors : columnErrors
-								});
+								result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
+									LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+									LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
+									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_auth(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
+		
+								if(result.rows.length > 0){
+									result.rows = propNamesToLowerCase(result.rows)
+									connection.close()
+		
+									return (
+										res.status(200).json({
+											status: 200,
+											error: false,
+											message: 'Successfully added new data!',
+											changes: result.rows,//req.body,
+											columnErrors: columnErrors
+										})
+									)
+								}
 							}
 						}
-
-                        //let query = `INSERT INTO ANNUAL_INV (${cols}) VALUES (${vals})`
-
 					}
 				}
 
@@ -352,6 +362,7 @@ exports.add = async function(req, res) {
 				}
 			}
 		}
+
 		connection.close()
 		res.status(400).json({
 			status: 400,
@@ -379,8 +390,7 @@ exports.update = async function(req, res) {
 
 	try{
 		const {changes,undo} = req.body.params
-
-		console.log(changes)
+		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
@@ -392,12 +402,12 @@ exports.update = async function(req, res) {
 				const cell_id = cells.old ? cells.old.id : cells.id
 
 				let result = await connection.execute(`SELECT * FROM ANNUAL_INV WHERE ID = :0`,[cell_id],dbSelectOptions)
-				const editable = result.rows.length > 0 ? (result.rows[0].LOCKED == 2 ? true : false) : true
+				const isRecordNotLocked = result.rows.length > 0 ? (result.rows[0].LOCKED == 2 ? true : false) : true
 				const annual_inv_equipment_group_id = result.rows[0].ANNUAL_INV_EQUIPMENT_GROUP_ID
 
 				result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INV'`,{},dbSelectOptions)
 
-				if(result.rows.length > 0 && editable){
+				if(result.rows.length > 0 && isRecordNotLocked){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_ANNUAL_INV.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 					const isUpdate = newData.update ? (newData.update ? true : false) : false
@@ -408,10 +418,8 @@ exports.update = async function(req, res) {
 						let query = `UPDATE ANNUAL_INV SET ANNUAL_INV_EQUIPMENT_GROUP_ID = :0
 									WHERE ID = ${cell_id}`
 
-									console.log(eGroupId,query)
 						if(eGroupId != -1){
 							result = await connection.execute(query,[eGroupId],{autoCommit:AUTO_COMMIT.UPDATE})
-							console.log(result)
 						}else {
 							columnErrors = {...columnErrors,errorFound:true}
 						}
@@ -436,33 +444,42 @@ exports.update = async function(req, res) {
                         let query = `UPDATE ANNUAL_INV SET ${cols}
                                     WHERE ID = ${cells.old.id}`
                     
-                        console.log(query)
                         result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-                        console.log(result)
 					}
 
-					connection.close()
+					if(result.rowsAffected > 0){
+						result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
+							LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+							LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
+							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_auth(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
 
-					return (
-						res.status(200).json({
-							status: 200,
-							error: false,
-							message: 'Successfully update data with id: ', //+ req.params.id,
-							data: [],//req.body,
-							columnErrors: columnErrors
-						})
-					)
+						if(result.rows.length > 0){
+							result.rows = propNamesToLowerCase(result.rows)
+
+							connection.close()
+
+							return (
+								res.status(200).json({
+									status: 200,
+									error: false,
+									message: 'Successfully update data', //+ req.params.id,
+									changes: result.rows,//req.body,
+									columnErrors: columnErrors
+								})
+							)
+
+						}
+					}
 				}
 			}
 		}
 		connection.close()
 		
 		return (
-			res.status(200).json({
-				status: 200,
+			res.status(400).json({
+				status: 400,
 				error: true,
 				message: 'Could not update data', //+ req.params.id,
-				data: [],//req.body,
 				columnErrors: columnErrors
 			})
 		)
