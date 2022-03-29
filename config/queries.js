@@ -98,7 +98,7 @@ module.exports = {
 	// on h.hra_num = hec.hra_num
 	// LEFT JOIN (${registered_users}) ur
 	// on ur.id = h.updated_by`),
-	hra_employee_form_all: (id) => (`SELECT 
+	hra_employee_form_auth: (id) => (`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,
 	e.first_name hra_first_name,
@@ -116,22 +116,22 @@ module.exports = {
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
 	on ur.id = h.updated_by `),
-	hra_employee_form_auth: (id) => (`SELECT 
-	h.hra_num,
-	e.first_name || ' ' || e.last_name as hra_full_name,
-	e.first_name hra_first_name,
-	e.last_name hra_last_name,
-	e.TITLE as hra_title,
-	e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
-	e.WORK_PHONE as hra_work_phone,
-	hec.HRA_EQUIPMENT_COUNT
-	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
-	LEFT JOIN (${employee}) e 
-	on h.employee_id = e.id
-	LEFT JOIN (${equipment_count.hra}) hec
-	on h.hra_num = hec.hra_num
-	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by `),
+	// hra_employee_form_auth: (id) => (`SELECT 
+	// h.hra_num,
+	// e.first_name || ' ' || e.last_name as hra_full_name,
+	// e.first_name hra_first_name,
+	// e.last_name hra_last_name,
+	// e.TITLE as hra_title,
+	// e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
+	// e.WORK_PHONE as hra_work_phone,
+	// hec.HRA_EQUIPMENT_COUNT
+	// FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
+	// LEFT JOIN (${employee}) e 
+	// on h.employee_id = e.id
+	// LEFT JOIN (${equipment_count.hra}) hec
+	// on h.hra_num = hec.hra_num
+	// LEFT JOIN (${registered_users}) ur
+	// on ur.id = h.updated_by `),
 	hra_employee_form_self: (id) => (`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,

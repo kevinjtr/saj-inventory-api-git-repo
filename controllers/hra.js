@@ -4,7 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol, hra_employee, hra_employee_form_all, hra_employee_form_auth, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
+const {employee_officeSymbol, hra_employee, hra_employee_form_auth, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
 const {rightPermision} = require('./validation/tools/user-database')
 const noReplaceCols = ['hra_num']
 

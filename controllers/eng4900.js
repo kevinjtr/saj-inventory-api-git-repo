@@ -20,7 +20,7 @@ const BANNED_COLS_FORM_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_B
 const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
-const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_forms"]
+const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg_forms"]
 
 const printElements = (elements) => {
 	let str = ""
@@ -55,6 +55,8 @@ fs.status as status_alias,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END is_losing_hra,
+CASE WHEN f.GAINING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END is_gaining_hra,
 l_hra.losing_hra_first_name,
 l_hra.losing_hra_last_name,
 l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
@@ -160,17 +162,19 @@ const ra = {
 }
 
 const requiresSignatureRemoval = (new_status, old_status, requested_action) => {
-	switch(requested_action) {
-		case "Excess":
-			return new_status < 5 && old_status > new_status; //completed losing signature. before: 4
-		case "Issue":
-		case "Transfer":
-		case "Repair":
-		case "FOI":
-			return new_status < 7 && old_status > new_status;//completed gaining signature. before: 6
-		default:
-		  return false;
-	  }
+	//console.log(new_status, old_status)
+
+	return new_status < 7 && old_status > new_status
+	// switch(requested_action) {
+	// 	case "Excess":
+	// 	case "Issue":
+	// 	case "Transfer":
+	// 	case "Repair":
+	// 	case "FOI":
+	// 		return old_status > new_status;//completed gaining signature. before: 6
+	// 	default:
+	// 	  return false;
+	//   }
 }
 
 const FORM_4900_STATUS = {
@@ -205,15 +209,73 @@ const FORM_4900_STATUS = {
 		8:"Sent to Logistics",
 		9:"Sent to PBO",
 		10:"Completed",
-	}
+	},
+	steps: [
+		{id:1, label:"Form Edit"},
+		{id:2, label:"Individual/Vendor signature required"},
+		{id:3, label:"Completed Individual/Vendor signature"},
+		{id:4, label:"Losing HRA signature required"},
+		{id:5, label:"Completed losing HRA signature"},
+		{id:6, label:"Gaining HRA signature required"},
+		{id:7, label:"Completed gaining HRA signature"},
+		{id:8, label:"Sent to Logistics"},
+		{id:9, label:"Sent to PBO"},
+		{id:10, label:"Completed"},
+		{id:11, label:"Form Rejected"}
+	],
 }
 
 const REJECT_FORM = {id:11, label:"Form Reject"}
 
-const getFormStatusOptions = (requested_action, status) => {
+const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, is_gaining_hra) => {
+
+	if(status == 1){
+		if([2,3,4].includes(new_status)){//contains a losing hra.
+			return true
+		}
+	}else if(status == 2){//form sign.
+		if([3, 11].includes(new_status)){
+			return true
+		}	
+	}else if(status == 3){
+		
+		if([1, 4].includes(new_status)){
+			return true
+		}	
+	}else if(status == 4){//form sign.
+
+		if([5, 11].includes(new_status)){
+			return true
+		}	
+	}else if(status == 5){
+		
+		if([1, 6].includes(new_status)){
+			return true
+		}	
+	}else if(status == 6){//form sign.
+		
+		if(new_status == 7 && is_gaining_hra && requested_action == 2){
+			return true
+		}else if(new_status == 7 && is_losing_hra && requested_action != 2){
+			return true
+		}else if(new_status == 11){
+			return true
+		}
+
+	}else if(status >= 7){
+		if(new_status == 1 || new_status > status){
+			return true
+		}
+	}
+
+	return false
+}
+
+const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gaining_hra, tab_idx) => {
 	const ids = Object.keys(FORM_4900_STATUS["all"])
 	const returnArray = []
 
+	console.log('req_action',requested_action, tab_idx) 
 	if([2, 4, 6, 11].includes(status)){//before 3, 5, 10
 		returnArray.push(REJECT_FORM)
 	}
@@ -228,11 +290,14 @@ const getFormStatusOptions = (requested_action, status) => {
 				returnArray.push({id:id, label:label})
 			}
 		}else if(status == 2){//form sign. before: 3, 5
-			if([2, 3, 4].includes(id)){//before: 3, 5
+
+			if(id == 2 || (id == 3 && tab_idx == 2)){//before: 3, 5
 				console.log(id)
 				returnArray.push({id:id, label:label})
-			}	
+			}
+
 		}else if(status == 3){//form sign. before: 3, 5
+
 			if(id == 1){
 				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			}else if([3, 4].includes(id)){//before: 3, 5
@@ -241,10 +306,11 @@ const getFormStatusOptions = (requested_action, status) => {
 			}	
 		}else if(status == 4){//form sign. before: 3, 5
 
-			if([4, 5].includes(id)){//before: 3, 5
+			if(id == 4 || (id == 5 && tab_idx == 2)){//before: 3, 5
 				console.log(id)
 				returnArray.push({id:id, label:label})
-			}	
+			}
+
 		}else if(status == 5){//form sign. before: 3, 5
 			
 			if(id == 1){
@@ -254,11 +320,19 @@ const getFormStatusOptions = (requested_action, status) => {
 				returnArray.push({id:id, label:label})
 			}	
 		}else if(status == 6){//form sign. before: 3, 5
+
+			if(requested_action == "Transfer"){
+				if(id == 6 || (id == 7 && is_gaining_hra && tab_idx == 2)){//before: 3, 5
+					console.log(id)
+					returnArray.push({id:id, label:label})
+				}
+			}else{
+				if(id == 6 || (id == 7 && tab_idx == 2)){//before: 3, 5
+					console.log(id)
+					returnArray.push({id:id, label:label})
+				}
+			}
 			
-			if([6, 7].includes(id)){//before: 3, 5
-				console.log(id)
-				returnArray.push({id:id, label:label})
-			}	
 		}else if(status >= 7){
 			if(id == 1){
 				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
@@ -270,21 +344,6 @@ const getFormStatusOptions = (requested_action, status) => {
 
 	return returnArray
 }
-
-// const getFormStatusOptions = (requested_action, status) => {
-
-// 	switch(requested_action) {
-// 		case "Issue":
-// 			return get4900FilteredOptions(status, "gaining", requested_action)
-// 		case "Excess":
-// 			return get4900FilteredOptions(status, "losing", requested_action)
-// 		case "Transfer":
-// 		case "Repair":
-// 		case "FOI":
-// 		default:
-// 			return get4900FilteredOptions(status, "all", requested_action)
-// 	  }
-// }
 		
 const isFormCompleted = (rowData) => {//Change to Accept Equipments.
 	const {status} = rowData
@@ -881,7 +940,7 @@ const FormsToMaterialTableFormat = (form_groups) => {
 
 	//console.log(form_groups)
 	for(const id in form_groups){
-		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, requested_action, status_alias} = form_groups[id][0]
+		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias} = form_groups[id][0]
 		
 		form_return.push({
 			bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
@@ -891,6 +950,8 @@ const FormsToMaterialTableFormat = (form_groups) => {
 			losing_hra: losing_hra_num ? `${losing_hra_num} - ${losing_hra_full_name}` : '',
 			status: status,
 			originator:originator,
+			is_losing_hra:is_losing_hra,
+			is_gaining_hra:is_gaining_hra,
 			requested_action: requested_action,
 			status_alias: status_alias,
 		})
@@ -935,9 +996,10 @@ const getQueryForTab = (tab_name, user) => {
 		// query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
 
 		//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
-	} else if(tab_name == "completed_forms"){
-		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5)) 
+	} else if(tab_name == "completed_and_ipg_forms"){
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)})) 
 		UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5))) `
+		//AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5)
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
 		
@@ -955,47 +1017,7 @@ const searchEng4900UpdatedData = async (form_id, connection, user) => {
 		const tab_name = ALL_ENG4900_TABS[i]
 
 		let query = getQueryForTab(tab_name, user)
-		// let query = queryForSearch(user)
-
-		// if(tab_name == "my_forms"){
-		// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (4,10) AND F.REQUESTED_ACTION in (3,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
-
-		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (6,10) AND F.REQUESTED_ACTION in (1,4,6))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
-		// }
-
-		// if(tab_name == "hra_forms"){
-		// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (4,10) AND F.REQUESTED_ACTION in (3,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
-		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (6,10) AND F.REQUESTED_ACTION in (1,4,6))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
-		// }
-
-		// if(tab_name == "sign_forms"){//Change: needs to be self.
-		// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (3))
-		// 			UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 4 AND F.REQUESTED_ACTION in (3,5))) `
-					
-		// 			// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
-		// 			//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
-
-		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,4,6))) `
-
-		// 	//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
-		// }
-
-		// if(tab_name == "completed_forms"){
-		// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (3)) 
-		// 	UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (3,5))) `
-		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
-		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
-			
-		// 	query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,4,6))) `
-		// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
-		// }
-
 		query = `SELECT * FROM (${query}) WHERE FORM_ID = :0`
-
-		//if(i == 1)
-			//console.log('\n-----------------------------------------------------------------------------------\n', query ,'\n----------------------------------------------------------------\n')
-			//console.log(`QUERY-${tab_name}`,query)
-
 		let result =  await connection.execute(`${query}`,[form_id],dbSelectOptions)
 		let {rows} = result
 
@@ -1013,8 +1035,9 @@ const searchEng4900UpdatedData = async (form_id, connection, user) => {
 	Object.keys(tabsReturnObject).map(function(tab){
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
-				const {requested_action, status} = tabsReturnObject[tab][elem]
-				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status)
+				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				tabsReturnObject[tab][elem].all_status_steps = FORM_4900_STATUS.steps
 			})
 		}
 	})
@@ -1055,8 +1078,9 @@ const getTabData = async (connection, user) => {
 	Object.keys(tabsReturnObject).map(function(tab){
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
-				const {requested_action, status} = tabsReturnObject[tab][elem]
-				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status)
+				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				tabsReturnObject[tab][elem].all_status_steps = FORM_4900_STATUS.steps
 			})
 		}
 	})
@@ -1156,8 +1180,9 @@ exports.search2 = async function(req, res) {
 			const search_return = FormsToMaterialTableFormat(form_groups)
 
 			search_return.map(function(form_record){
-				const {requested_action, status} = form_record
-				form_record.status_options = getFormStatusOptions(requested_action, status)
+				const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
+				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				form_record.all_status_steps = FORM_4900_STATUS.steps
 				return form_record
 			})
 
@@ -1293,6 +1318,7 @@ exports.add = async function(req, res) {
 	const cells = {}
 	let cols = ""
 	let vals = ""
+	const {tab} = req.body
 
 	for(const key of keys){
 		if(req.body.form[key]){
@@ -1355,8 +1381,9 @@ exports.add = async function(req, res) {
 				const search_return = FormsToMaterialTableFormat(form_groups)
 
 				search_return.map(function(form_record){
-					const {requested_action, status} = form_record
-					form_record.status_options = getFormStatusOptions(requested_action, status)
+					const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
+					form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+					form_record.all_status_steps = FORM_4900_STATUS.steps
 					return form_record
 				})
 
@@ -1405,8 +1432,6 @@ exports.update = async function(req, res) {
 	try{
 		const {changes} = req.body.params
 
-		console.log(changes)
-
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {newData} = changes[row];
@@ -1428,57 +1453,93 @@ exports.update = async function(req, res) {
 				const cell_id = newData.hasOwnProperty('form_id') ? newData.form_id : (newData.hasOwnProperty('id') ? newData.id : -1)
 
 				if(cell_id != -1 && status){
-					let from_record_result = await connection.execute(`SELECT f.*, ra.alias as requested_action_alias FROM FORM_4900 f
-					LEFT JOIN REQUESTED_ACTION ra on ra.id = f.requested_action WHERE F.ID = :0`,[cell_id],dbSelectOptions)
+					let from_record_result = await connection.execute(`SELECT * FROM (${queryForSearch(req.user)}) WHERE FORM_ID = :0`,[cell_id],dbSelectOptions)
 
-					console.log("HERE 1")
 					if(from_record_result.rows.length > 0){
-
 						from_record_result.rows =  propNamesToLowerCase(from_record_result.rows)
 						db_update_results.fs_record.status_downgrade = from_record_result.rows[0].status > status
-						const {file_storage_id, requested_action, requested_action_alias, losing_hra, gaining_hra} = from_record_result.rows[0]
-						const form_4900_changes = {0:{...newData, id: cell_id}}
+						const {file_storage_id, requested_action, requested_action_alias, is_losing_hra, is_gaining_hra} = from_record_result.rows[0]
 
-						console.log("HERE 2 (formUpdate)",form_4900_changes)
-						db_update_results.form_4900.error = !(await formUpdate(connection, edipi, {...form_4900_changes}, false))
-
-						if(db_update_results.fs_record.status_downgrade){
-							console.log("HERE 3 (downgrade)")
+						if(isNewStatusValid(requested_action, status, from_record_result.rows[0].status, is_losing_hra, is_gaining_hra)){
+							console.log('new_status is valid')
 							db_update_results.fs_record.signature_removal = requiresSignatureRemoval(status, from_record_result.rows[0].status, requested_action_alias)
+							let form_4900_changes = {}
 
-							if(db_update_results.fs_record.signature_removal && file_storage_id){
-								let file_storage_del_result = await connection.execute('UPDATE FILE_STORAGE SET DELETED = 1 WHERE ID = :0',[file_storage_id],{autoCommit:false})
-								db_update_results.fs_record.deleted = file_storage_del_result.rowsAffected > 0
-								db_update_results.fs_record.error = file_storage_del_result.rowsAffected == 0
-							}						
+							if(db_update_results.fs_record.signature_removal){
+								form_4900_changes = {0:{...newData, id: cell_id, file_storage_id: null}}
+							}else{
+								form_4900_changes = {0:{...newData, id: cell_id}}
+							}
 
-						}else if(status == 10){//form is completed.
-							console.log("HERE 4 (isComplete)")
-							db_update_results.form_4900.complete = true
-							db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+							console.log("HERE 2 (formUpdate)",form_4900_changes)
+							db_update_results.form_4900.error = !(await formUpdate(connection, edipi, {...form_4900_changes}, false))
+	
+							if(db_update_results.fs_record.status_downgrade){
+								console.log("HERE 3 (downgrade)")
+	
+								if(db_update_results.fs_record.signature_removal && file_storage_id){
+									console.log("HERE 3 (downgrade) delete")
+
+									const binds = {
+										id: file_storage_id,
+										file_name: {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
+									}
+
+									let file_storage_del_result = await connection.execute('UPDATE FILE_STORAGE SET DELETED = 1 WHERE ID = :0',[file_storage_id],{autoCommit:false})
+									db_update_results.fs_record.error = file_storage_del_result.rowsAffected == 0
+									
+									if(file_storage_del_result.rowsAffected > 0){
+										db_update_results.fs_record.deleted = true
+										let file_storage_fetch_result = await connection.execute('SELECT FILE_NAME FROM FILE_STORAGE WHERE ID = :0',[file_storage_id],dbSelectOptions)
+
+										if(file_storage_fetch_result.rows.length > 0){
+											db_update_results.fs_record.file_name = file_storage_fetch_result.rows[0].FILE_NAME
+										}
+									}
+								}						
+	
+							}else if(status == 10){//form is completed.
+								console.log("HERE 4 (isComplete)")
+								db_update_results.form_4900.complete = true
+								db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+							}
+	
+							if(!isTransactionErrorFound(db_update_results)){
+								//commit changes.
+								await connection.commit()
+								//await connection.rollback()//DELETE THIS LINE.
+								console.log(db_update_results)
+
+								if(db_update_results.fs_record.deleted && db_update_results.fs_record.file_name){
+									const pdf_path = path.join(__dirname,`../file_storage/pdf/${db_update_results.fs_record.file_name}`)
+
+									await fs.promises.unlink(pdf_path, (err) => {
+										if (err) {
+											console.error(err)
+											return
+										}
+										
+										console.log("file removed.")
+									})
+								}
+								//await connection.rollback()//DELETE THIS LINE.
+								const tabsReturnObject = await getTabData(connection, req.user)
+								//const tabsReturnObject = await searchEng4900UpdatedData(cell_id, connection, req.user)
+								//const tabsDelReturnObject = searchEng4900DeletedData(tab_idx,tabsReturnObject,cell_id)
+								
+								return(
+									res.status(200).json({
+										status: 200,
+										error: false,
+										tabUpdatedData:tabsReturnObject,
+									})
+								)
+	
+							}
+						}else{
+							console.log('new_status is not valid')
 						}
 
-						
-						
-
-						if(!isTransactionErrorFound(db_update_results)){
-							//commit changes.
-							await connection.commit()
-							console.log(db_update_results)
-							//await connection.rollback()//DELETE THIS LINE.
-							const tabsReturnObject = await getTabData(connection, req.user)
-							//const tabsReturnObject = await searchEng4900UpdatedData(cell_id, connection, req.user)
-							//const tabsDelReturnObject = searchEng4900DeletedData(tab_idx,tabsReturnObject,cell_id)
-							
-							return(
-								res.status(200).json({
-									status: 200,
-									error: false,
-									tabUpdatedData:tabsReturnObject,
-								})
-							)
-
-						}
 
 						//error is found.
 						await connection.rollback()
@@ -1552,9 +1613,15 @@ exports.destroy = async function(req, res) {
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.upload = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	await connection.execute('SAVEPOINT form_update')
 	const changes = await ParseHeaders(req.headers.changes)
 	const {edipi} = req.headers.cert
-
+	const db_update_results = {
+		fs_record: {deleted:false, status_downgrade:false, signature_removal: false, error:false},
+		equipment_result: {error: false},
+		form_4900: {complete:false,error:false}
+	}
+	
 	if (!req.files) {
         return res.status(500).send({ msg: "file is not found" })
 	}
@@ -1562,141 +1629,94 @@ exports.upload = async function(req, res) {
     // accessing the file
 	const myFile = req.files.file;
 
-	console.log(myFile)
-
 	if(isFileValid(myFile.name,'pdf') && req.params.id >= 0 && Object.keys(changes).length){
 		const {id} = req.params
-		let result = await connection.execute(`select * from form_4900 f
-		left join (select id as file_id, file_name, folder from file_storage) fs 
-		on f.file_storage_id = fs.file_id
-		where f.id = ${id} `, {}, dbSelectOptions)
+		const new_status = changes.status
 
+		let result = await connection.execute(`SELECT * FROM (${queryForSearch(req.user)}) F 
+		LEFT JOIN file_storage fs on fs.id = f.file_storage_id 
+		WHERE F.FORM_ID = :0`,[id],dbSelectOptions)
 		let new_filename = ""
 
 		if(result.rows.length != 0){
 			result.rows = propNamesToLowerCase(result.rows)
+			const {requested_action, requested_action_alias, is_losing_hra, is_gaining_hra, file_storage_id} = result.rows[0]
+			const old_status = result.rows[0].status
+			const status_upgrade = new_status > old_status
+			db_update_results.fs_record.status_downgrade = old_status > new_status
 
-			console.log(result.rows[0])
-			if(result.rows[0].file_storage_id > 0){
-				new_filename = result.rows[0].file_name
+			if(isNewStatusValid(requested_action, new_status, old_status, is_losing_hra, is_gaining_hra) && status_upgrade){
+
+				console.log('here1')
+
+				if(file_storage_id > 0){
+					console.log('here2')
+					new_filename = result.rows[0].file_name
+				}else{
+					console.log('here2')
+					new_filename = Math.floor(Date.now() / 1000) + "-" + myFile.name
+				}
+
+				console.log(pdfUploadPath + new_filename)
+
+				myFile.mv(pdfUploadPath + new_filename, async function(err) {
+
+					console.log(err)
+					if(err) {
+						console.log('here3-error')
+						return res.status(500).send(err);
+					}
+						
+					console.log(console.log('here4'))
+					const file_id = await saveFileInfoToDatabase(connection, new_filename, 'pdf')
+
+					if(file_id != -1){
+						const form_4900_changes = {0:{...changes, id: id, file_storage_id: file_id}}
+						console.log('Updating FORM_4900 Record...')
+		
+						db_update_results.form_4900.error = !(await formUpdate(connection, edipi, {...form_4900_changes}, false))
+						
+						if(new_status == 10){//form is completed.
+							console.log("HERE 4 (isComplete)")
+							db_update_results.form_4900.complete = true
+							db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+						}
+	
+						if(!isTransactionErrorFound(db_update_results)){
+							connection.commit()
+							const tabsReturnObject = await getTabData(connection, req.user)
+							
+							return(
+								res.status(200).json({
+									status: 200,
+									error: false,
+									msg:'File uploaded!',
+									tabUpdatedData:tabsReturnObject,
+								})
+							)
+						}else{
+							connection.rollback()
+							return(
+								res.status(400).json({
+									status: 400,
+									error: true,
+									msg:'File not uploaded!',
+									tabUpdatedData:{},
+								})
+							)
+						}
+					}else{
+						res.status(400).send({msg:'File not uploaded!'});
+					}
+				});
 			}else{
-				new_filename = Math.floor(Date.now() / 1000) + "-" + myFile.name
+				res.status(400).send({msg:'File not uploaded!'});
 			}
 		}else{
-			new_filename = Math.floor(Date.now() / 1000) + "-" + myFile.name
+			res.status(400).send({msg:'File not uploaded!'});
 		}
-
-		console.log(new_filename)
-
-		const newData = JSON.parse(req.headers.changes)
-		result = await connection.execute(`select * from form_4900 where id = ${id}`,{},dbSelectOptions)
-		result.rows = propNamesToLowerCase(result.rows)
-		const {status} = result.rows[0]
-
-		const status_upgrade = newData.status > status
-
-		if(status_upgrade){
-			myFile.mv(pdfUploadPath + new_filename, async function(err) {
-				if (err)
-				  return res.status(500).send(err);
-			
-				  console.log(new_filename)
-				 const file_id = await saveFileInfoToDatabase(connection, new_filename, 'pdf')
-				 
-				 const form_4900_changes = {0:{...newData, id: id, file_storage_id: file_id}}
-	
-				 console.log('Updating FORM_4900 Record...')
-	
-				 const formUpdateResult = await formUpdate(connection, edipi, form_4900_changes)
-	
-				 console.log(formUpdateResult ? "sucessfully updated form_4900" : "error updating form_4900")
-
-
-
-	
-				//update eng4900 file_storage_id and status
-				res.send({msg:'File uploaded!',
-			
-			});
-			  });
-		}else{
-			res.status(400).send('Status Downgrade: File was not uploaded!');
-		}
-
 		
 	}else{
-		res.status(500).send('API error: File was not uploaded!');
+		res.status(400).send({msg:'File not uploaded!'});
 	}
-
-	//res.status(500).send({ msg: "something bad happened." });
-
-
-	//console.log(myFile)
-// 	const connection = await oracledb.getConnection(dbConfig);
-
-// 	const binds = {
-// 		file_name: myFile.name,
-// 		content_type: myFile.mimetype,
-// 		content_buffer: myFile.data,
-// 		id: {
-// 			type: oracledb.NUMBER,
-// 			dir: oracledb.BIND_OUT
-// 		}
-// 		};
-		
-// 	let result = await connection.execute(createSql, binds,{autoCommit:true});
-
-// 	const getSql =
-//  `select file_name "file_name",
-//     dbms_lob.getlength(blob_data) "file_length",
-//     content_type "content_type",
-//     blob_data "blob_data"
-//   from file_storage
-//   where id = :id`
-
-// 	const binds2 = {
-// 		id: result.outBinds.id[0]
-// 	};
-// 	const opts = {
-// 		fetchInfo: {
-// 		blob_data: {
-// 			type: oracledb.BUFFER
-// 		}
-// 		}
-// 	};
-// 	result = await connection.execute(getSql, binds2, opts);
-// 	console.log(result.rows[0])
-// 	return res.send(result.rows[0])
-
-
-	
-// 	//  mv() method places the file inside public directory
-//     // myFile.mv(path.join(__dirname,`../public/${myFile.name}`), async function (err) {
-//     //     if (err) {
-//     //         console.log(err)
-//     //         return res.status(500).send({ msg: "Error occured" });
-// 	// 	}
-
-
-// 	// 	//const valid_signature = await ValidateEng4900Signature(`./public/${myFile.name}`,"losing")
-// 	// 	//console.log("losing hra signed? " + (valid_signature ? "yes":"no"))
-
-// 	// 	const connection =  await oracledb.getConnection(dbConfig);
-// 	// 	let result = await connection.execute('select * from pdf_storage',{},{...dbSelectOptions,fetchInfo: {
-// 	// 		blobdata: {
-// 	// 		  type: oracledb.BUFFER
-// 	// 		}
-// 	// 	  }})
-
-// 	// 	  await fs.promises.writeFile(path.join(__dirname,'../output/test_download.pdf'), result.rows[0].BLOBDATA, () => {
-// 	// 		console.log('PDF created!')
-// 	// 	})
-
-// 	// 	//console.log(result.rows[0].BLOBDATA)
-// 	// 	//await savePdfToDatabase(myFile)
-// 	// 	//await savePdfToDatabase(path.join(__dirname,`../public/${myFile.name}`))
-// 	// });
-	
-// 	// returing the response with file path and name
-// 	//return res.send('file upload done.');
 };
