@@ -7,7 +7,7 @@ const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {rightPermision} = require('./validation/tools/user-database')
-const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_self, employee_officeSymbol, EQUIPMENT, registered_users} = require('../config/queries');
+const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_all, hra_num_form_self, employee_officeSymbol, EQUIPMENT, registered_users} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
@@ -48,7 +48,35 @@ const equipment_fetch_type = (type, user_id) => {
 }
 
 const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employee}) hra_emp 
-						RIGHT JOIN (${equipment_employee}) eq_emp 
+						RIGHT JOIN (
+							SELECT
+							eq.ID,
+							eq.BAR_TAG_NUM,
+							eq.CATALOG_NUM,
+							eq.BAR_TAG_HISTORY_ID,
+							eq.MANUFACTURER,
+							eq.MODEL,
+							eq.CONDITION,
+							eq.SERIAL_NUM,
+							eq.ACQUISITION_DATE,
+							eq.ACQUISITION_PRICE,
+							eq.DOCUMENT_NUM,
+							eq.ITEM_TYPE,
+							eq.HRA_NUM,
+							ur.UPDATED_BY_FULL_NAME,
+							e.id as employee_id,
+							e.first_name || ' ' || e.last_name as employee_full_name,
+							e.first_name employee_first_name,
+							e.last_name employee_last_name,
+							e.TITLE as employee_title,
+							e.OFFICE_SYMBOL as employee_office_symbol,
+							e.WORK_PHONE as employee_work_phone
+							FROM ${EQUIPMENT} eq
+							LEFT JOIN employee e
+							on eq.user_employee_id = e.id
+							LEFT JOIN (${registered_users}) ur
+							on ur.id = eq.updated_by 
+						) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(type, user_id)}`
 
 
@@ -84,6 +112,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							eq.DOCUMENT_NUM,
 							eq.ITEM_TYPE,
 							eq.HRA_NUM,
+							ur.UPDATED_BY_FULL_NAME,
 							e.id as employee_id,
 							e.first_name || ' ' || e.last_name as employee_full_name,
 							e.first_name employee_first_name,
@@ -91,7 +120,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
 							e.WORK_PHONE as employee_work_phone
-							FROM EQUIPMENT eq
+							FROM ${EQUIPMENT} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
@@ -111,9 +140,6 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 
 	return tabsReturnObject
 }
-
-
-
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
@@ -156,7 +182,7 @@ exports.form = async function(req, res) {
 	let hra_num_groups = {}
 
 	try{
-		let result =  await connection.execute(`SELECT * from (${hra_num_form_auth(req.user)}) hra_emp
+		let result =  await connection.execute(`SELECT * from (${hra_num_form_all(req.user)}) hra_emp
 												LEFT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
 
@@ -379,7 +405,7 @@ exports.search = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const edit_rights = await rightPermision(req.headers.cert.edipi)
-	const tab_edits = {0:false,1:edit_rights,2:false,3:edit_rights}
+	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights}
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
@@ -446,7 +472,8 @@ exports.search2 = async function(req, res) {
 
 			const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
 			let tabsReturnObject = {}
-			let hras = []	
+			let hras = []
+			let my_hras = []	
 			let employees = []
 
 			if(init){
@@ -468,12 +495,20 @@ exports.search2 = async function(req, res) {
 					
 				}
 
-				let result =  await connection.execute(`${hra_employee}`,{},dbSelectOptions) //fetch by destrict
+				let result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_all(req.user)})`,{},dbSelectOptions) //fetch by destrict
 				if(result.rows.length > 0){
 					let {rows} = result
 					rows = propNamesToLowerCase(rows)
 					hras = [...rows]
 				}
+
+				result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_self(req.user)})`,{},dbSelectOptions) //fetch by destrict
+				if(result.rows.length > 0){
+					let {rows} = result
+					rows = propNamesToLowerCase(rows)
+					my_hras = [...rows]
+				}
+
 
 				result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
 
@@ -490,6 +525,7 @@ exports.search2 = async function(req, res) {
 					data: tabsReturnObject,
 					editable: tab_edits,
 					hras: hras,
+					my_hras:my_hras,
 					employees: employees
 				});
 			}

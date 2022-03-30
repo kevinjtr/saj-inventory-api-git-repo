@@ -9,11 +9,12 @@ const groupBy = require('lodash/groupBy');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_auth, hra_num_form_all, hra_employee_form_self, hra_employee_form_auth, hra_employee, EQUIPMENT} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
-const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js')
+const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js');
+const { Console } = require('console');
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 const BANNED_COLS_FORM_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
@@ -54,9 +55,9 @@ f.file_storage_id,
 fs.status as status_alias,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END originator,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END is_losing_hra,
-CASE WHEN f.GAINING_HRA IN (${hra_num_form_auth(id)}) THEN 1 ELSE 0 END is_gaining_hra,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
+CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,
 l_hra.losing_hra_first_name,
 l_hra.losing_hra_last_name,
 l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
@@ -85,7 +86,7 @@ e.id as EQUIPMENT_ID,
 	e.DOCUMENT_NUM, 
 	e.ITEM_TYPE , 
 	e.USER_EMPLOYEE_ID
-	from form_4900 f
+	from ${FORM_4900} f
 	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
 	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
 	LEFT JOIN requested_action ra on ra.id = f.requested_action
@@ -118,7 +119,7 @@ const newQuerySelById = `SELECT
 		f.expiration_date,
 		TO_CHAR(f.expiration_date,'mm/dd/yyyy') as expiration_date_print,
 		f.temporary_loan
-		from form_4900 f, requested_action ra,
+		from ${FORM_4900} f, requested_action ra,
 		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where ra.id = f.requested_action and (f.losing_hra = l_hra.losing_hra_num or (f.losing_hra is NULL and l_hra.losing_hra_num  is null)) and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0 
 		UNION ALL (
@@ -145,7 +146,7 @@ const newQuerySelById = `SELECT
 			f.expiration_date,
 			TO_CHAR(f.expiration_date,'mm/dd/yyyy') as expiration_date_print,
 			f.temporary_loan
-			from form_4900 f, requested_action ra,
+			from ${FORM_4900} f, requested_action ra,
 			(${eng4900_gainingHra}) g_hra
 			where ra.id = f.requested_action and f.losing_hra is NULL and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0
 		) `
@@ -572,7 +573,7 @@ const get4900HraAndEquipments = async function(connection, user, edit_rights) {
 			}
 
 			if(tab_name == "hra_forms"){
-				auth_hras = edit_rights ? hra_employee_form_auth(user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(user)
+				auth_hras = edit_rights ? hra_employee_form_all(user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_all(user)
 			}
 
 			let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
@@ -657,7 +658,7 @@ const formUpdate = async (connection, edipi, changes, auto_commit=true) => {
 			if(changes.hasOwnProperty(row)) {
 				const {id} = changes[row];
 				const cells = {new: changes[row]}
-				let result = await connection.execute(`SELECT * FROM FORM_4900 WHERE ID = :0`,[id],dbSelectOptions)
+				let result = await connection.execute(`SELECT * FROM ${FORM_4900} WHERE ID = :0`,[id],dbSelectOptions)
 
 				if(result.rows.length > 0){
 					result.rows = propNamesToLowerCase(result.rows)
@@ -695,7 +696,7 @@ const formUpdate = async (connection, edipi, changes, auto_commit=true) => {
 									}
 								}
 					
-								let query = `UPDATE FORM_4900 SET ${cols} WHERE ID = ${cells.old.id}`
+								let query = `UPDATE ${FORM_4900} SET ${cols} WHERE ID = ${cells.old.id}`
 							
 
 								console.log(query,cells.update)
@@ -979,31 +980,31 @@ const getQueryForTab = (tab_name, user) => {
 		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1,2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
 		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
 	} else if(tab_name == "hra_forms"){
-		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1,2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
-		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1,2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
+		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
 	} else if(tab_name == "sign_forms"){//Change: needs to be self.
-		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2))
-				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-
-				UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) `
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2))
+				UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1, 3, 4, 5))) `
 				
-				//UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
+				//UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
 
 
 				// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
 				//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
 
-		// query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
+		// query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
 
 		//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
 	} else if(tab_name == "completed_and_ipg_forms"){
-		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)})) 
-		UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5))) `
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)})) 
+		UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5))) `
 		//AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5)
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
 		
-		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
+		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
 	}
 
@@ -1367,7 +1368,7 @@ exports.add = async function(req, res) {
 				}
 			}
 
-			let query = `INSERT INTO FORM_4900 (${cols}) VALUES (${vals})`
+			let query = `INSERT INTO ${FORM_4900} (${cols}) VALUES (${vals})`
 			result = await connection.execute(query,cells,{autoCommit:true})
 
 			if(result.rowsAffected > 0){
@@ -1501,7 +1502,7 @@ exports.update = async function(req, res) {
 							}else if(status == 10){//form is completed.
 								console.log("HERE 4 (isComplete)")
 								db_update_results.form_4900.complete = true
-								db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+								db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0]})
 							}
 	
 							if(!isTransactionErrorFound(db_update_results)){
@@ -1550,7 +1551,7 @@ exports.update = async function(req, res) {
 							res.status(400).json({
 								status: 400,
 								error: true,
-								tabChanges:{}
+								tabUpdatedData:{}
 							})
 						)
 					}
@@ -1565,7 +1566,7 @@ exports.update = async function(req, res) {
 				status: 400,
 				error: true,
 				message: 'Could not update data',
-				tabChanges:{}
+				tabUpdatedData:{}
 			})
 		)
 	}catch(err){
@@ -1575,39 +1576,114 @@ exports.update = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'Cannot delete data with id: ',
-			tabChanges:{}
+			tabUpdatedData:{}
 		});
 	}
 };
 
 //!DELETE form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
+	const connection =  await oracledb.getConnection(dbConfig);
+	await connection.execute('SAVEPOINT form_delete')
+	let tabsReturnObject = {}
 
-	// try{
-	// 	let result =  await connection.execute(`DELETE from form_4900 WHERE id = :0`,[req.params.id],{autoCommit:true})
-	// 	console.log(result)
-	// 	if (result.rowsAffected > 0) {
-	// 		result.rows = result.rows.map(function(r){
-	// 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-	// 			return r;
-	// 		})
+	try{
+		const changes = req.body.params
+		const id = changes.form_id
 
-	// 		res.status(200).json({
-	// 			status: 200,
-	// 			error: false,
-	// 			message: 'Successfully delete data with id: ' + req.params.id
-	// 		});
-	// 	} else {
-	// 		res.status(400).json({
-	// 			status: 400,
-	// 			error: true,
-	// 			message: 'Cannot delete data with id: ' + req.params.id
-	// 		});
-	// 	}
-	// }catch(err){
-	// 	console.log(err);
-	// }
+		let result = await connection.execute(`SELECT * FROM ${FORM_4900} F
+		LEFT JOIN FILE_STORAGE FS ON FS.ID = F.FILE_STORAGE_ID WHERE F.ID = :0`,[id],dbSelectOptions)
+
+		if(result.rows.length > 0){
+			result.rows = propNamesToLowerCase(result.rows)
+			const {file_storage_id, file_name} = result.rows[0]
+
+			if(result.rows[0].status == 1){
+				if(result.rows[0].file_storage_id){
+					//attached file found.
+					let file_storage_del_result = await connection.execute('UPDATE FILE_STORAGE SET DELETED = 1 WHERE ID = :0',[file_storage_id],{autoCommit:false})
+
+					if(file_storage_del_result.rowsAffected > 0 && file_name){
+						let form_4900_del_result = await connection.execute(`UPDATE ${FORM_4900} SET DELETED = 1, FILE_STORAGE_ID = null, updated_by = ${req.user} WHERE ID = :0`,[id],{autoCommit:false})
+
+						if(form_4900_del_result.rowsAffected > 0){
+							const pdf_path = path.join(__dirname,`../file_storage/pdf/${file_name}`)
+	
+							await connection.commit()
+							//await connection.rollback()
+							tabsReturnObject = await getTabData(connection, req.user)
+							await connection.close()
+
+							await fs.promises.unlink(pdf_path, (err) => {
+								if (err) {
+									console.error(err)
+									return
+								}
+								
+								console.log("file removed.")
+							})
+
+							return res.status(200).json({
+								status: 200,
+								error: false,
+								message: `Successfully deleted data`, //+ req.params.id
+								tabUpdatedData: tabsReturnObject
+							});
+						}
+					}
+						
+				}else{
+					//no file found,
+					let form_4900_del_result = await connection.execute(`UPDATE ${FORM_4900} SET DELETED = 1, FILE_STORAGE_ID = null, updated_by = ${req.user} WHERE ID = :0`,[id],{autoCommit:false})
+
+					if(form_4900_del_result.rowsAffected > 0){
+						await connection.commit()
+						//await connection.rollback()
+						tabsReturnObject = await getTabData(connection, req.user)
+						console.log(tabsReturnObject)
+						await connection.close()
+
+						return res.status(200).json({
+							status: 200,
+							error: false,
+							message: `Successfully deleted data`, //+ req.params.id
+							tabUpdatedData: tabsReturnObject
+						});
+					}
+				}
+			}else{
+				await connection.rollback()
+				await connection.close()
+		
+				return res.status(400).json({
+					status: 400,
+					error: true,
+					message: `Cannot delete data. Form status must be (1).`, //+ req.params.id
+					tabUpdatedData: tabsReturnObject
+				});
+			}
+		}
+
+		await connection.rollback()
+		await connection.close()
+
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: `Cannot delete data`, //+ req.params.id
+			tabUpdatedData: tabsReturnObject
+		});
+
+	}catch(err){
+		connection.close()
+		console.log(err)
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: `Cannot delete data`, //+ req.params.id
+			tabUpdatedData: tabsReturnObject
+		});
+	}
 };
 
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
@@ -1679,11 +1755,11 @@ exports.upload = async function(req, res) {
 						if(new_status == 10){//form is completed.
 							console.log("HERE 4 (isComplete)")
 							db_update_results.form_4900.complete = true
-							db_update_results.equipment = await doTransaction(connection, req.user, {...form_4900_changes[0]})
+							db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0]})
 						}
 	
 						if(!isTransactionErrorFound(db_update_results)){
-							connection.commit()
+							await connection.commit()
 							const tabsReturnObject = await getTabData(connection, req.user)
 							
 							return(
@@ -1695,7 +1771,7 @@ exports.upload = async function(req, res) {
 								})
 							)
 						}else{
-							connection.rollback()
+							await connection.rollback()
 							return(
 								res.status(400).json({
 									status: 400,

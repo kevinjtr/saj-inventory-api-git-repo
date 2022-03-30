@@ -16,6 +16,7 @@ module.exports = function(app) {
 	//!POST
 	app.route('/eng4900/add').post(usersController.verifyToken, controller.add);
 	app.route('/eng4900/update').post(usersController.verifyToken, controller.update);
+	app.route('/eng4900/destroy').post(usersController.verifyToken, controller.destroy);
 	//app.route('/eng4900').post(controller.add);
 	//!PATCH
 	//app.route('/eng4900/:id').patch(usersController.verifyToken, controller.update);

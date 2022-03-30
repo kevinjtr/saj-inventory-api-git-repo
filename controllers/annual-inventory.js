@@ -6,7 +6,7 @@ const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee,registered_users,hra_num_form_auth, hra_employee_form_auth, EQUIPMENT} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee,registered_users,hra_num_form_all, hra_employee_form_all, EQUIPMENT} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 //const {create4900} = require('../pdf-fill.js')
@@ -50,7 +50,7 @@ exports.index = async function(req, res) {
 
 	try{
 
-		let result = await connection.execute(hra_employee_form_auth(req.user),{},dbSelectOptions)
+		let result = await connection.execute(hra_employee_form_all(req.user),{},dbSelectOptions)
 
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
@@ -59,7 +59,7 @@ exports.index = async function(req, res) {
 			result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
 			LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 			LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-			on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_auth(req.user)})`,{},dbSelectOptions)
+			on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)})`,{},dbSelectOptions)
 			connection.close()
 	
 			if(result.rows.length > 0){
@@ -146,7 +146,7 @@ exports.getById = async function(req, res) {
 		) e
 		on e.id = eg.ANNUAL_INV_EQUIPMENT_ID) EQ
 		ON AI.ANNUAL_INV_EQUIPMENT_GROUP_ID = EQ.ANNUAL_INV_EQUIPMENT_GROUP_ID
-		WHERE ai.id = :0 and EQ.hra_num in (${hra_num_form_auth(req.user)})
+		WHERE ai.id = :0 and EQ.hra_num in (${hra_num_form_all(req.user)})
 		order by EQ.employee_full_name asc`,[req.params.id],dbSelectOptions)		
 
         connection.close()
@@ -336,7 +336,7 @@ exports.add = async function(req, res) {
 								result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
 									LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 									LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_auth(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
+									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
 		
 								if(result.rows.length > 0){
 									result.rows = propNamesToLowerCase(result.rows)
@@ -451,7 +451,7 @@ exports.update = async function(req, res) {
 						result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
 							LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 							LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_auth(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
+							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
 
 						if(result.rows.length > 0){
 							result.rows = propNamesToLowerCase(result.rows)
