@@ -86,7 +86,14 @@ exports.index = async function(req, res) {
 
 		}
 
-
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: [],
+			editable: edit_rights,
+			hras: [],
+		});
 
 	}catch(err){
 		console.log(err)
@@ -336,7 +343,7 @@ exports.add = async function(req, res) {
 								result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
 									LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 									LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
+									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
 		
 								if(result.rows.length > 0){
 									result.rows = propNamesToLowerCase(result.rows)
@@ -451,7 +458,7 @@ exports.update = async function(req, res) {
 						result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
 							LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 							LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) and a.rowid = :0`,[result.lastRowid],dbSelectOptions)
+							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
 
 						if(result.rows.length > 0){
 							result.rows = propNamesToLowerCase(result.rows)
