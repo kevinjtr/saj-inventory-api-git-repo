@@ -38,14 +38,14 @@ const includesAnyEditRoutes = (str) => {
 
 const tokenIsAuthorized = (decoded_token, path) => {
 	const {user} = decoded_token
-	const route_to_access = path.split('/').filter(Boolean)[0];
+	const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
 
 	if(includesAnyEditRoutes(path)){//is edit route
+		
 		if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
 			if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
 				return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
 			}
-
 			return user.level == "admin"
 		}		
 	}
@@ -54,10 +54,9 @@ const tokenIsAuthorized = (decoded_token, path) => {
 		if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
 			return REGISTERED_USERS_VIEW[user.level][route_to_access].view
 		}
-
 		return user.level == "admin"
 	}
-
+	
 	console.log('SOMETHING WENT WRONG WHILE VERIFYING TOKEN ACCESS!')
 	return false
 }
@@ -67,71 +66,78 @@ const REGISTERED_USERS_VIEW = {
 		admin:{view:true, edit:true},
 		home:{view:true, edit:true},
 		equipment:{view:true, edit:true},
-		annualInventory:{view:true, edit:true},
+		annualinventory:{view:true, edit:true},
 		hra:{view:true, edit:true},
 		employee:{view:true, edit:true},
 		eng4900:{view:true, edit:true},
-		changeHistory:{view:true, edit:true},
+		changehistory:{view:true, edit:true},
+		authorizedusers:{view:true, edit:true},
 	},
 	employee_1:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
-		annualInventory: {view:false, edit:false},
+		annualinventory: {view:false, edit:false},
 		hra: {view:false, edit:false},
 		employee: {view:false, edit:false},
 		eng4900: {view:false, edit:false},
-		changeHistory: {view:false, edit:false},
+		changehistory: {view:false, edit:false},
+		authorizedusers:{view:false, edit:false},
 	},
 	employee_2:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
-		annualInventory: {view:true, edit:true},
+		annualinventory: {view:true, edit:true},
 		hra: {view:false, edit:false},
 		employee: {view:false, edit:false},
 		eng4900: {view:true, edit:true},
-		changeHistory: {view:false, edit:false},
+		changehistory: {view:false, edit:false},
+		authorizedusers:{view:false, edit:false},
 	},
 	employee_3:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
-		annualInventory: {view:true, edit:true},
+		annualinventory: {view:true, edit:true},
 		hra: {view:false, edit:false},
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
-		changeHistory: {view:false, edit:false},
+		changehistory: {view:false, edit:false},
+		authorizedusers:{view:false, edit:false},
 	},
 	employee_4:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
-		annualInventory: {view:true, edit:true},
+		annualinventory: {view:true, edit:true},
 		hra: {view:true, edit:true},
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
-		changeHistory: {view:true, edit:false},
+		changehistory: {view:true, edit:false},
+		authorizedusers:{view:false, edit:false},
 	},
 	hra_1:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:false},
-		annualInventory: {view:true, edit:true},
+		annualinventory: {view:true, edit:true},
 		hra: {view:true, edit:false},
 		employee: {view:true, edit:false},
 		eng4900: {view:true, edit:true},
-		changeHistory: {view:true, edit:false},
+		changehistory: {view:true, edit:false},
+		authorizedusers:{view:true, edit:true},
 	},
 	hra_2:{
 		admin:{view:false, edit:false},
 		home: {view:true, edit:false},
 		equipment: {view:true, edit:true},
-		annualInventory: {view:true, edit:true},
+		annualinventory: {view:true, edit:true},
 		hra: {view:true, edit:true},
 		employee: {view:true, edit:true},
 		eng4900: {view:true, edit:true},
-		changeHistory: {view:true, edit:true},
+		changehistory: {view:true, edit:true},
+		authorizedusers:{view:true, edit:true},
 	},
 }
 
@@ -147,13 +153,13 @@ exports.login = async (req, res) => {
 		}
 
 		if(edipi){
+			if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
+				await certTools.UpdateUserAccessHistory(req.headers.cert)
+			}
+
 			let result =  await connection.execute(`${registered_users} where edipi = :0`,[edipi],dbSelectOptions)
 
 			if(result.rows.length > 0){
-				if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
-					certTools.UpdateUserAccessHistory(req.headers.cert)
-				}
-
 				result.rows = propNamesToLowerCase(result.rows)
 				const {id, updated_by_full_name, user_level_alias} = result.rows[0]
 
@@ -175,7 +181,8 @@ exports.login = async (req, res) => {
 						user: user.level,
 						user_name: user.name,
 						exp: token_exp,
-						access: user.access
+						access: user.access,
+						message: 'Login success.'
 					});
 				});
 
@@ -183,12 +190,13 @@ exports.login = async (req, res) => {
 			}	
 		}
 
-		res.status(400).json({
+		res.status(200).json({
 			token: '',
 			user: '',
 			user_name: '',
 			exp: '',
-			access: {}
+			access: {},
+			message: 'User account was not found.'
 		});
 		
 	}catch(err){
@@ -199,7 +207,8 @@ exports.login = async (req, res) => {
 			user: '',
 			user_name: '',
 			exp: '',
-			access: {}
+			access: {},
+			message: 'A server error occured.'
 		});
 	}
 
@@ -341,7 +350,6 @@ exports.verifyToken = async (req, res, next) => {
 				}
 					
 				req.user = decode.user.id
-				
 			}
 		});
 
@@ -352,7 +360,7 @@ exports.verifyToken = async (req, res, next) => {
 		//res.send('Please login to access app!!');
 	//}
 
-	res.send('Please login to access app!!');
+	res.status(400).send('Please login to access app!!');
 };
 
 exports.verifyTokenAndBufferUpload = async function post(req, res, next) {
@@ -431,4 +439,17 @@ exports.verifyTokenAndBufferUpload = async function post(req, res, next) {
 	} catch (err) {
 		res.send('error on the api side');
 	}
-  }
+}
+
+exports.userAccessInsert = async (req, res) => {
+
+	if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
+		const success = await certTools.insertUserAccessHistory(req.headers.cert)
+
+		if(success){
+			return res.send('success: your credentials have been recorded.')
+		}
+	}
+
+	return res.send('error: your credentials have not been recorded.')
+}

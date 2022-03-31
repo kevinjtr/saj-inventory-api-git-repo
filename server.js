@@ -60,7 +60,8 @@ const annualInventoryRoutes = require('./routes/annual-inventory');
 const dbPopulateRoutes = require('./routes/db-populate.js');
 const user = require('./routes/user');
 const register = require('./routes/register');
-const problem = require('./routes/problem')
+const problem = require('./routes/problem');
+const authorizedUsers = require('./routes/authorized-users');
 
 usersRoutes(app);
 handleError(app);
@@ -79,6 +80,7 @@ dbPopulateRoutes(app)
 user(app)
 register(app)
 problem(app)
+authorizedUsers(app)
 
 if (process.env.HTTPS === 'true') {
 	const fs = require('fs');

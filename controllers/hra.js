@@ -4,7 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol, hra_employee, hra_employee_form_all, hra_employee_form_auth, hra_employee_form_self} = require('../config/queries')
+const {employee_officeSymbol, hra_employee, hra_employee_form_all, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
 const {rightPermision} = require('./validation/tools/user-database')
 const noReplaceCols = ['hra_num']
 
@@ -67,11 +67,11 @@ exports.form = async function(req, res) {
 			}
 
 			if(tab_name == "hra_forms"){
-				auth_hras = edit_rights ? hra_employee_form_auth(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(req.user)
+				auth_hras = edit_rights ? hra_employee_form_all(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_all(req.user)
 			}
 
 			//console.log('auth_hras',auth_hras)
-			//const auth_hras = edit_rights ? hra_employee_form_auth(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_auth(req.user)
+			//const auth_hras = edit_rights ? hra_employee_form_all(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_all(req.user)
 			let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 
 			if(result.rows.length > 0){
@@ -79,7 +79,7 @@ exports.form = async function(req, res) {
 
 				for(let j=0;j<hra.losing.length;j++){
 					const {hra_num} = hra.losing[j]
-					result = await connection.execute(`SELECT * FROM EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
+					result = await connection.execute(`SELECT * FROM ${EQUIPMENT} WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)
 					hra.losing[j].equipments = propNamesToLowerCase(result.rows)
 				}
 
