@@ -196,7 +196,7 @@ exports.login = async (req, res) => {
 			user_name: '',
 			exp: '',
 			access: {},
-			message: 'User is not registered.'
+			message: 'User account was not found.'
 		});
 		
 	}catch(err){
