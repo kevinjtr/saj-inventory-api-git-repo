@@ -86,6 +86,33 @@ const getdistricts = async function() {
 }
 };
 
+const getDistrictId = async function() {
+	const connection =  await oracledb.getConnection(dbConfig);
+
+	try{
+        let query = `SELECT * from district` 
+
+        let result =  await connection.execute(query,{},dbSelectOptions)
+
+        if(result.rows.length > 0){
+			result.rows = result.rows.map(function(r){
+				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+				                return r;
+				            })
+				            
+			return result.rows         
+        }   
+
+		return []   
+        
+		} 
+	catch(err){
+		console.log(err)
+		
+			return []
+	}
+}
+
 const getofficesymbols = async function() {
     const connection =  await oracledb.getConnection(dbConfig);
 
@@ -199,8 +226,14 @@ exports.add = async function(req, res) {
 			const {newData} = req.body.params
 			if(newData.first_name && newData.last_name && newData.title && newData.office_symbol && newData.work_phone && newData.division && newData.district && newData.email && newData.user_type ){
 			console.log("validation complete")
+
+			// Convert District Symbol to District Id
+			let districtQuery = `select id from district where symbol = :0`
+			let districtResult = await connection.execute(districtQuery,[newData.district],dbSelectOptions) 
+			newData.district = districtResult.rows[0].ID
 			
 			const {user_type} = newData
+			
 					//Verify if user is registered.
 					let query = `select * from registered_users where edipi = :0`
 					let result = await connection.execute(query,[cac_info.edipi],dbSelectOptions)
@@ -230,6 +263,7 @@ exports.add = async function(req, res) {
 							message: 'Unable to submit registration.  Your previous registration request is awaiting approval.',
 						}); 
 					} 
+					
 					const return_messages = {}
 					
 					if(newData.user_type === 2){
@@ -261,8 +295,17 @@ exports.add = async function(req, res) {
 							}
 								
 							else{
+								// CHECK IF HRA IS ASSIGNED TO ANOTHER USER
+								let query = `SELECT * FROM HRA
+								WHERE HRA_NUM = ${Number(hra_num)}` //and UPPER(e.first_name) = '${cac_info.first_name.toUpperCase()}' and 
+								//UPPER(e.last_name) = '${cac_info.last_name.toUpperCase()}'`
+
+								let result = await connection.execute(query,{},dbSelectOptions)
+
+								let statusComment = result.rows.length > 0 ? "HRA user account tied to different employee" : "No existing HRA user account found"
+
 								// HRA INFO AND CAC INFO DO NOT MATCH
-								let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type, hras) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num})`
+								let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, hras, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
 								let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights pending" : "Error inserting employee registration"
 							}
@@ -281,8 +324,10 @@ exports.add = async function(req, res) {
 					
 				
 					//User wants to register as non HRA. user_type = 4 [Regular Employee] - Admin can make him any user_type.
+
+						let statusComment = newData.user_type === 2 ? "User did not specify HRA number" : "Regular user"
 					
-						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, division, district, email, user_type) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type})`
+						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
 				
 						let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 						

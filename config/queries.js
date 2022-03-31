@@ -31,10 +31,40 @@ ON e.id = eec.user_employee_id
 LEFT JOIN (${registered_users}) ur
 on ur.id = e.updated_by`
 
+const employee_registration = `SELECT
+er.ID,
+er.FIRST_NAME,
+er.LAST_NAME,
+er.TITLE,
+er.WORK_PHONE,
+er.EMAIL,
+er.HRAS,
+er.EDIPI,
+er.STATUS_COMMENT,
+er.FIRST_NAME_CAC,
+er.LAST_NAME_CAC,
+dt.SYMBOL as DISTRICT_SYMBOL,
+dt.NAME as DISTRICT,
+dn.SYMBOL as DIVISION_SYMBOL,
+dn.NAME as DIVISION,
+os.ALIAS as OFFICE_SYMBOL_ALIAS,
+CASE er.USER_TYPE WHEN '2' THEN 'HRA'
+WHEN '4' THEN 'Regular' 
+ELSE 'Other' END AS USER_TYPE_LABEL
+FROM EMPLOYEE_REGISTRATION er
+LEFT JOIN OFFICE_SYMBOL os
+ON er.OFFICE_SYMBOL = os.id
+LEFT JOIN DISTRICT dt
+ON er.DISTRICT = dt.id
+LEFT JOIN DIVISION dn
+ON er.DIVISION = dn.id
+WHERE er.DELETED = 2`
+
 module.exports = {
 	registered_users:registered_users,
 	registered_users_all_cols:registered_users_all_cols,
 	employee_officeSymbol: employee,
+	employee_registration:employee_registration,
     equipment_employee: `SELECT
 	eq.ID,
 	eq.BAR_TAG_NUM,
