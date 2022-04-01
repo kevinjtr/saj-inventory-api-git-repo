@@ -19,3 +19,5 @@ private/*.cert
 !private/.gitkeep
 file_storage/pdf/*
 !file_storage/pdf/.gitkeep
+output/*
+!output/.gitkeep
