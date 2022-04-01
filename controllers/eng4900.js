@@ -122,7 +122,7 @@ const newQuerySelById = `SELECT
 		from ${FORM_4900} f, requested_action ra,
 		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where ra.id = f.requested_action and (f.losing_hra = l_hra.losing_hra_num or (f.losing_hra is NULL and l_hra.losing_hra_num  is null)) and f.gaining_hra = g_hra.gaining_hra_num AND f.id = :0 
-		UNION ALL (
+		UNION (
 			SELECT
 			f.id as form_id,
 			f.status,
@@ -394,39 +394,39 @@ const doTransaction = async (connection, user_id, rowData) => {
 	let return_result = {error: false, message: "no action was done."}
 	const {form_id} = rowData
 
-	console.log(rowData)
-
 	try{
 		let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`//returns array of equipments.
 		let result = await connection.execute(sql,{},dbSelectOptions)
-
+		
 		if(isFormCompleted(rowData) && result.rows.length > 0){
 			console.log('HERE dT-1')
 			result.rows = propNamesToLowerCase(result.rows)
 			
 			const {requested_action, status_alias, losing_hra_num, gaining_hra_num} = result.rows[0]
+			console.log(result.rows)
+			const equipment_ids = result.rows.map(x => x.equipment_id)
 			const bar_tags = result.rows.map(x => x.bar_tag_num)
 			const bar_tags_print = printElements(bar_tags)
+			const equipment_ids_print = printElements(equipment_ids)
 
-			let equipment_result = await connection.execute(`SELECT * FROM ${EQUIPMENT} where BAR_TAG_NUM in (${bar_tags_print})`,{},dbSelectOptions)
+			let equipment_result = await connection.execute(`SELECT * FROM ${EQUIPMENT} where bar_tag_num in (${bar_tags_print})`,{},dbSelectOptions)
 	
+			console.log(equipment_result.rows.length > 0)
 			if(status_alias == "Completed"){
 				switch (requested_action) {
 					case "Issue":
 						console.log('HERE dT-2-i')
 						if(equipment_result.rows.length == 0){
 							console.log('HERE dT-3-i')
-							console.log(formEquipmentInsertQuery(requested_action, losing_hra_num, `BAR_TAG_NUM IN (${bar_tags_print})`))
-							result = await connection.execute(formEquipmentInsertQuery(requested_action, losing_hra_num, `BAR_TAG_NUM IN (${bar_tags_print})`),{},{autoCommit:false})
+							console.log(formEquipmentInsertQuery(requested_action, losing_hra_num, `ID IN (${equipment_ids_print})`))
+							result = await connection.execute(formEquipmentInsertQuery(requested_action, losing_hra_num, `ID IN (${equipment_ids_print})`),{},{autoCommit:false})
 
-							if(result.rowsAffected != bar_tags.length){
+							if(result.rowsAffected != equipment_ids.length){
 								return_result = {...return_result, error:true,  message: `One or more equipments could not be added.`}
 							}else{
 								return_result = {...return_result,  message: `all equipments were added.`}
 							}
 						}else{
-							// equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
-							// const bar_tags_found = equipment_result.rows.map(x => bar_tag_num) 
 							return_result = {...return_result, error:true,  message: `1 - equipment/s: ${bar_tags_print} already exists.`}
 						}
 						
@@ -452,7 +452,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 							})
 	
 							if(!return_result.error){
-								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE bar_tag_num IN (${bar_tags_print})`,{},{autoCommit:false})
 	
 								if(result.rowsAffected != bar_tags.length){
 									return_result = {...return_result, error:true,  message: `One or more equipments could not be found. No transfer was done.`}
@@ -486,8 +486,8 @@ const doTransaction = async (connection, user_id, rowData) => {
 							if(!return_result.error){
 								console.log('HERE dT-4-e')
 
-								console.log(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE BAR_TAG_NUM IN (${bar_tags_print})`)
-								result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+								console.log(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`)
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`,{},{autoCommit:false})
 
 								if(result.rowsAffected == bar_tags.length){
 									console.log('HERE dT-5-e')
@@ -529,7 +529,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 							})
 	
 							if(!return_result.error){
-								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE BAR_TAG_NUM IN (${bar_tags_print})`,{},{autoCommit:false})
+								result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE bar_tag_num IN (${bar_tags_print})`,{},{autoCommit:false})
 	
 								if(result.rowsAffected != bar_tags.length){
 									return_result = {...return_result, error:true,  message: `One or more equipments could not be transfered to FOI.`}
@@ -552,6 +552,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 			return return_result
 		}
 	}catch(err){
+		console.log(err)
 		return_result = {...return_result, error:true, message:"an error has occured."}
 	}
 
@@ -939,7 +940,6 @@ const FormsToMaterialTableFormat = (form_groups) => {
 
 	const form_return = []
 
-	//console.log(form_groups)
 	for(const id in form_groups){
 		const {form_id, status, losing_hra_num , losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias} = form_groups[id][0]
 		
@@ -978,33 +978,33 @@ const getQueryForTab = (tab_name, user) => {
 
 	if(tab_name == "my_forms"){
 		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1,2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
-		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+		//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
 	} else if(tab_name == "hra_forms"){
 		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1,2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
-		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
+		//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
 	} else if(tab_name == "sign_forms"){//Change: needs to be self.
 		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2))
-				UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-				UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1, 3, 4, 5))) `
+				UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1, 3, 4, 5))) `
 				
-				//UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
+				//UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
 
 
 				// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
 				//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
 
-		// query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
+		// query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
 
 		//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
 	} else if(tab_name == "completed_and_ipg_forms"){
 		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)})) 
-		UNION ALL (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5))) `
+		UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5))) `
 		//AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5)
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
 		
-		//query += `UNION ALL (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
+		//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
 		//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
 	}
 
@@ -1068,7 +1068,6 @@ const getTabData = async (connection, user) => {
 		let {rows} = result
 
 		rows = propNamesToLowerCase(rows)
-
 		const form_groups = groupBy(rows, function(r) {
 			return r.form_id;
 		  });		
@@ -1375,6 +1374,7 @@ exports.add = async function(req, res) {
 				query = `${queryForSearch(req.user)} WHERE F.ROWID = :0`
 				result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
 				result.rows = propNamesToLowerCase(result.rows)
+
 				const form_groups = groupBy(result.rows, function(r) {
 					return r.form_id;
 				  });	
