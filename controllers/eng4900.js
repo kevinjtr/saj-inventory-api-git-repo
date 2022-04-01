@@ -163,7 +163,6 @@ const ra = {
 }
 
 const requiresSignatureRemoval = (new_status, old_status, requested_action) => {
-	//console.log(new_status, old_status)
 
 	return new_status < 7 && old_status > new_status
 	// switch(requested_action) {
@@ -276,7 +275,6 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 	const ids = Object.keys(FORM_4900_STATUS["all"])
 	const returnArray = []
 
-	console.log('req_action',requested_action, tab_idx) 
 	if([2, 4, 6, 11].includes(status)){//before 3, 5, 10
 		returnArray.push(REJECT_FORM)
 	}
@@ -293,7 +291,6 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 		}else if(status == 2){//form sign. before: 3, 5
 
 			if(id == 2 || (id == 3 && tab_idx == 2)){//before: 3, 5
-				console.log(id)
 				returnArray.push({id:id, label:label})
 			}
 
@@ -302,13 +299,11 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 			if(id == 1){
 				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			}else if([3, 4].includes(id)){//before: 3, 5
-				console.log(id)
 				returnArray.push({id:id, label:label})
 			}	
 		}else if(status == 4){//form sign. before: 3, 5
 
 			if(id == 4 || (id == 5 && tab_idx == 2)){//before: 3, 5
-				console.log(id)
 				returnArray.push({id:id, label:label})
 			}
 
@@ -317,19 +312,16 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 			if(id == 1){
 				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			}else if([5, 6].includes(id)){//before: 3, 5
-				console.log(id)
 				returnArray.push({id:id, label:label})
 			}	
 		}else if(status == 6){//form sign. before: 3, 5
 
 			if(requested_action == "Transfer"){
 				if(id == 6 || (id == 7 && is_gaining_hra && tab_idx == 2)){//before: 3, 5
-					console.log(id)
 					returnArray.push({id:id, label:label})
 				}
 			}else{
 				if(id == 6 || (id == 7 && tab_idx == 2)){//before: 3, 5
-					console.log(id)
 					returnArray.push({id:id, label:label})
 				}
 			}
@@ -403,7 +395,6 @@ const doTransaction = async (connection, user_id, rowData) => {
 			result.rows = propNamesToLowerCase(result.rows)
 			
 			const {requested_action, status_alias, losing_hra_num, gaining_hra_num} = result.rows[0]
-			console.log(result.rows)
 			const equipment_ids = result.rows.map(x => x.equipment_id)
 			const bar_tags = result.rows.map(x => x.bar_tag_num)
 			const bar_tags_print = printElements(bar_tags)
@@ -411,14 +402,12 @@ const doTransaction = async (connection, user_id, rowData) => {
 
 			let equipment_result = await connection.execute(`SELECT * FROM ${EQUIPMENT} where bar_tag_num in (${bar_tags_print})`,{},dbSelectOptions)
 	
-			console.log(equipment_result.rows.length > 0)
 			if(status_alias == "Completed"){
 				switch (requested_action) {
 					case "Issue":
 						console.log('HERE dT-2-i')
 						if(equipment_result.rows.length == 0){
 							console.log('HERE dT-3-i')
-							console.log(formEquipmentInsertQuery(requested_action, losing_hra_num, `ID IN (${equipment_ids_print})`))
 							result = await connection.execute(formEquipmentInsertQuery(requested_action, losing_hra_num, `ID IN (${equipment_ids_print})`),{},{autoCommit:false})
 
 							if(result.rowsAffected != equipment_ids.length){
@@ -486,7 +475,6 @@ const doTransaction = async (connection, user_id, rowData) => {
 							if(!return_result.error){
 								console.log('HERE dT-4-e')
 
-								console.log(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`)
 								result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`,{},{autoCommit:false})
 
 								if(result.rowsAffected == bar_tags.length){
@@ -496,11 +484,6 @@ const doTransaction = async (connection, user_id, rowData) => {
 									console.log('HERE dT-5-e')
 									return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
 								}
-
-								//}else{
-									//console.log('HERE dT-5-e')
-									//return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
-								//}
 							}
 							
 						}else{
@@ -778,18 +761,14 @@ exports.getById = async function(req, res) {
 			result.rows[0].equipment_group = []
 			result.rows[0].hra = hra
 
-			//console.log(result.rows[0].form_equipment_group_id)
 			let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].form_equipment_group_id],dbSelectOptions)
 
-			//console.log(eg_result)
 			if(eg_result.rows.length > 0){
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 				result.rows[0].equipment_group = eg_result.rows
-				//console.log(result.rows[0])
 	
 				create4900(result.rows[0])
 	
-				//console.log(`returning ${result.rows.length} rows`)
 				return res.status(200).json({
 					status: 200,
 					error: false,
@@ -892,38 +871,6 @@ exports.getPdfById = async function(req, res) {
 	
 						return(res)
 					}
-					
-					// .then(()=>{
-	
-					// 	var file = path.join(__dirname , '../output/output_eng4900.pdf');    
-	
-					// 	fs.readFile(file , function (err,data){
-					// 		res.contentType("application/pdf");
-					// 		res.send(data);
-					// 	});
-					// }).catch((err) => {
-					// 	res.status(400)
-					// 	  .json({message: 'an error has occured.', err: err});
-					//   });
-		
-					//res.contentType("application/pdf");
-					
-	
-					// res.download(file, function (err) {
-					// 	if (err) {
-					// 		console.log("Error on sending file.");
-					// 		console.log(err);
-					// 	} else {
-					// 		console.log("Success on seding file.");
-					// 	}    
-					// });
-					//console.log(`returning ${result.rows.length} rows`)
-					// return res.status(200).json({
-					// 	status: 200,
-					// 	error: false,
-					// 	message: 'Successfully get single data!',//return form and bartags.
-					// 	data: result.rows[0]
-					// });
 				}
 	
 				return res.status(400).json({message: 'an error has occured.', error: true});
@@ -1247,11 +1194,8 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 	try{
 		const changes = [...equipments]
 
-		console.log(changes)
-		//console.log(changes,edipi)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				const newData = changes[row];
 				const keys = Object.keys(newData)
 				let cols = ''
@@ -1273,23 +1217,10 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 								vals = vals + comma + ':' + keys[i]
 								insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
 								(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
-
-								// if(i == keys.length - 1 && typeof edipi != 'undefined'){
-								// 	result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-								// 	console.log(result.rows)
-								// 	if(result.rows.length > 0){
-								// 		const registered_users_id = result.rows[0].ID
-								// 		comma = cols ? ', ': ''
-								// 		cols = cols + comma + 'updated_by'
-								// 		vals = vals + comma + ':' + 'updated_by'
-								// 		insert_obj['updated_by'] = registered_users_id
-								// 	}
-								// }
 							}
 						}
 			
 						let query = `INSERT INTO FORM_EQUIPMENT (${cols}) VALUES (${vals})`
-						//console.log(query,insert_obj)
 						result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
 						if(result.rowsAffected){
@@ -1300,8 +1231,6 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 				}
 			}
 		}
-
-		console.log(idArray)
 		return (idArray)
 	}catch(err){
 		console.log(err)
@@ -1638,9 +1567,7 @@ exports.destroy = async function(req, res) {
 
 					if(form_4900_del_result.rowsAffected > 0){
 						await connection.commit()
-						//await connection.rollback()
 						tabsReturnObject = await getTabData(connection, req.user)
-						console.log(tabsReturnObject)
 						await connection.close()
 
 						return res.status(200).json({
@@ -1743,7 +1670,6 @@ exports.upload = async function(req, res) {
 						return res.status(500).send(err);
 					}
 						
-					console.log(console.log('here4'))
 					const file_id = await saveFileInfoToDatabase(connection, new_filename, 'pdf')
 
 					if(file_id != -1){
