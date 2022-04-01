@@ -78,9 +78,11 @@ var fillEng4900PDF = async function(data){
             const pdfField = form.getTextField(field.name)
             if(field.data){
                 pdfField.setText(field.data.toString())
-            }
 
-            pdfField.enableReadOnly()
+                if(field.name == "inv_app_id"){
+                    pdfField.enableReadOnly()
+                }
+            }
         }
 
         if(field.type == 'checkbox'){
@@ -88,8 +90,6 @@ var fillEng4900PDF = async function(data){
             if(field.data){
                 pdfField.check()
             }
-
-            pdfField.enableReadOnly()
         }
     }
 

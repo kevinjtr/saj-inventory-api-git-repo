@@ -5,7 +5,7 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy');
-const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
+const {propNamesToLowerCase, objectDifference, isValidDate} = require('../tools/tools');
 const {rightPermision} = require('./validation/tools/user-database')
 const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_all, hra_num_form_self, employee_officeSymbol, EQUIPMENT, registered_users} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
@@ -95,6 +95,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 	for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
 		const tab_name = ALL_EQUIPMENT_TABS[i]
 
+		console.log(id)
 		let query = `SELECT * FROM (
 			SELECT * from (${hra_employee}) hra_emp 
 						RIGHT JOIN (
@@ -132,6 +133,8 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 		let result =  await connection.execute(`${query}`,[id],dbSelectOptions)
 		let {rows} = result
 
+
+		console.log(rows)
 		if(rows.length > 0){
 			rows = propNamesToLowerCase(rows)	
 			tabsReturnObject[i] = rows
@@ -657,7 +660,7 @@ exports.add = async function(req, res) {
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name
 									vals = vals + comma + ':' + keys[i]
-									insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+									insert_obj[keys[i]] = isValidDate(newData[keys[i]]) && keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
 									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
 									if(i == keys.length - 1 && !keys.includes('updated_by')){
@@ -718,6 +721,7 @@ exports.update = async function(req, res) {
 	let columnErrors = {rows:{},errorFound:false}
 	let tabsReturnObject = {}
 
+	
 	try{
 		const {changes,undo} = req.body.params
 		for(const row in changes){
@@ -729,6 +733,7 @@ exports.update = async function(req, res) {
 				cells.update = {}
 				let cols = ''
 				
+				console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
@@ -746,7 +751,7 @@ exports.update = async function(req, res) {
 									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name + ' = :' + keys[i]
-									cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+									cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
 									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 								}
 
@@ -757,9 +762,10 @@ exports.update = async function(req, res) {
 								}
 							}
 				
-							let query = `UPDATE ${EQUIPMENT} SET ${cols}
+							let query = `UPDATE EQUIPMENT SET ${cols}
 										WHERE ID = ${cells.old.id}`
 						
+										console.log(query, cells.update)
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 
 							if(result.rowsAffected > 0){
@@ -806,7 +812,7 @@ exports.destroy = async function(req, res) {
 			if(changes.hasOwnProperty(row)) {
 				const {id} = changes[row].newData
 				let cols = `, UPDATED_BY = ${req.user}`
-				let result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1 ${cols} WHERE ID = :0`,[id],{autoCommit:AUTO_COMMIT.DELETE})
+				let result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1 ${cols} WHERE ID = :0`,[id],{autoCommit:true})
 
 				if(result.rowsAffected > 0 && AUTO_COMMIT.DELETE){
 					tabsReturnObject = await searchEquipmentUpdatedData(id, connection, req.user)

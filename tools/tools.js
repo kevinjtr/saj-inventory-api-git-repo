@@ -141,5 +141,8 @@ module.exports = {
           resolve (parsed_read_data)
       })
       
-   }
+   },
+   isValidDate: (date) => {
+    return date != null && date != "null" && typeof date != "undefined" && date != ""
+  }
   };
