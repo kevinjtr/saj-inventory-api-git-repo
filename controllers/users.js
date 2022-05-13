@@ -17,6 +17,7 @@ const upload = multer({ dest: path.join(__dirname,'../public/') })
 	It uses promises.
  */
 const jwt = require('jsonwebtoken');
+const {REGISTERED_USERS_VIEW} = require('../config/constants');
 
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
@@ -41,7 +42,6 @@ const tokenIsAuthorized = (decoded_token, path) => {
 	const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
 
 	if(includesAnyEditRoutes(path)){//is edit route
-		
 		if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
 			if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
 				return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
@@ -61,84 +61,20 @@ const tokenIsAuthorized = (decoded_token, path) => {
 	return false
 }
 
-const REGISTERED_USERS_VIEW = {
-	admin:{
-		admin:{view:true, edit:true},
-		home:{view:true, edit:true},
-		equipment:{view:true, edit:true},
-		annualinventory:{view:true, edit:true},
-		hra:{view:true, edit:true},
-		employee:{view:true, edit:true},
-		eng4900:{view:true, edit:true},
-		changehistory:{view:true, edit:true},
-		authorizedusers:{view:true, edit:true},
-	},
-	employee_1:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:false},
-		annualinventory: {view:false, edit:false},
-		hra: {view:false, edit:false},
-		employee: {view:false, edit:false},
-		eng4900: {view:false, edit:false},
-		changehistory: {view:false, edit:false},
-		authorizedusers:{view:false, edit:false},
-	},
-	employee_2:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:false},
-		annualinventory: {view:true, edit:true},
-		hra: {view:false, edit:false},
-		employee: {view:false, edit:false},
-		eng4900: {view:true, edit:true},
-		changehistory: {view:false, edit:false},
-		authorizedusers:{view:false, edit:false},
-	},
-	employee_3:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:false},
-		annualinventory: {view:true, edit:true},
-		hra: {view:false, edit:false},
-		employee: {view:true, edit:true},
-		eng4900: {view:true, edit:true},
-		changehistory: {view:false, edit:false},
-		authorizedusers:{view:false, edit:false},
-	},
-	employee_4:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:false},
-		annualinventory: {view:true, edit:true},
-		hra: {view:true, edit:true},
-		employee: {view:true, edit:true},
-		eng4900: {view:true, edit:true},
-		changehistory: {view:true, edit:false},
-		authorizedusers:{view:false, edit:false},
-	},
-	hra_1:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:false},
-		annualinventory: {view:true, edit:true},
-		hra: {view:true, edit:false},
-		employee: {view:true, edit:false},
-		eng4900: {view:true, edit:true},
-		changehistory: {view:true, edit:false},
-		authorizedusers:{view:true, edit:true},
-	},
-	hra_2:{
-		admin:{view:false, edit:false},
-		home: {view:true, edit:false},
-		equipment: {view:true, edit:true},
-		annualinventory: {view:true, edit:true},
-		hra: {view:true, edit:true},
-		employee: {view:true, edit:true},
-		eng4900: {view:true, edit:true},
-		changehistory: {view:true, edit:true},
-		authorizedusers:{view:true, edit:true},
-	},
+const tokenHasEditPermision = (decoded_token, path) => {
+	const {user} = decoded_token
+	const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
+
+	if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
+		console.log(2)
+		if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
+			console.log(3)
+			return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
+		}
+		return user.level == "admin"
+	}
+	
+	return false
 }
 
 //!LOGIN USERS
@@ -343,6 +279,9 @@ exports.verifyToken = async (req, res, next) => {
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
+					const edit_rights = tokenHasEditPermision(decode, req.path)
+					req.edit_rights = edit_rights
+
 					console.log('is authorized')
 					next();
 				}else{

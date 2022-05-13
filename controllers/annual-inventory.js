@@ -45,7 +45,7 @@ const andOR_multiple = {
 						 
 //!SELECT * FROM ANNUAL_INV
 exports.index = async function(req, res) {
-    const edit_rights = await rightPermision(req.headers.cert.edipi)
+    const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -110,7 +110,7 @@ exports.index = async function(req, res) {
 
 //!SELECT ANNUAL_INV BY ID
 exports.getById = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	
 	try{

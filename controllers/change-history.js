@@ -23,7 +23,7 @@ ON e.OFFICE_SYMBOL = o.id`
 //!SELECT * FROM EQUIPMENT HISTORY
 exports.equipment = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 
 	try{
         const hra_employee_ = `SELECT 
@@ -104,7 +104,7 @@ exports.equipment = async function(req, res) {
 //!SELECT * FROM HRA HISTORY
 exports.hra = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 
 	try{
 
@@ -160,7 +160,7 @@ exports.hra = async function(req, res) {
 //!SELECT * FROM EMPLOYEE HISTORY
 exports.employee = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 
 	try{
         let result =  await connection.execute(`SELECT 
@@ -213,7 +213,7 @@ exports.employee = async function(req, res) {
 //!SELECT * FROM FORM_4900_HISTORY
 exports.eng4900 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 
 	try{
 		let query = `SELECT

@@ -187,7 +187,7 @@ exports.index = async function(req, res) {
     }
 
     try{
-        const edit_rights = await rightPermision(edipi)
+        const {edit_rights} = req
         return_object = {
             registeredUsers: await getNames(connection),
             hras: await getHRAs(connection, edipi),

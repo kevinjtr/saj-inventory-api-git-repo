@@ -25,6 +25,10 @@ e.TITLE,
 e.WORK_PHONE,
 o.ALIAS as OFFICE_SYMBOL_ALIAS,
 e.OFFICE_SYMBOL,
+e.office_location_id,
+e.DIVISION,
+e.DISTRICT,
+ol.NAME as OFFICE_LOCATION_NAME,
 eec.EMPLOYEE_EQUIPMENT_COUNT
 FROM EMPLOYEE e
 LEFT JOIN OFFICE_SYMBOL o
@@ -32,7 +36,9 @@ ON e.OFFICE_SYMBOL = o.id
 LEFT JOIN (${equipment_count.employee}) eec
 ON e.id = eec.user_employee_id
 LEFT JOIN (${registered_users}) ur
-on ur.id = e.updated_by `
+on ur.id = e.updated_by
+LEFT JOIN OFFICE_LOCATION ol
+on ol.id = e.office_location_id `
 
 const employee_registration = `SELECT
 er.ID,
@@ -90,12 +96,15 @@ module.exports = {
 	e.last_name employee_last_name,
 	e.TITLE as employee_title,
 	e.OFFICE_SYMBOL as employee_office_symbol,
-	e.WORK_PHONE as employee_work_phone
+	e.WORK_PHONE as employee_work_phone,
+	ol.NAME as employee_office_location_name
 	FROM ${EQUIPMENT} eq
 	LEFT JOIN employee e
 	on eq.user_employee_id = e.id
 	LEFT JOIN (${registered_users}) ur
-	on ur.id = eq.updated_by `,
+	on ur.id = eq.updated_by
+	LEFT JOIN OFFICE_LOCATION ol
+	on ol.id = e.office_location_id `,
 	hra_employee:`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,
@@ -104,7 +113,8 @@ module.exports = {
 	e.TITLE as hra_title,
 	e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
 	e.WORK_PHONE as hra_work_phone,
-	hec.HRA_EQUIPMENT_COUNT
+	hec.HRA_EQUIPMENT_COUNT,
+	e.OFFICE_LOCATION_NAME as hra_office_location_name
 	FROM hra h
 	LEFT JOIN (${employee}) e 
 	on h.employee_id = e.id

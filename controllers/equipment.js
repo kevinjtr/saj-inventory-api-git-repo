@@ -70,15 +70,17 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							e.last_name employee_last_name,
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
-							e.WORK_PHONE as employee_work_phone
+							e.WORK_PHONE as employee_work_phone,
+							ol.NAME as employee_office_location_name
 							FROM ${EQUIPMENT} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
 							on ur.id = eq.updated_by 
+							LEFT JOIN OFFICE_LOCATION ol
+							on ol.id = e.office_location_id 
 						) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(type, user_id)}`
-
 
 const getQueryForTab = (tab_name, user, fetch=true) => {
 
@@ -120,12 +122,15 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							e.last_name employee_last_name,
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
-							e.WORK_PHONE as employee_work_phone
+							e.WORK_PHONE as employee_work_phone,
+							ol.NAME as employee_office_location_name
 							FROM ${EQUIPMENT} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
 							on ur.id = eq.updated_by 
+							LEFT JOIN OFFICE_LOCATION ol
+							on ol.id = e.office_location_id
 						) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(tab_name, user)}
 						) WHERE ID = :0`
@@ -146,7 +151,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -180,7 +185,7 @@ exports.index = async function(req, res) {
 
 //!SELECT * FROM EQUIPMENT
 exports.form = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	let hra_num_groups = {}
 
@@ -220,7 +225,7 @@ exports.form = async function(req, res) {
 
 //!SELECT EQUIPMENT BY ID
 exports.getById = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
@@ -267,7 +272,7 @@ exports.getById = async function(req, res) {
 //!SELECT EQUIPMENT BY FIELDS DATA
 exports.search = async function(req, res) {
 
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 	let cols = []
@@ -407,168 +412,168 @@ exports.search = async function(req, res) {
 
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights}
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
+	console.log(edit_rights)
 	try{
-		if(edit_rights){
-			const {fields,options, tab, init} = req.body;
-			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
-	
-			for(const parameter of searchCriteria){
+		//if(edit_rights){
+		const {fields,options, tab, init} = req.body;
+		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 
-				const isStringColumn = eqDatabaseColNames[parameter].type == "string"
-				const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
-	
-				if(db_col_name != undefined){
-					const db_col_value = fields[parameter]
-					const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
-					const includesOperator = searchOptions[options.includes[parameter]]
-					const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
-	
-					if(db_col_value.includes(';')){
-						const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
-	
-						for(let i=0; i<search_values.length;i++){
-							const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
-							const operator = op_chooser(query_search)
-							const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
-							const condition = `${db_col_name} ${includesOperator} ${val} `
-	
-							if(i == 0 && !query_search){
-								query_search = query_search + '(' + condition + ' '
-	
-							}else if(i == 0 && query_search){
-								query_search = query_search + operator + ' ( ' + condition + ' '
-	
-							}else if(i != 0 && i != search_values.length - 1){
-								query_search = query_search + operator + ' ' + condition + ' '
-	
-							}else if(i == search_values.length - 1){
-								query_search = query_search  + operator + ' ' + condition + ') '
-							}
+		for(const parameter of searchCriteria){
+
+			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
+
+			if(db_col_name != undefined){
+				const db_col_value = fields[parameter]
+				const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
+				const includesOperator = searchOptions[options.includes[parameter]]
+				const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
+
+				if(db_col_value.includes(';')){
+					const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
+
+					for(let i=0; i<search_values.length;i++){
+						const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
+						const operator = op_chooser(query_search)
+						const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
+						const condition = `${db_col_name} ${includesOperator} ${val} `
+
+						if(i == 0 && !query_search){
+							query_search = query_search + '(' + condition + ' '
+
+						}else if(i == 0 && query_search){
+							query_search = query_search + operator + ' ( ' + condition + ' '
+
+						}else if(i != 0 && i != search_values.length - 1){
+							query_search = query_search + operator + ' ' + condition + ' '
+
+						}else if(i == search_values.length - 1){
+							query_search = query_search  + operator + ' ' + condition + ') '
 						}
-						
-	
-					}else{
-						//const operator = isStringColumn ? 'LIKE' : '='
-						const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-						//console.log(andOR_single[options.includes[parameter]],query_search)
-						query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
-	
-						//console.log(val,query_search)
-						//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
-					}
-				}
-			}
-	
-			for(const parameter in options.blanks){
-				const isStringColumn = eqDatabaseColNames[parameter].type == "string"
-				const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
-				const blankOperator = searchBlanks[options.blanks[parameter]]
-				const and_OR = blankAndOr[options.blanks[parameter]]
-				query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
-			}
-
-			const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
-			let tabsReturnObject = {}
-			let hras = []
-			let my_hras = []	
-			let employees = []
-
-			if(init){
-				for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
-					const tab_name = ALL_EQUIPMENT_TABS[i]
-					const eq_search = tab_name != "equipment_search"
-
-					let query = getQueryForTab(tab_name, req.user, eq_search)
-
-					if(query){
-						let result =  await connection.execute(`${query}`,{},dbSelectOptions)
-						let {rows} = result
-						rows = propNamesToLowerCase(rows)
-
-						tabsReturnObject[i] = rows
-					}else{
-						tabsReturnObject[i] = []
 					}
 					
-				}
 
-				let result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_all(req.user)})`,{},dbSelectOptions) //fetch by destrict
-				if(result.rows.length > 0){
+				}else{
+					//const operator = isStringColumn ? 'LIKE' : '='
+					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
+					//console.log(andOR_single[options.includes[parameter]],query_search)
+					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+
+					//console.log(val,query_search)
+					//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
+				}
+			}
+		}
+
+		for(const parameter in options.blanks){
+			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
+			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
+			const blankOperator = searchBlanks[options.blanks[parameter]]
+			const and_OR = blankAndOr[options.blanks[parameter]]
+			query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
+		}
+
+		const newEquipmentEmployee = edit_rights ? equipment_employee.replace('SELECT','SELECT\nur.updated_by_full_name,\n') : equipment_employee
+		let tabsReturnObject = {}
+		let hras = []
+		let my_hras = []	
+		let employees = []
+
+		if(init){
+			for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
+				const tab_name = ALL_EQUIPMENT_TABS[i]
+				const eq_search = tab_name != "equipment_search"
+
+				let query = getQueryForTab(tab_name, req.user, eq_search)
+
+				console.log(query)
+				if(query){
+					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 					let {rows} = result
 					rows = propNamesToLowerCase(rows)
-					hras = [...rows]
-				}
 
-				result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_self(req.user)})`,{},dbSelectOptions) //fetch by destrict
-				if(result.rows.length > 0){
-					let {rows} = result
-					rows = propNamesToLowerCase(rows)
-					my_hras = [...rows]
-				}
+					tabsReturnObject[i] = rows
+				}else{
+					tabsReturnObject[i] = []
+				}				
+			}
 
+			let result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_all(req.user)})`,{},dbSelectOptions) //fetch by destrict
+			if(result.rows.length > 0){
+				let {rows} = result
+				rows = propNamesToLowerCase(rows)
+				hras = [...rows]
+			}
 
-				result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
+			result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_self(req.user)})`,{},dbSelectOptions) //fetch by destrict
+			if(result.rows.length > 0){
+				let {rows} = result
+				rows = propNamesToLowerCase(rows)
+				my_hras = [...rows]
+			}
 
-				if(result.rows.length > 0){
-					let {rows} = result
-					rows = propNamesToLowerCase(rows)
-					employees = [...rows]
-				}
+			result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
 
+			if(result.rows.length > 0){
+				let {rows} = result
+				rows = propNamesToLowerCase(rows)
+				employees = [...rows]
+			}
+
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully get single data!',
+				data: tabsReturnObject,
+				editable: tab_edits,
+				hras: hras,
+				my_hras:my_hras,
+				employees: employees
+			});
+		}
+
+		let query = getQueryForTab(tab, req.user)
+
+		switch(tab) {
+			case 'my_equipment':
+				query = `${query} AND ${query_search}`
+				break;
+			case 'my_hra_equipment':
+				query = `${query} AND ${query_search}`
+				break;
+			case 'hra_equipment':
+				query = `${query} AND ${query_search}`
+				break;
+			case 'equipment_search':
+				query = `${query} `
+				query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
+				break;
+			}
+
+			if(query){
+			query += "ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name "
+
+			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+			let {rows} = result
+			rows = propNamesToLowerCase(rows)
+
+			if(rows.length > 0){
 				return res.status(200).json({
 					status: 200,
 					error: false,
 					message: 'Successfully get single data!',
-					data: tabsReturnObject,
-					editable: tab_edits,
-					hras: hras,
-					my_hras:my_hras,
-					employees: employees
+					data: {[ALL_EQUIPMENT_TABS.indexOf(tab)]: rows},
+					editable: tab_edits
 				});
 			}
-
-			let query = getQueryForTab(tab, req.user)
-
-			switch(tab) {
-				case 'my_equipment':
-					query = `${query} AND ${query_search}`
-					break;
-				case 'my_hra_equipment':
-					query = `${query} AND ${query_search}`
-					break;
-				case 'hra_equipment':
-					query = `${query} AND ${query_search}`
-					break;
-				case 'equipment_search':
-					query = `${query} `
-					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
-					break;
-			  }
-
-			  if(query){
-				query += "ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name "
-
-				let result =  await connection.execute(`${query}`,{},dbSelectOptions)
-				let {rows} = result
-				rows = propNamesToLowerCase(rows)
-	
-				if(rows.length > 0){
-					return res.status(200).json({
-						status: 200,
-						error: false,
-						message: 'Successfully get single data!',
-						data: {[ALL_EQUIPMENT_TABS.indexOf(tab)]: rows},
-						editable: tab_edits
-					});
-				}
-			  }
-		}
+			}
+		//}
 
 		return res.status(200).json({
 			status: 400,

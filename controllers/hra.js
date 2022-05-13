@@ -14,7 +14,8 @@ const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	//const {edit_rights} = req
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -51,7 +52,7 @@ exports.index = async function(req, res) {
 
 //!SELECT * FROM HRA
 exports.form = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	const TABS = ["my_forms","hra_forms"]
 	const tabsReturnObject = {}	
@@ -117,7 +118,7 @@ exports.form = async function(req, res) {
 
 //!SELECT HRA BY HRA_NUM
 exports.getById = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`${hra_employee}
@@ -152,7 +153,7 @@ exports.getById = async function(req, res) {
 
 //!SELECT HRA BY FIELDS DATA
 exports.search = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{

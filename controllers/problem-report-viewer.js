@@ -21,7 +21,7 @@ const arraytoObject = (array, param) => {
 exports.index = async function (req, res) {
     const connection = await oracledb.getConnection(dbConfig);
     try {
-        const edit_rights = await rightPermision(req.headers.cert.edipi)
+        const {edit_rights} = req
         let result = await connection.execute(`SELECT * FROM PROBLEMS_REPORTED WHERE DELETED = 'No' ORDER BY DATE_REPORTED DESC`, {}, dbSelectOptions)
         result.rows = propNamesToLowerCase(result.rows)
 

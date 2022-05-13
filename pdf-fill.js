@@ -106,6 +106,7 @@ var create4900Json = async function(form_data){
     //     if (err) return console.log(err);
     //     console.log('eng4900-form-data saved!');
     //   })
+
     const keys = Object.keys(form_data)
 
     for(const key of keys){//remove null values.
@@ -129,7 +130,8 @@ var create4900Json = async function(form_data){
         {name: "b. Office Symbol_2", type:"textfield", data: form_data.gaining_hra_os_alias},
         {name: "c. Hand Receipt Account Number_2", type:"textfield", data: form_data.gaining_hra_num},
         {name: "d. Work Phone Number_2", type:"textfield", data: formatPhoneNumber(form_data.gaining_hra_work_phone)},
-        {name: "13a. ror_prop", type:"textfield", data: ""},
+        {name: "13a. ror_prop", type:"textfield", data: form_data.individual_ror_prop},
+        
     ]
 
     for(let i=0;i<form_data.equipment_group.length;i++){

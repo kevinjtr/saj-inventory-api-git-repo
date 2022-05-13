@@ -2,6 +2,7 @@
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
+const groupBy = require('lodash/groupBy')
 //const connection =  oracledb.getConnection(dbConfig);
 //const connection = require('../connect');
 const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/tools');
@@ -13,7 +14,8 @@ const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
+	console.log(edit_rights)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -22,12 +24,18 @@ exports.index = async function(req, res) {
 		let result =  await connection.execute(`${newEmployee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
+		let result_office_loc =  await connection.execute(`SELECT id as office_location_id, name as office_location_name, division, district FROM OFFICE_LOCATION`,{},dbSelectOptions)
+		result_office_loc.rows = propNamesToLowerCase(result_office_loc.rows)
+
+		const district_office_locations = groupBy(result_office_loc.rows,'district')
+
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
 			data: result.rows,
-			editable: edit_rights
+			editable: edit_rights,
+			district_office_locations: district_office_locations
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -45,7 +53,7 @@ exports.index = async function(req, res) {
 
 //!SELECT EMPLOYEE BY ID
 exports.getById = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
 		let result =  await connection.execute(`SELECT * FROM employee WHERE id = :0 ORDER BY FIRST_NAME,LAST_NAME`,[req.params.id],dbSelectOptions)
@@ -76,7 +84,7 @@ exports.getById = async function(req, res) {
 
 //!SELECT EMPLOYEE BY FIELDS DATA
 exports.search = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const {edit_rights} = req
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
 

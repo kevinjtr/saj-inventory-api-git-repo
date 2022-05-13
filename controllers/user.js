@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 exports.user = async (req,res) => {
 
-  const edit_rights = await rightPermision(req.headers.cert.edipi)
+  const {edit_rights} = req
   
   if(edit_rights){
     jwt.sign({
