@@ -63,6 +63,7 @@ const register = require('./routes/register');
 const problem = require('./routes/problem');
 const authorizedUsers = require('./routes/authorized-users');
 const registeredUsers = require('./routes/registered-users');
+const updatesMaintenanceMessages = require('./routes/updates-maintenance-messages');
 
 usersRoutes(app);
 handleError(app);
@@ -83,6 +84,7 @@ register(app)
 problem(app)
 authorizedUsers(app)
 registeredUsers(app)
+updatesMaintenanceMessages(app)
 
 if (process.env.HTTPS === 'true') {
 	const fs = require('fs');

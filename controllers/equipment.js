@@ -13,7 +13,7 @@ const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = re
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
 const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
-const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search"]
+const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search","excess_equipment"]
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -41,6 +41,8 @@ const equipment_fetch_type = (type, user_id) => {
 		case 'hra_equipment':
 			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) `;
 		case 'equipment_search':
+			return ` `;
+		case 'excess_equipment':
 			return ` `;
 		default:
 			return ` `
@@ -70,9 +72,14 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							e.last_name employee_last_name,
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
+<<<<<<< Updated upstream
 							e.WORK_PHONE as employee_work_phone,
 							ol.NAME as employee_office_location_name
 							FROM ${EQUIPMENT} eq
+=======
+							e.WORK_PHONE as employee_work_phone
+							FROM ${type == "excess_equipment" ? "(SELECT * FROM EQUIPMENT WHERE DELETED = 1)": EQUIPMENT} eq
+>>>>>>> Stashed changes
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
@@ -84,7 +91,7 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 
 const getQueryForTab = (tab_name, user, fetch=true) => {
 
-	if(fetch){
+	if(fetch){		
 		return equipmentQueryForSearch(tab_name, user)
 	}
 
@@ -412,8 +419,13 @@ exports.search = async function(req, res) {
 
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
+<<<<<<< Updated upstream
 	const {edit_rights} = req
 	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights}
+=======
+	const edit_rights = await rightPermision(req.headers.cert.edipi)
+	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights,4:edit_rights}
+>>>>>>> Stashed changes
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
@@ -572,8 +584,52 @@ exports.search2 = async function(req, res) {
 					editable: tab_edits
 				});
 			}
+<<<<<<< Updated upstream
 			}
 		//}
+=======
+
+			let query = getQueryForTab(tab, req.user)
+
+			switch(tab) {
+				case 'my_equipment':
+					query = `${query} AND ${query_search}`
+					break;
+				case 'my_hra_equipment':
+					query = `${query} AND ${query_search}`
+					break;
+				case 'hra_equipment':
+					query = `${query} AND ${query_search}`
+					break;
+				case 'equipment_search':
+					query = `${query} `
+					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
+					break;
+				case 'excess_equipment':
+					query = `${query} `
+					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
+					break;
+			  }
+
+			  if(query){
+				query += "ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name "
+
+				let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+				let {rows} = result
+				rows = propNamesToLowerCase(rows)
+	
+				if(rows.length > 0){
+					return res.status(200).json({
+						status: 200,
+						error: false,
+						message: 'Successfully get single data!',
+						data: {[ALL_EQUIPMENT_TABS.indexOf(tab)]: rows},
+						editable: tab_edits
+					});
+				}
+			  }
+		}
+>>>>>>> Stashed changes
 
 		return res.status(200).json({
 			status: 400,
