@@ -325,12 +325,46 @@ exports.add = async function(req, res) {
 				
 					//User wants to register as non HRA. user_type = 4 [Regular Employee] - Admin can make him any user_type.
 
-						let statusComment = newData.user_type === 2 ? "User did not specify HRA number" : "Regular user"
-					
-						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
-				
-						let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
+					let statusComment = newData.user_type === 2 ? "User did not specify HRA number" : "Regular user"
+
+					// Check if user exists in the employee table
+					let employeeQuery = `SELECT * FROM EMPLOYEE
+							WHERE OFFICE_SYMBOL = ${Number(newData.office_symbol)} 
+							and DIVISION = ${Number(newData.division)} 
+							and DISTRICT = ${Number(newData.district)} 
+							and UPPER(first_name) = '${cac_info.first_name.toUpperCase()}' 
+							and	UPPER(last_name) = '${cac_info.last_name.toUpperCase()}'`
+	
+					let employeeResult = await connection.execute(employeeQuery,{},dbSelectOptions)
+
+					if(employeeResult.rows.length > 0){
+
+						const employee_record = propNamesToLowerCase(employeeResult.rows)[0]//grabbing first element.
+
+						let mergeQuery = `MERGE INTO REGISTERED_USERS ru
+								USING (SELECT 1 FROM DUAL) m
+								ON (ru.edipi = ${cac_info.edipi})
+								WHEN NOT MATCHED THEN
+								INSERT (ru.edipi,ru.full_name,ru.employee_id,ru.user_level) 
+								VALUES (${cac_info.edipi}, '${employee_record.first_name + " " + employee_record.last_name}', ${employee_record.id}, 7)
+						`
+
+						let mergeResult = await connection.execute(mergeQuery,{},{autoCommit:AUTO_COMMIT.ADD})
+
+						if(mergeResult.rowsAffected > 0){
+							return res.status(200).json({
+								status: 200,
+								error: false,
+								message: 'Your registration has been approved and you may now log in using CAC authentication.',
+							});
+						}
+
+					} else {
 						
+						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
+					
+						let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
+							
 						if(insertResult.rowsAffected > 0){
 							return res.status(200).json({
 								status: 200,
@@ -338,6 +372,7 @@ exports.add = async function(req, res) {
 								message: 'Your registration request has been submitted and is now pending approval.',
 							});
 						}
+					}
 		}
 
 	}

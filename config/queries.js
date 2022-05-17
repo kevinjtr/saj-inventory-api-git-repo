@@ -17,6 +17,32 @@ const registered_users_all_cols = `SELECT u.*, e.first_name||' '||e.last_name as
 LEFT JOIN EMPLOYEE e
 on u.employee_id = e.id `
 
+const employeesForRegistrationAssignment = `SELECT
+e.ID,
+e.FIRST_NAME,
+e.LAST_NAME,
+e.TITLE,
+e.WORK_PHONE,
+e.OFFICE_SYMBOL,
+e.DISTRICT,
+e.DIVISION,
+e.EMAIL,
+o.ALIAS as OFFICE_SYMBOL_ALIAS,
+d.NAME as DIVISION_NAME,
+dd.NAME as DISTRICT_NAME,
+d.SYMBOL as DIVISION_SYMBOL,
+dd.SYMBOL as DISTRICT_SYMBOL
+FROM EMPLOYEE e
+LEFT JOIN OFFICE_SYMBOL o
+ON e.OFFICE_SYMBOL = o.id
+LEFT JOIN DIVISION d
+ON e.DIVISION = d.id
+LEFT JOIN DISTRICT dd
+ON e.DISTRICT = dd.id
+WHERE e.DELETED != 1`
+
+
+
 const employee = `SELECT
 e.ID,
 e.FIRST_NAME,
@@ -52,10 +78,13 @@ er.EDIPI,
 er.STATUS_COMMENT,
 er.FIRST_NAME_CAC,
 er.LAST_NAME_CAC,
+er.DIVISION as DIVISION,
+er.DISTRICT as DISTRICT,
+er.OFFICE_SYMBOL as OFFICE_SYMBOL,
 dt.SYMBOL as DISTRICT_SYMBOL,
-dt.NAME as DISTRICT,
+dt.NAME as DISTRICT_NAME,
 dn.SYMBOL as DIVISION_SYMBOL,
-dn.NAME as DIVISION,
+dn.NAME as DIVISION_NAME,
 os.ALIAS as OFFICE_SYMBOL_ALIAS,
 CASE er.USER_TYPE WHEN '2' THEN 'HRA'
 WHEN '4' THEN 'Regular' 
@@ -76,6 +105,7 @@ module.exports = {
 	registered_users_all_cols:registered_users_all_cols,
 	employee_officeSymbol: employee,
 	employee_registration:employee_registration,
+	employeesForRegistrationAssignment:employeesForRegistrationAssignment,
     equipment_employee: `SELECT
 	eq.ID,
 	eq.BAR_TAG_NUM,
@@ -122,6 +152,26 @@ module.exports = {
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
 	on ur.id = h.updated_by `,
+	employeeByEDIPI: (edipi)=> (`SELECT
+	e.ID,
+	e.FIRST_NAME,
+	e.LAST_NAME,
+	e.OFFICE_SYMBOL,
+	e.DISTRICT,
+	e.DIVISION,
+	o.ALIAS as OFFICE_SYMBOL_ALIAS,
+	d.NAME as DIVISION_NAME,
+	dd.NAME as DISTRICT_NAME
+	FROM EMPLOYEE e
+	LEFT JOIN OFFICE_SYMBOL o
+	ON e.OFFICE_SYMBOL = o.id
+	LEFT JOIN DIVISION d
+	ON e.DIVISION = d.id
+	LEFT JOIN DISTRICT dd
+	ON e.DISTRICT = dd.id
+	LEFT JOIN REGISTERED_USERS ru
+	ON e.ID = ru.employee_id
+	WHERE e.DELETED != 1 AND ru.edipi = ${edipi}`),
 	// hra_employee_form_all: (id) => (`SELECT 
 	// h.hra_num,
 	// e.first_name || ' ' || e.last_name as hra_full_name,

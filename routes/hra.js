@@ -2,6 +2,7 @@
 
 module.exports = function(app) {
 	const controller = require('../controllers/hra');
+	const controller2 = require('../controllers/hra2');
 	const usersController = require('../controllers/users');
 
 	//!GET
@@ -9,6 +10,7 @@ module.exports = function(app) {
 	app.route('/hra/form').get(usersController.verifyToken, controller.form);
 	app.route('/hra/:id').get(usersController.verifyToken,controller.getById);
 	app.route('/hra/search').post(usersController.verifyToken,controller.search);
+	app.route('/hra2').get(usersController.verifyToken,controller2.index);
 	
 	//!POST
 	//app.route('/hra').post(usersController.verifyToken, controller.add);

@@ -15,7 +15,7 @@ module.exports = function(app) {
 	app.route('/register/add').post(controller1.add);
 
 	//GET REGISTRATION
-	app.route('/register').get(usersController.verifyToken, controller2.index);
-    app.route('/register/destroy').post(usersController.verifyToken, controller2.destroy);
+	app.route('/registrationviewer').get(usersController.verifyToken, controller2.index);
+    app.route('/registrationviewer/destroy').post(usersController.verifyToken, controller2.destroy);
 
 };

@@ -31,6 +31,8 @@ module.exports = {
             eng4900:{view:true, edit:true},
             changehistory:{view:true, edit:true},
             authorizedusers:{view:true, edit:true},
+            registrationviewer:{view:true,edit:true},
+		    employee2:{view:true,edit:true}
         },
         employee_1:{
             admin:{view:false, edit:false},
@@ -42,6 +44,8 @@ module.exports = {
             eng4900: {view:false, edit:false},
             changehistory: {view:false, edit:false},
             authorizedusers:{view:false, edit:false},
+            registrationviewer:{view:false,edit:false},
+            employee2:{view:false,edit:false}
         },
         employee_2:{
             admin:{view:false, edit:false},
@@ -53,6 +57,8 @@ module.exports = {
             eng4900: {view:true, edit:false},
             changehistory: {view:true, edit:false},
             authorizedusers:{view:false, edit:false},
+            registrationviewer:{view:false,edit:false},
+            employee2:{view:false,edit:false}
         },
         employee_3:{
             admin:{view:false, edit:false},
@@ -64,6 +70,8 @@ module.exports = {
             eng4900: {view:true, edit:true},
             changehistory: {view:true, edit:false},
             authorizedusers:{view:false, edit:false},
+            registrationviewer:{view:false,edit:false},
+            employee2:{view:false,edit:false}
         },
     /* 	employee_4:{
             admin:{view:false, edit:false},
@@ -75,6 +83,8 @@ module.exports = {
             eng4900: {view:true, edit:true},
             changehistory: {view:true, edit:false},
             authorizedusers:{view:false, edit:false},
+		    registrationviewer:{view:false,edit:false},
+		    employee2:{view:false,edit:false}
         }, */
         hra_1:{
             admin:{view:false, edit:false},
@@ -86,6 +96,10 @@ module.exports = {
             eng4900: {view:true, edit:true},
             changehistory: {view:true, edit:true},
             authorizedusers:{view:true, edit:true},
+            employee2:{view:true,edit:true},
+            registeredusers:{view:true,edit:true},
+            registrationviewer:{view:true,edit:true},
+            employee2:{view:true,edit:true}
         },
         /* hra_2:{
             admin:{view:false, edit:false},
@@ -97,6 +111,8 @@ module.exports = {
             eng4900: {view:true, edit:true},
             changehistory: {view:true, edit:true},
             authorizedusers:{view:true, edit:true},
+            registrationviewer:{view:true,edit:true},
+            employee2:{view:true,edit:true}
         }, */
     }
 }

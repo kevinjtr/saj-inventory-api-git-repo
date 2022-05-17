@@ -8,15 +8,6 @@ const AUTO_COMMIT = { ADD: true, UPDATE: true, DELETE: false }
 const filter = require('lodash/filter')
 const {employee_registration} = require('../config/queries');
 
-const arraytoObject = (array, param) => {
-    let obj = {}
-    for (const elem of array) {
-        const val = elem[param]
-        obj[val] = elem
-
-    }
-    return obj
-}
 //SELECT * FROM REGISTRATIONS
 exports.index = async function (req, res) {
     const connection = await oracledb.getConnection(dbConfig);
