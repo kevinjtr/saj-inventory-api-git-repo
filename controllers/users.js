@@ -61,6 +61,17 @@ const tokenIsAuthorized = (decoded_token, path) => {
 	return false
 }
 
+const isUserAdmin = async (user_id) => {
+	const connection =  await oracledb.getConnection(dbConfig);
+	let result =  await connection.execute('SELECT "user_level" FROM registered_users WHERE id = :0',[user_id],dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].user_level == 1
+	}
+
+	return false
+}				
+
 const tokenHasEditPermision = (decoded_token, path) => {
 	const {user} = decoded_token
 	const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
@@ -266,14 +277,14 @@ exports.verifyUser = async (req, res, next) => {
 exports.verifyToken = async (req, res, next) => {
 	//! Get auth header value
 	const bearerToken = req.headers.auth;
-	
+
 	if (typeof bearerToken !== 'undefined') {
 		req.token = bearerToken;
 		//! Next middleware
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 
-			//console.log(decode)
+			console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {
@@ -281,6 +292,7 @@ exports.verifyToken = async (req, res, next) => {
 				if(tokenIsAuthorized(decode, req.path)){
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
+					req.user_level = decode.user.level					
 
 					console.log('is authorized')
 					next();

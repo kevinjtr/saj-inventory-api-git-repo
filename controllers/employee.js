@@ -7,7 +7,7 @@ const groupBy = require('lodash/groupBy')
 //const connection = require('../connect');
 const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol} = require('../config/queries');
+const {employee_officeSymbol,employee_id_auth} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
 const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
@@ -19,8 +19,11 @@ exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
-		const newEmployee = edit_rights ? employee_officeSymbol.replace('SELECT','SELECT\ne.OFFICE_SYMBOL,\nur.updated_by_full_name,\n') : employee_officeSymbol.replace('e.ID,','')
+		const newEmployee = (edit_rights ? employee_officeSymbol.replace('SELECT',`SELECT 
+		ur.updated_by_full_name,
+		case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`) : employee_officeSymbol.replace('e.ID,',`case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`)) + ` WHERE e.id in (${employee_id_auth(req.user)}) `
 
+		console.log(newEmployee)
 		let result =  await connection.execute(`${newEmployee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -29,13 +32,17 @@ exports.index = async function(req, res) {
 
 		const district_office_locations = groupBy(result_office_loc.rows,'district')
 
+		let result_office_symbol =  await connection.execute(`SELECT id as office_symbol,alias as office_symbol_alias FROM OFFICE_SYMBOL order by alias asc`,{},dbSelectOptions)
+		result_office_symbol.rows = propNamesToLowerCase(result_office_symbol.rows)
+
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
 			data: result.rows,
-			editable: edit_rights,
-			district_office_locations: district_office_locations
+			editable: true,
+			district_office_locations: district_office_locations,
+			office_symbol:result_office_symbol.rows
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -45,7 +52,7 @@ exports.index = async function(req, res) {
 			error: true,
 			message: 'No data found!',
 			data: [],
-			editable: edit_rights
+			editable: true
 		});
 		//logger.error(err)
 	}

@@ -269,6 +269,30 @@ module.exports = {
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
 	on ur.id = h.updated_by `),
+	employee_id_auth: (id) => (`select distinct e.id from employee e
+	left join registered_users ru
+	on ru.employee_id = e.id
+	LEFT JOIN HRA H
+	ON E.ID = H.EMPLOYEE_ID
+	where office_symbol in (
+			select os.id from hra h
+			left join employee e
+			on e.id = h.employee_id
+			left join office_symbol os
+			on os.id = e.office_symbol
+			where e.id in (SELECT h.employee_id FROM HRA h
+				left join employee e 
+                on e.id = h.employee_id
+				WHERE h.hra_num IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
+				union
+				SELECT employee_id FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})
+				)
+    ) OR (select user_level from registered_users where id = 1 and user_level = 1) is not null OR
+	 ((select user_level from registered_users where id = 1 and user_level in (9,11)) is not null AND H.HRA_NUM IS NULL AND E.OFFICE_SYMBOL IS NULL)
+    UNION
+    SELECT employee_id FROM registered_users WHERE id = ${id}`),
+
+			//OR (e.office_symbol is null and ru.user_level in (1,11))
 	// hra_employee_form_all:`SELECT 
 	// h.hra_num,
 	// e.first_name || ' ' || e.last_name as hra_full_name,
