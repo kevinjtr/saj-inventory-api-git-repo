@@ -42,6 +42,8 @@ const equipment_fetch_type = (type, user_id) => {
 			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) `;
 		case 'equipment_search':
 			return ` `;
+		case 'excess_equipment':
+			return `WHERE eq_emp.eq_deleted = 1 `;
 		default:
 			return ` `
 	  }
@@ -63,6 +65,7 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							eq.DOCUMENT_NUM,
 							eq.ITEM_TYPE,
 							eq.HRA_NUM,
+							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
 							e.id as employee_id,
 							e.first_name || ' ' || e.last_name as employee_full_name,
@@ -72,7 +75,7 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							e.OFFICE_SYMBOL as employee_office_symbol,
 							e.WORK_PHONE as employee_work_phone,
 							ol.NAME as employee_office_location_name
-							FROM ${EQUIPMENT} eq
+							FROM ${type != "excess_equipment" ? EQUIPMENT : "EQUIPMENT"} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
@@ -97,7 +100,6 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 	for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
 		const tab_name = ALL_EQUIPMENT_TABS[i]
 
-		console.log(id)
 		let query = `SELECT * FROM (
 			SELECT * from (${hra_employee}) hra_emp 
 						RIGHT JOIN (
@@ -115,6 +117,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							eq.DOCUMENT_NUM,
 							eq.ITEM_TYPE,
 							eq.HRA_NUM,
+							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
 							e.id as employee_id,
 							e.first_name || ' ' || e.last_name as employee_full_name,
@@ -124,7 +127,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							e.OFFICE_SYMBOL as employee_office_symbol,
 							e.WORK_PHONE as employee_work_phone,
 							ol.NAME as employee_office_location_name
-							FROM ${EQUIPMENT} eq
+							FROM ${tab_name != "excess_equipment" ? EQUIPMENT : "EQUIPMENT"} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
 							LEFT JOIN (${registered_users}) ur
@@ -139,7 +142,6 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 		let {rows} = result
 
 
-		console.log(rows)
 		if(rows.length > 0){
 			rows = propNamesToLowerCase(rows)	
 			tabsReturnObject[i] = rows
@@ -413,7 +415,7 @@ exports.search = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const {edit_rights} = req
-	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights}
+	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights,4:edit_rights}
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
@@ -490,8 +492,7 @@ exports.search2 = async function(req, res) {
 				const eq_search = tab_name != "equipment_search"
 
 				let query = getQueryForTab(tab_name, req.user, eq_search)
-
-				console.log(query)
+				
 				if(query){
 					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
 					let {rows} = result
@@ -537,22 +538,24 @@ exports.search2 = async function(req, res) {
 				my_hras:my_hras,
 				employees: employees
 			});
-		}else if(tab_edits[tab]){
+		}else if(tab_edits[ALL_EQUIPMENT_TABS.indexOf(tab)]){
 			let query = getQueryForTab(tab, req.user)
 
 			switch(tab) {
 				case 'my_equipment':
-					query = `${query} AND ${query_search}`
+					query = ` ${query} AND ${query_search}`
 					break;
 				case 'my_hra_equipment':
-					query = `${query} AND ${query_search}`
+					query = ` ${query} AND ${query_search}`
 					break;
 				case 'hra_equipment':
-					query = `${query} AND ${query_search}`
+					query = ` ${query} AND ${query_search}`
 					break;
 				case 'equipment_search':
-					query = `${query} `
-					query += `${query_search != '' ? `WHERE ${query_search} `: ''} `
+					query += ` ${query_search != '' ? `WHERE ${query_search} `: ''} `
+					break;
+				case 'excess_equipment':
+					query += ` ${query_search != '' ? ` AND ${query_search} `: ''} `
 					break;
 			}
 	
@@ -738,7 +741,6 @@ exports.update = async function(req, res) {
 				cells.update = {}
 				let cols = ''
 				
-				console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
@@ -770,7 +772,7 @@ exports.update = async function(req, res) {
 							let query = `UPDATE EQUIPMENT SET ${cols}
 										WHERE ID = ${cells.old.id}`
 						
-										console.log(query, cells.update)
+
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 
 							if(result.rowsAffected > 0){

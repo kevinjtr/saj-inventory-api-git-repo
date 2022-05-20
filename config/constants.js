@@ -20,6 +20,26 @@ module.exports = {
         '=':'IS',
         '!=':'IS NOT',
     },
+    /*
+	USER ROLES:
+		admin - full access to the system
+
+		employee_1 - Considered a regular/standard user. Most users will be at this level. 
+			View access to the home and equipment tabs. 
+
+		employe_2 - Someone assisting with annual inventory/finding equipment but not making documents. 
+			View access to the following tabs: home, equipment, annual inventory, hra, employee, ENG4900, and change history
+
+		employee_3 - An authorized user. Someone who has permission to make documents and/or sign on behalf of an HRA holder. 
+		             Typically a management assistant. 
+			View access to the following tabs: home, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
+			Edit capabilites in the following tabs: annual inventory and ENG4900
+		
+		hra_1 - This is an HRA holder
+			View access to the following tabs:  home, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
+			Edit capabilities in the following tabs: equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
+
+*/
     REGISTERED_USERS_VIEW: {
         admin:{
             admin:{view:true, edit:true},
