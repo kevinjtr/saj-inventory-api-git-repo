@@ -37,16 +37,27 @@ const fs = require('fs');
 exports.index = async function(req, res) {
 	try{
 		fs.readFile('./public/updates-maintenance-messages.json', (err, data) => {
-			if (err) throw err;
+			if (err){
+				res.status(400).json({
+					status: 400,
+					error: true,
+					message: 'Successfully get single data!',
+					data: []
+				});
+
+				throw err;
+			} 
 			let messages = JSON.parse(data);
 			console.log(messages);
+
+			res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully get single data!',
+				data: messages
+			});
 		});
-		res.status(200).json({
-			status: 200,
-			error: false,
-			message: 'Successfully get single data!',
-			data: messages
-        });
+
         
 	}catch(err){
 		console.log(err)

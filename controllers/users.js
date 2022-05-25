@@ -108,14 +108,15 @@ exports.login = async (req, res) => {
 
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)
-				const {id, updated_by_full_name, user_level_alias} = result.rows[0]
+				const {id, updated_by_full_name, user_level_alias, user_level_name} = result.rows[0]
 
-				//console.log(result.rows[0])
+				console.log(result.rows[0])
 				//console.log(result)
 				user = {
 					id: id,
 					name: updated_by_full_name,
 					level: user_level_alias,
+					level_name: user_level_name,
 					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1
 				};
 
@@ -126,6 +127,7 @@ exports.login = async (req, res) => {
 					res.json({
 						token: token,
 						user: user.level,
+						level_name:user.level_name,
 						user_name: user.name,
 						exp: token_exp,
 						access: user.access,

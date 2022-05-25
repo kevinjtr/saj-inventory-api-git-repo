@@ -13,7 +13,7 @@ const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = re
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
 const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
-const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search"]
+const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search","excess_equipment"]
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -415,7 +415,7 @@ exports.search = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const {edit_rights} = req
-	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights,4:edit_rights}
+	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights,4:false}
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';

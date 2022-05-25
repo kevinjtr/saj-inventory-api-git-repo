@@ -7,7 +7,7 @@ const equipment_count = {
 	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM ${EQUIPMENT} GROUP BY HRA_NUM `
 }
 
-const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias FROM registered_users u
+const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias, ul.name as user_level_name FROM registered_users u
 LEFT JOIN EMPLOYEE e
 on u.employee_id = e.id
 LEFT JOIN USER_LEVEL ul
