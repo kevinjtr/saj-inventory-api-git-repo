@@ -11,11 +11,11 @@ const {employee_officeSymbol,employee_id_auth} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
 const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
-
+const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
 	const {edit_rights} = req
-	console.log(edit_rights)
+	console.log(edit_rights, req.user_level)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -23,7 +23,6 @@ exports.index = async function(req, res) {
 		ur.updated_by_full_name,
 		case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`) : employee_officeSymbol.replace('e.ID,',`case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`)) + ` WHERE e.id in (${employee_id_auth(req.user)}) `
 
-		console.log(newEmployee)
 		let result =  await connection.execute(`${newEmployee} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -40,9 +39,9 @@ exports.index = async function(req, res) {
 			error: false,
 			message: 'Successfully get single data!',
 			data: result.rows,
-			editable: true,
 			district_office_locations: district_office_locations,
-			office_symbol:result_office_symbol.rows
+			office_symbol:result_office_symbol.rows,
+			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level)}
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -52,7 +51,7 @@ exports.index = async function(req, res) {
 			error: true,
 			message: 'No data found!',
 			data: [],
-			editable: true
+			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level)}
 		});
 		//logger.error(err)
 	}

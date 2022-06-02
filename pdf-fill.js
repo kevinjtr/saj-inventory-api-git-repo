@@ -9,6 +9,7 @@ const path = require('path')
 const moment = require('moment')
 //const dir = path.join(__dirname,'./BulkPdf')
 const findIndex = require('lodash/findIndex');
+const HIDDEN_HRA_ACCOUNTS = [2,4]
 
 const SIGN_DATE_FIELD_NAME = {
     ROR_PROP:"b Date",
@@ -100,6 +101,30 @@ var fillEng4900PDF = async function(data){
     })
 }
 
+const IncludesHiddenAccountNumber = (n) => {
+    if(n){
+        if(HIDDEN_HRA_ACCOUNTS.includes(Number(n))){
+            return true
+        }
+    }
+
+    return false
+}
+
+const HraNumFormat = (n) => {
+    if(n){
+        let string_num = n.toString()
+
+        while(string_num.length < 3){
+            string_num = `0${string_num}`
+        }
+
+        return string_num
+    }
+
+    return n
+}
+
 var create4900Json = async function(form_data){
 
     //   fs.writeFile('eng4900-form-data.json',JSON.stringify(form_data,null,2),function (err) {
@@ -113,6 +138,8 @@ var create4900Json = async function(form_data){
         form_data[key] = form_data[key] ? form_data[key] : ""
     }
 
+    console.log(form_data)
+
     let data = [
         {name: "inv_app_id", type:"textfield", data: 'IA4900-' + form_data.form_id},
         {name: "Issue", type:"checkbox", data: form_data.requested_action == "Issue"},
@@ -124,11 +151,11 @@ var create4900Json = async function(form_data){
         {name: "Expiration Date", type:"date", data: ""},
         {name: "2a Name", type:"textfield", data: (form_data.losing_hra_first_name + ' ' + form_data.losing_hra_last_name).trim()},
         {name: "b Office Symbol_1", type:"textfield", data: form_data.losing_hra_os_alias},
-        {name: "c. Hand Receipt Account Number_1", type:"textfield", data: form_data.losing_hra_num},
+        {name: "c. Hand Receipt Account Number_1", type:"textfield", data: IncludesHiddenAccountNumber(form_data.losing_hra_num) ? "" : HraNumFormat(form_data.losing_hra_num)},
         {name: "d. Work Phone Number_1", type:"textfield", data: formatPhoneNumber(form_data.losing_hra_work_phone)},
         {name: "3a Name", type:"textfield", data: (form_data.gaining_hra_first_name + ' ' +form_data.gaining_hra_last_name).trim()},
         {name: "b. Office Symbol_2", type:"textfield", data: form_data.gaining_hra_os_alias},
-        {name: "c. Hand Receipt Account Number_2", type:"textfield", data: form_data.gaining_hra_num},
+        {name: "c. Hand Receipt Account Number_2", type:"textfield", data: IncludesHiddenAccountNumber(form_data.gaining_hra_num) ? "" : HraNumFormat(form_data.gaining_hra_num)},
         {name: "d. Work Phone Number_2", type:"textfield", data: formatPhoneNumber(form_data.gaining_hra_work_phone)},
         {name: "13a. ror_prop", type:"textfield", data: form_data.individual_ror_prop},
         
@@ -142,7 +169,7 @@ var create4900Json = async function(form_data){
             {name: `5 Bar Tag NoRow${num}`, type:"textfield", data: equipment.bar_tag_num},
             {name: `6 CatalogRow${num}`, type:"textfield", data: equipment.catalog_num},
             {name: `7 Nomenclature include make modelRow${num}`, type:"textfield", data: equipment.item_type},
-            {name: `8 Cond CodeRow${num}`, type:"textfield", data:  equipment.condition},
+            {name: `8 Cond CodeRow${num}`, type:"textfield", data:  equipment.condition_alias},
             {name: `9 Serial NumberRow${num}`, type:"textfield", data: equipment.serial_num},
             {name: `10 ACQ DateRow${num}`, type:"date", data: equipment.acquisition_date ? moment(equipment.acquisition_date).format('yyyy-MM-DD') : ""},
             {name: `11 ACQ PriceRow${num}`, type:"textfield", data: equipment.acquisition_price},

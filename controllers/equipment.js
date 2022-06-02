@@ -43,7 +43,7 @@ const equipment_fetch_type = (type, user_id) => {
 		case 'equipment_search':
 			return ` `;
 		case 'excess_equipment':
-			return `WHERE eq_emp.eq_deleted = 1 `;
+			return `WHERE eq_emp.eq_deleted = 1 and (select user_level from registered_users where id = ${user_id} and user_level in (1,9,11)) is not null `;
 		default:
 			return ` `
 	  }
@@ -67,6 +67,7 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							eq.HRA_NUM,
 							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
+							ur.user_level,
 							e.id as employee_id,
 							e.first_name || ' ' || e.last_name as employee_full_name,
 							e.first_name employee_first_name,
@@ -119,6 +120,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							eq.HRA_NUM,
 							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
+							ur.user_level,
 							e.id as employee_id,
 							e.first_name || ' ' || e.last_name as employee_full_name,
 							e.first_name employee_first_name,
@@ -415,7 +417,9 @@ exports.search = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const {edit_rights} = req
-	const tab_edits = {0:false,1:edit_rights,2:edit_rights,3:edit_rights,4:false}
+	const accepted_user_levels = ['employee_3','hra_1','admin'].includes(req.user_level)
+	const tab_edits = {0:false, 1:edit_rights, 2:edit_rights, 3:edit_rights, 4:false}
+	const tab_views = {0:true, 1:edit_rights, 2:edit_rights, 3: accepted_user_levels || edit_rights, 4: accepted_user_levels || edit_rights}//search and view.
 
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
@@ -526,8 +530,6 @@ exports.search2 = async function(req, res) {
 				employees = [...rows]
 			}
 
-			console.log(tabsReturnObject)
-
 			return res.status(200).json({
 				status: 200,
 				error: false,
@@ -536,9 +538,13 @@ exports.search2 = async function(req, res) {
 				editable: tab_edits,
 				hras: hras,
 				my_hras:my_hras,
-				employees: employees
+				employees: employees,
+				rights:{
+					view: tab_views,
+					edit: tab_edits,
+				}
 			});
-		}else if(tab_edits[ALL_EQUIPMENT_TABS.indexOf(tab)]){
+		}else if(tab_views[ALL_EQUIPMENT_TABS.indexOf(tab)]){
 			let query = getQueryForTab(tab, req.user)
 
 			switch(tab) {

@@ -1,4 +1,5 @@
 const fs = require('fs')
+const {REGISTERED_USERS_VIEW} = require('../config/constants')
 
 module.exports = {
     propNamesToLowerCase: (rows) => {
@@ -144,5 +145,20 @@ module.exports = {
    },
    isValidDate: (date) => {
     return date != null && date != "null" && typeof date != "undefined" && date != ""
+  },
+  tokenHasEditPermision: (decoded_token, path) => {
+    const {user} = decoded_token
+    const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
+  
+    if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
+      console.log(2)
+      if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
+        console.log(3)
+        return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
+      }
+      return user.level == "admin"
+    }
+    
+    return false
   }
   };

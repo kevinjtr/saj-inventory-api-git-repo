@@ -274,7 +274,7 @@ module.exports = {
 	on ru.employee_id = e.id
 	LEFT JOIN HRA H
 	ON E.ID = H.EMPLOYEE_ID
-	where office_symbol in (
+	where (office_symbol in (
 			select os.id from hra h
 			left join employee e
 			on e.id = h.employee_id
@@ -287,41 +287,11 @@ module.exports = {
 				union
 				SELECT employee_id FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})
 				)
-    ) OR (select user_level from registered_users where id = 1 and user_level = 1) is not null OR
-	 ((select user_level from registered_users where id = 1 and user_level in (9,11)) is not null AND H.HRA_NUM IS NULL AND E.OFFICE_SYMBOL IS NULL)
+    	  ) AND (select user_level from registered_users where id = ${id} and user_level in (1,9,11)) is not null
+	) OR (select user_level from registered_users where id = ${id} and user_level = 1) is not null OR
+	 ((select user_level from registered_users where id = ${id} and user_level in (9,11)) is not null AND H.HRA_NUM IS NULL AND E.OFFICE_SYMBOL IS NULL)
     UNION
     SELECT employee_id FROM registered_users WHERE id = ${id}`),
-
-			//OR (e.office_symbol is null and ru.user_level in (1,11))
-	// hra_employee_form_all:`SELECT 
-	// h.hra_num,
-	// e.first_name || ' ' || e.last_name as hra_full_name,
-	// e.first_name hra_first_name,
-	// e.last_name hra_last_name,
-	// e.TITLE as hra_title,
-	// e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
-	// e.WORK_PHONE as hra_work_phone,
-	// hec.HRA_EQUIPMENT_COUNT
-	// FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = 1)
-	// union all
-	// SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = 1)) h
-	// LEFT JOIN (${employee}) e 
-	// on h.employee_id = e.id
-	// LEFT JOIN (${equipment_count.hra}) hec
-	// on h.hra_num = hec.hra_num
-	// LEFT JOIN (${registered_users}) ur
-	// on ur.id = h.updated_by`,
-	// hra_num_form_all:`SELECT 
-	// h.hra_num
-	// FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = 1)
-	// union all
-	// SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = 1)) h
-	// LEFT JOIN (${employee}) e 
-	// on h.employee_id = e.id
-	// LEFT JOIN (${equipment_count.hra}) hec
-	// on h.hra_num = hec.hra_num
-	// LEFT JOIN (${registered_users}) ur
-	// on ur.id = h.updated_by`,
 	hra_employee_no_count:`SELECT 
 	h.hra_num,
 	e.id as hra_employee_id,

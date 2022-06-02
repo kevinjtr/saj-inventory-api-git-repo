@@ -111,7 +111,7 @@ module.exports = {
             home: {view:true, edit:false},
             equipment: {view:true, edit:true},
             annualinventory: {view:true, edit:true},
-            hra: {view:true, edit:true}, //should only be able to edit their HRA info but can view all HRAs
+            hra: {view:true, edit:false}, //should only be able to edit their HRA info but can view all HRAs
             employee: {view:true, edit:true}, // edit:false allow users to edit their own info
             eng4900: {view:true, edit:true},
             changehistory: {view:true, edit:true},

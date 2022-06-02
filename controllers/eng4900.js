@@ -276,9 +276,20 @@ const FORM_4900_STATUS = {
 		{id:11, label:"Completed PBO signature"},
 		{id:12, label:"Form Rejected"},
 	],
+	rejected:{
+		12:"Form Rejected",
+	}
 }
 
 const REJECT_FORM = {id:12, label:"Form Reject"}
+
+const getAllStatusSteps = (status, requested_action) => {
+	if(status != 12){
+		return FORM_4900_STATUS[requested_action]
+	}
+
+	return FORM_4900_STATUS["rejected"]
+}
 
 const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, is_gaining_hra) => {
 
@@ -287,7 +298,7 @@ const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, i
 			return true
 		}
 	}else if(status == 2){//form sign.
-		if([3, 11].includes(new_status)){
+		if([3, 12].includes(new_status)){
 			return true
 		}	
 	}else if(status == 3){
@@ -297,7 +308,7 @@ const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, i
 		}	
 	}else if(status == 4){//form sign.
 
-		if([5, 11].includes(new_status)){
+		if([5, 12].includes(new_status)){
 			return true
 		}	
 	}else if(status == 5){
@@ -311,15 +322,53 @@ const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, i
 			return true
 		}else if(new_status == 7 && is_losing_hra && requested_action != 2){
 			return true
-		}else if(new_status == 11){
+		}else if(new_status == 12){
 			return true
 		}
 
-	}else if(status >= 7){
-		if(new_status == 1 || new_status > status){
+	}else if(status == 7){
+		if([1, 8].includes(new_status)){
+			return true
+		}	
+	}else if(status == 8){//form sign.
+		
+		if(new_status == 9 && is_gaining_hra && requested_action == 2){
+			return true
+		}else if(new_status == 9 && is_losing_hra && requested_action != 2){
+			return true
+		}else if(new_status == 12){
+			return true
+		}
+
+	}else if(status == 9){
+		if([1, 10].includes(new_status)){
+			return true
+		}	
+	}else if(status == 10){//form sign.
+		
+		if(new_status == 11 && is_gaining_hra && requested_action == 2){
+			return true
+		}else if(new_status == 11 && is_losing_hra && requested_action != 2){
+			return true
+		}else if(new_status == 12){
+			return true
+		}
+
+	}else if(status == 12){//form revert.
+
+		if(new_status == 1){
 			return true
 		}
 	}
+	// else if(status == 11){
+	// 	if([1, 10].includes(new_status)){
+	// 		return true
+	// 	}	
+	// }else if(status >= 7){
+	// 	if(new_status == 1 || new_status > status){
+	// 		return true
+	// 	}
+	// }
 
 	return false
 }
@@ -329,7 +378,7 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 	const ids = Object.keys(FORM_4900_STATUS[requested_action])
 	const returnArray = []
 
-	if([2, 4, 6, 8, 10].includes(status)){//before 3, 5, 10
+	if([2, 4, 6, 8, 10, 12].includes(status)){//before 3, 5, 10
 		returnArray.push(REJECT_FORM)
 	}
 
@@ -349,6 +398,10 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 			}else if(status == 3){
 				if(id == 3){//before: 3, 5
 					returnArray.push({id:id, label:label})
+				}
+			}else if (status == 12){
+				if(id == 1){
+					returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 				}
 			}
 			
@@ -415,11 +468,9 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 					}
 				}
 				
-			}else if(status >= 7){
+			}else if (status == 12){
 				if(id == 1){
 					returnArray.push({id:id, label:label + " (removes PDF signatures)"})
-				}else if (id >= status){
-					returnArray.push({id:id, label:label})
 				}
 			}
 			
@@ -466,11 +517,15 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 				}
 			}
 			
-		}else if(status >= 7){
+		}else if(status >= 7 && status < 12){
 			if(id == 1){
 				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			}else if (id >= status){
 				returnArray.push({id:id, label:label})
+			}
+		}else if (status == 12){
+			if(id == 1){
+				returnArray.push({id:id, label:label + " (removes PDF signatures)"})
 			}
 		}
 	}
@@ -1165,10 +1220,11 @@ const searchEng4900UpdatedData = async (form_id, connection, user) => {
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
 				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				const steps = getAllStatusSteps(status, requested_action)
 				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
-				tabsReturnObject[tab][elem].all_status_steps = Object.keys(FORM_4900_STATUS[requested_action]).map((key) => {
-					return {id:Number(key), label:FORM_4900_STATUS[requested_action][key]}
-				})	
+				tabsReturnObject[tab][elem].all_status_steps = Object.keys(steps).map((key) => {
+					return {id:Number(key), label:steps[key]}
+				})
 
 				// Object.keys(FORM_4900_STATUS[requested_action]).map((key) => {
 				// 	return {id:Number(key), label:FORM_4900_STATUS[requested_action][key]}
@@ -1215,9 +1271,10 @@ const getTabData = async (connection, user) => {
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
 				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				const steps = getAllStatusSteps(status, requested_action)
 				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
-				tabsReturnObject[tab][elem].all_status_steps = Object.keys(FORM_4900_STATUS[requested_action]).map((key) => {
-					return {id:Number(key), label:FORM_4900_STATUS[requested_action][key]}
+				tabsReturnObject[tab][elem].all_status_steps = Object.keys(steps).map((key) => {
+					return {id:Number(key), label:steps[key]}
 				})	
 			})
 		}
@@ -1320,8 +1377,9 @@ exports.search2 = async function(req, res) {
 			search_return.map(function(form_record){
 				const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
 				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
-				form_record.all_status_steps = Object.keys(FORM_4900_STATUS[requested_action]).map((key) => {
-					return {id:Number(key), label:FORM_4900_STATUS[requested_action][key]}
+				const steps = getAllStatusSteps(status, requested_action)
+				form_record.all_status_steps = Object.keys(steps).map((key) => {
+					return {id:Number(key), label:steps[key]}
 				})	
 				return form_record
 			})
@@ -1511,8 +1569,9 @@ exports.add = async function(req, res) {
 				search_return.map(function(form_record){
 					const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
 					form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
-					form_record.all_status_steps = Object.keys(FORM_4900_STATUS[requested_action]).map((key) => {
-						return {id:Number(key), label:FORM_4900_STATUS[requested_action][key]}
+					const steps = getAllStatusSteps(status, requested_action)
+					form_record.all_status_steps = Object.keys(steps).map((key) => {
+						return {id:Number(key), label:steps[key]}
 					})	
 					return form_record
 				})
@@ -1553,6 +1612,7 @@ exports.update = async function(req, res) {
 	await connection.execute('SAVEPOINT form_update')
 	const {edipi} = req.headers.cert
 
+	console.log('data',req.body.params.changes[0])
 	const db_update_results = {
 		fs_record: {deleted:false, status_downgrade:false, signature_removal: false, error:false},
 		equipment_result: {error: false},
@@ -1628,11 +1688,12 @@ exports.update = async function(req, res) {
 									}
 								}						
 	
-							}else if(status == 10){//form is completed.
-								console.log("HERE 4 (isComplete)")
-								db_update_results.form_4900.complete = true
-								db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0], requested_action: requested_action})
 							}
+							// else if(status == 10){//form is completed.
+							// 	console.log("HERE 4 (isComplete)")
+							// 	db_update_results.form_4900.complete = true
+							// 	db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0], requested_action: requested_action})
+							// }
 	
 							if(!isTransactionErrorFound(db_update_results)){
 								//commit changes.
@@ -1716,11 +1777,15 @@ exports.destroy = async function(req, res) {
 
 	try{
 		const changes = req.body.params
-		const id = changes.form_id
+		//const id = changes.form_id
+		const id = changes.hasOwnProperty('form_id') ? changes.form_id : (changes.hasOwnProperty('id') ? changes.id : -1)
+		//console.log(changes)
 
-		let result = await connection.execute(`SELECT * FROM ${FORM_4900} F
+		
+		let result = await connection.execute(`${queryForSearch(req.user)} 
 		LEFT JOIN FILE_STORAGE FS ON FS.ID = F.FILE_STORAGE_ID WHERE F.ID = :0`,[id],dbSelectOptions)
 
+		console.log(result.rows)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 			const {file_storage_id, file_name} = result.rows[0]

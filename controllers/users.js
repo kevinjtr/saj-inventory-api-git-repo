@@ -5,7 +5,7 @@ require('dotenv').config();
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const {registered_users} = require('../config/queries')
-const {propNamesToLowerCase} = require('../tools/tools')
+const {propNamesToLowerCase, tokenHasEditPermision} = require('../tools/tools')
 const certTools = require('../middleware/utils/cert-tools');
 const path = require('path')
 const multer  = require('multer')
@@ -69,22 +69,6 @@ const isUserAdmin = async (user_id) => {
 		return result.rows[0].user_level == 1
 	}
 
-	return false
-}				
-
-const tokenHasEditPermision = (decoded_token, path) => {
-	const {user} = decoded_token
-	const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
-
-	if(REGISTERED_USERS_VIEW.hasOwnProperty(user.level)){
-		console.log(2)
-		if(REGISTERED_USERS_VIEW[user.level].hasOwnProperty(route_to_access)){
-			console.log(3)
-			return REGISTERED_USERS_VIEW[user.level][route_to_access].edit
-		}
-		return user.level == "admin"
-	}
-	
 	return false
 }
 
@@ -292,6 +276,7 @@ exports.verifyToken = async (req, res, next) => {
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
+					console.log(req.path)
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
 					req.user_level = decode.user.level					
@@ -303,6 +288,7 @@ exports.verifyToken = async (req, res, next) => {
 				}
 					
 				req.user = decode.user.id
+				req.decode = decode
 			}
 		});
 
