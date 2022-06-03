@@ -15,6 +15,11 @@ if (process.env.NODE_ENV === 'development') {
 	app.use(cors());
 	usaceCertMiddleware = require('./middleware/usace-cert-middleware');
 } else {
+	var methods = ["log", "debug"];
+    for(var i=0;i<methods.length;i++){
+        console[methods[i]] = function(){};
+    }
+	
 	usaceCertMiddleware = require('./middleware/usace-cert-middleware_apache');
 }
 
@@ -98,14 +103,14 @@ if (process.env.HTTPS === 'true') {
 	const httpsServer = https.createServer(httpsOptions, app);
 	httpsServer.timeout = 240000;
 	httpsServer.listen(port);
-	console.log(`Server is listening on https://localhost:${port}`);
+	console.info(`Server is listening on https://localhost:${port}`);
 	//csv.run()
 } else {
 	const http = require('http');
 	const httpServer = http.createServer(app);
 	httpServer.timeout = 240000;
 	httpServer.listen(port);
-	console.log(`Server is listening on http://localhost:${port}`);
+	console.info(`Server is listening on http://localhost:${port}`);
 }
 
 //app.listen(port);
