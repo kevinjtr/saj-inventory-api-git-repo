@@ -13,7 +13,7 @@ const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_
 const {employee_officeSymbol} = require('../config/queries');
 //const { fstat } = require('fs');
 const fs = require('fs')
-const path = require('path')
+const path = require('path');
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
     // extendedMetaData: true,               // get extra metadata
@@ -267,12 +267,14 @@ exports.add = async function(req, res) {
 					const return_messages = {}
 					
 					if(newData.user_type === 2){
-						//User is not registered
+						
+						//Flag to mark if employee was updated
+						let employeeUpdated=false
 						
 						for(let i=0;i<newData.hras.length;i++){//user_type = 2 [HRA]
 							//User wants to register as an HRA.
 							const hra_num = newData.hras[i]
-							
+														
 							let query = `SELECT h.*,e.* FROM HRA h LEFT JOIN (${employee_officeSymbol}) e 
 							on h.employee_id = e.id
 							WHERE HRA_NUM = ${Number(hra_num)} and UPPER(e.first_name) = '${cac_info.first_name.toUpperCase()}' and 
@@ -291,7 +293,59 @@ exports.add = async function(req, res) {
 								`
 								//let insertQuery = `INSERT /*+ ignore_row_on_dupkey_index(registered_users(EDIPI)) */ INTO registered_users (EDIPI, FULL_NAME, EMPLOYEE_ID, USER_LEVEL) VALUES (${cac_info.edipi}, '${hra_record.first_name + " " + hra_record.last_name}', ${hra_record.id}, 11)`
 								let insertResult = await connection.execute(mergeQuery,{},{autoCommit:AUTO_COMMIT.ADD})
-								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights granted" : "Error inserting user rights"	
+								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights granted" : "Error inserting user rights"
+								
+								// If the user was registered and employee was not already updated, also update their employee record with information they entered into the form
+								if(insertResult.rowsAffected > 0 && !employeeUpdated){
+									try{
+
+										// Check if user exists in the employee table
+										//let employeeQuery = `SELECT * FROM EMPLOYEE
+										//WHERE OFFICE_SYMBOL = ${Number(newData.office_symbol)} 
+										//and DIVISION = ${Number(newData.division)} 
+										//and DISTRICT = ${Number(newData.district)} 
+										//and UPPER(first_name) = '${cac_info.first_name.toUpperCase()}' 
+										//and	UPPER(last_name) = '${cac_info.last_name.toUpperCase()}'`
+
+										//let employeeResult = await connection.execute(employeeQuery,{},dbSelectOptions)
+
+										// Record return from original HRA/employee query
+										const hra_employee_record = propNamesToLowerCase(result.rows)[0]//grabbing first element.
+										
+										// Employee fields to be updated
+										const updates = ['title','work_phone','email','office_location_id']
+										let cols = ''
+										let vals = []
+										for(let i=0;i<updates.length;i++){
+											if(newData.hasOwnProperty(updates[i]) && newData[updates[i]] !== ''){
+												cols = cols + updates[i] + '= :' + i + ','
+												vals.push(newData[updates[i]]) 
+											// If the column is office_location_id, set blank so any previous office information is removed from employee table
+											} else if (newData.hasOwnProperty('office_location_id') && newData.office_location_id === ''){
+												cols = cols + updates[i] + '= :' + i + ','
+												vals.push(newData[updates[i]]) 
+											}
+										}
+										// Remove last comma
+										if(cols !== ''){cols = cols.slice(0,-1)}
+			
+										const updateQuery = `UPDATE EMPLOYEE SET ${cols}
+															WHERE ID = '${hra_employee_record.employee_id}'`
+										console.log(updateQuery)
+										let updateResult = await connection.execute(updateQuery,vals,{autoCommit:AUTO_COMMIT.ADD})
+										
+										if(updateResult.rowsAffected > 0){
+											employeeUpdated = true
+											console.log('HRA Employee information was updated')
+										} else {
+											console.log('HRA Employee information was NOT updated')
+										}
+
+									} catch(err){
+										console.log('HRA user was registered but there was an error when updating employee information')
+										console.log(err)
+									}
+								}
 							}
 								
 							else{
@@ -305,7 +359,7 @@ exports.add = async function(req, res) {
 								let statusComment = result.rows.length > 0 ? "HRA user account tied to different employee" : "No existing HRA user account found"
 
 								// HRA INFO AND CAC INFO DO NOT MATCH
-								let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, hras, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
+								let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, hras, status_comment,first_name_cac,last_name_cac,office_location_id) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, ${hra_num}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}',${newData.office_location_id?newData.office_location_id:null})`
 								let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 								return_messages[hra_num] = insertResult.rowsAffected > 0 ? "HRA user rights pending" : "Error inserting employee registration"
 							}
@@ -337,7 +391,7 @@ exports.add = async function(req, res) {
 	
 					let employeeResult = await connection.execute(employeeQuery,{},dbSelectOptions)
 
-					if(employeeResult.rows.length > 0){
+					if(employeeResult.rows.length > 0 && newData.user_type === 4){
 
 						const employee_record = propNamesToLowerCase(employeeResult.rows)[0]//grabbing first element.
 
@@ -352,6 +406,44 @@ exports.add = async function(req, res) {
 						let mergeResult = await connection.execute(mergeQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 
 						if(mergeResult.rowsAffected > 0){
+
+							// If the user was registered, also update their employee record with information they entered into the form
+							try{
+								// Employee fields to be updated
+								const updates = ['title','work_phone','email','office_location_id']
+								let cols = ''
+								let vals = []
+								for(let i=0;i<updates.length;i++){
+									if(newData.hasOwnProperty(updates[i]) && newData[updates[i]] !== ''){
+										cols = cols + updates[i] + '= :' + i + ','
+										vals.push(newData[updates[i]]) 
+									// If the column is office_location_id, set blank so any previous office information is removed from employee table
+									} else if (newData.hasOwnProperty('office_location_id') && newData.office_location_id === ''){
+										cols = cols + updates[i] + '= :' + i + ','
+										vals.push(newData[updates[i]]) 
+									}
+								}
+								// Remove last comma
+								if(cols !== ''){cols = cols.slice(0,-1)}
+
+								const updateQuery = `UPDATE EMPLOYEE SET ${cols}
+													WHERE ID = '${employee_record.id}'`
+								console.log(updateQuery)
+								let updateResult = await connection.execute(updateQuery,vals,{autoCommit:AUTO_COMMIT.ADD})
+								
+								if(updateResult.rowsAffected >0){
+									console.log('Regular Employee information was updated')
+								} else {
+									console.log('Regular Employee information was NOT updated')
+								}
+
+							} catch(err){
+								console.log('Regular user was registered but there was an error when updating employee information')
+								console.log(err)
+							}
+							
+							
+
 							return res.status(200).json({
 								status: 200,
 								error: false,
@@ -361,7 +453,7 @@ exports.add = async function(req, res) {
 
 					} else {
 						
-						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, status_comment,first_name_cac,last_name_cac) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}')`
+						let insertQuery = `INSERT INTO EMPLOYEE_REGISTRATION (EDIPI, first_name, last_name, title, office_symbol, work_phone, deleted, division, district, email, user_type, status_comment,first_name_cac,last_name_cac,office_location_id) VALUES (${cac_info.edipi}, '${newData.first_name}', '${newData.last_name}', '${newData.title}', ${newData.office_symbol}, '${newData.work_phone}', 2 , ${newData.division}, ${newData.district}, '${newData.email}', ${newData.user_type}, '${statusComment}','${cac_info.first_name}','${cac_info.last_name}',${newData.office_location_id?newData.office_location_id:null})`
 					
 						let insertResult = await connection.execute(insertQuery,{},{autoCommit:AUTO_COMMIT.ADD})
 							
