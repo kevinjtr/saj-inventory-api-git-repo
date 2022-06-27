@@ -66,6 +66,8 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							eq.ITEM_TYPE,
 							eq.HRA_NUM,
 							eq.deleted eq_deleted,
+							eq.status,
+							eq.status_date,
 							ur.UPDATED_BY_FULL_NAME,
 							ur.user_level,
 							e.id as employee_id,
@@ -118,6 +120,8 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							eq.DOCUMENT_NUM,
 							eq.ITEM_TYPE,
 							eq.HRA_NUM,
+							eq.STATUS,
+							eq.STATUS_DATE,
 							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
 							ur.user_level,
@@ -530,6 +534,8 @@ exports.search2 = async function(req, res) {
 				employees = [...rows]
 			}
 
+			//console.log(tabsReturnObject)
+
 			return res.status(200).json({
 				status: 200,
 				error: false,
@@ -648,7 +654,7 @@ exports.add = async function(req, res) {
 
 	try{
 		const {changes} = req.body.params
-		console.log(changes)
+		//console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {newData} = changes[row];
@@ -734,7 +740,7 @@ exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	let tabsReturnObject = {}
-
+	console.log("You've entered the update method")
 	
 	try{
 		const {changes,undo} = req.body.params
@@ -746,7 +752,7 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-				
+				console.log(newData)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})
