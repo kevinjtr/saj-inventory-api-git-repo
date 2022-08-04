@@ -3,10 +3,14 @@ const dbConfig = require('../dbconfig.js');
 const {dbSelectOptions} = require('../config/db-options');
 const moment = require('moment')
 const sendmail = require('sendmail')();
+const new_version = "v0.9.2"
+const message_type = "scheduled_update"
+const when = "tomorrow August 5, 2022"
 
 const subject = {
     maintenance: (obj) => `Notification: Inventory Application will be down ${obj.when} for scheduled maintenance.`,
-    update: (obj) => `Notification: Inventory Application will be down ${obj.when} for version update.`,
+    scheduled_update: (obj) => `Notification: Inventory Application will be down ${obj.when} for version update.`,
+    update_complete: (obj) => `Notification: Inventory Application has been updated to ${new_version}.`,
 }
 
 const DateTimePrint = () => `Date/Time: ${moment(new Date()).format("MMMM DD, YYYY HH:mm:ss")}.<br/><br/>`
@@ -17,11 +21,30 @@ const html_body = {
     Inventory Application will be down ${obj.when} for maintenance.<br/><br/>
 
   -Inventory App Notifications`,
-  update: (obj) => `Att: ${obj.first_name ? obj.first_name : ""} ${obj.last_name},<br/><br/>
+  scheduled_update: (obj) => `Att: ${obj.first_name ? obj.first_name : ""} ${obj.last_name},<br/><br/>
 
     You have received this email because you're currently registered on CESAJ Inventory Application.<br/><br/>
     
-    Note: Inventory Application will be down ${obj.when} for v0.9.2 update.<br/><br/>
+    Note: Inventory Application will be down ${obj.when} for ${new_version} update.<br/><br/>
+
+    <strong>New Features:</strong><br/><br/>
+    User Registration.<br/>
+    ----New users can easily register directly from the Sign In Page.<br/><br/>
+    ENG4900 Email notifications.<br/>
+    ----HRAs and authorized users will recieve email alerts from the application on the status of a ENG4900 form.<br/><br/>
+    Ability to turn ON/OFF email notifications.<br/>
+    ----location: Click on User Information Icon on top right of screen and then "Email Notifications".<br/><br/>
+    HRA users can now approve new user registrations from employees of their offices.<br/>
+    ----Ex: when a new user tries to register with office CESAJ-EN-DG.<br/>
+    ----Every HRA account tied to CESAJ-EN-DG will be allowed to approve new users.<br/><br/>
+    Other small fixes were done to improve website.<br/><br/>  
+
+  -Inventory App Notifications`,
+  update_complete: (obj) => `Att: ${obj.first_name ? obj.first_name : ""} ${obj.last_name},<br/><br/>
+
+    You have received this email because you're currently registered on CESAJ Inventory Application.<br/><br/>
+    
+    Note: Inventory Application has been updated to ${new_version}.<br/><br/>
 
     <strong>New Features:</strong><br/><br/>
     User Registration.<br/>
@@ -40,9 +63,6 @@ const html_body = {
 
 async function massEmailAlert() {
     const connection =  await oracledb.getConnection(dbConfig);
-    //const message_type = "maintenance" 
-    const message_type = "update"
-    const when = "tomorrow August 5, 2022"
 
     let sql = `select e.first_name as "first_name", e.last_name as "last_name", e.email as "email", ru.notifications as "notifications" from registered_users ru
     left join employee e on e.id = ru.employee_id
