@@ -23,6 +23,8 @@ const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
 const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg_forms"]
+const {form4900EmailAlert} = require("../tools/email-notifier")
+require('dotenv').config();
 
 const printElements = (elements) => {
 	let str = ""
@@ -1611,6 +1613,7 @@ exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	await connection.execute('SAVEPOINT form_update')
 	const {edipi} = req.headers.cert
+	let notifcations_active = false;
 
 	console.log('data',req.body.params.changes[0])
 	const db_update_results = {
@@ -1621,6 +1624,13 @@ exports.update = async function(req, res) {
 
 	try{
 		const {changes} = req.body.params
+
+		if(process.env.APPLICATION_ID){
+			let notifications_result = await connection.execute(`SELECT NOTIFICATIONS AS "notifications" FROM APPLICATION_SETTINGS WHERE ID = :0`,[process.env.APPLICATION_ID],dbSelectOptions)
+			notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
+		}
+
+		console.log(`notifications on: ${notifcations_active}`)
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -1716,6 +1726,10 @@ exports.update = async function(req, res) {
 								//const tabsReturnObject = await searchEng4900UpdatedData(cell_id, connection, req.user)
 								//const tabsDelReturnObject = searchEng4900DeletedData(tab_idx,tabsReturnObject,cell_id)
 								
+								if(notifcations_active){
+									form4900EmailAlert(cell_id, connection)
+								}
+
 								return(
 									res.status(200).json({
 										status: 200,
@@ -1882,6 +1896,7 @@ exports.upload = async function(req, res) {
 	await connection.execute('SAVEPOINT form_update')
 	const changes = await ParseHeaders(req.headers.changes)
 	const {edipi} = req.headers.cert
+	let notifcations_active = false;
 	const db_update_results = {
 		fs_record: {deleted:false, status_downgrade:false, signature_removal: false, error:false},
 		equipment_result: {error: false},
@@ -1898,6 +1913,13 @@ exports.upload = async function(req, res) {
 	if(isFileValid(myFile.name,'pdf') && req.params.id >= 0 && Object.keys(changes).length){
 		const {id} = req.params
 		const new_status = changes.status
+
+		if(process.env.APPLICATION_ID){
+			let notifications_result = await connection.execute(`SELECT NOTIFICATIONS AS "notifications" FROM APPLICATION_SETTINGS WHERE ID = :0`,[process.env.APPLICATION_ID],dbSelectOptions)
+			notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
+		}
+
+		console.log(`notifications on: ${notifcations_active}`)
 
 		let result = await connection.execute(`SELECT * FROM (${queryForSearch(req.user)}) F 
 		LEFT JOIN file_storage fs on fs.id = f.file_storage_id 
@@ -1949,9 +1971,12 @@ exports.upload = async function(req, res) {
 
 						if(!isTransactionErrorFound(db_update_results)){
 							await connection.commit()
-							
 							const tabsReturnObject = await getTabData(connection, req.user)
 							
+							if(notifcations_active){
+								form4900EmailAlert(id, connection)
+							}
+
 							return(
 								res.status(200).json({
 									status: 200,

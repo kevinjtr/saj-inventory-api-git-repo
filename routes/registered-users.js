@@ -9,4 +9,6 @@ module.exports = function(app) {
 
 	//POST REGISTERED USER
 	app.route('/registered-users/add').post(usersController.verifyToken,controller.add);
+
+	app.route('/registered-users/notifications/:active').post(usersController.verifyToken,controller.notifications);
 };

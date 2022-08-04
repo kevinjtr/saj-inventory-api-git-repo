@@ -92,7 +92,7 @@ exports.login = async (req, res) => {
 
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)
-				const {id, updated_by_full_name, user_level_alias, user_level_name} = result.rows[0]
+				const {id, updated_by_full_name, user_level_alias, user_level_name, notifications} = result.rows[0]
 
 				console.log(result.rows[0])
 				//console.log(result)
@@ -101,7 +101,8 @@ exports.login = async (req, res) => {
 					name: updated_by_full_name,
 					level: user_level_alias,
 					level_name: user_level_name,
-					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1
+					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1,
+					notifications: notifications,
 				};
 
 				//console.log(user)
@@ -115,7 +116,8 @@ exports.login = async (req, res) => {
 						user_name: user.name,
 						exp: token_exp,
 						access: user.access,
-						message: 'Login success.'
+						message: 'Login success.',
+						notifications: user.notifications
 					});
 				});
 
@@ -270,7 +272,7 @@ exports.verifyToken = async (req, res, next) => {
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 
-			console.log(decode)
+			//console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {

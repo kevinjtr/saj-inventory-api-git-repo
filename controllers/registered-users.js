@@ -4,6 +4,7 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
+const { autoCommit } = require('oracledb');
 
 const noReplaceCols = ['hra_num']
 const BANNED_COLS_RU_ADD = ['','']
@@ -20,7 +21,10 @@ exports.getByEDIPI = async function(req, res) {
 	const {edipi} = req.params
 
 	try{
-		let result =  await connection.execute(`SELECT * FROM REGISTERED_USERS WHERE EDIPI = ${edipi}`,{},dbSelectOptions)
+		let result =  await connection.execute(`SELECT e.first_name||' '||e.last_name as FULL_NAME, ru.id,ru.edipi,ru.employee_id,ru.user_level,ru.notifications FROM REGISTERED_USERS ru
+		left join employee e on e.id = ru.employee_id
+		WHERE ru.EDIPI = ${edipi}`,{},dbSelectOptions)
+
 		result.rows = propNamesToLowerCase(result.rows)
 	
 		res.status(200).json({
@@ -39,7 +43,6 @@ exports.getByEDIPI = async function(req, res) {
 		});
 	}
 };
-
 
 //!INSERT REGISTERED_USERS
 exports.add = async function(req, res) {
@@ -99,6 +102,46 @@ exports.add = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'Error adding new data!'
+		});
+	}
+};
+
+//!UPDate REGISTERED_USERS
+exports.notifications = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
+	const {active} = req.params
+
+	try{
+		const num = JSON.parse(active)
+		console.log(`active: ${active}, user: ${req.user}`)
+
+		let result =  await connection.execute(`UPDATE REGISTERED_USERS SET NOTIFICATIONS = :0 WHERE ID = ${req.user}`,[Number(num)],{autoCommit:false})
+		
+		if(result.rowsAffected > 0){
+			connection.commit();
+
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully updated notifications!',
+			});
+		}
+
+		console.log(err)
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'Could not update notifications!',
+		});
+	
+		
+	}catch(err){
+		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: []
 		});
 	}
 };

@@ -72,11 +72,10 @@ const getNames = async function(connection) {
     //const connection = await oracledb.getConnection(dbConfig);
     var resultArray = [];
     try {     
-        let result = await connection.execute(`SELECT "ID", "ID" as registered_users_id, 
-        "EDIPI", 
-        "FULL_NAME", 
-        "EMPLOYEE_ID", 
-        "USER_LEVEL"  FROM REGISTERED_USERS`, {}, dbSelectOptions)
+        let result = await connection.execute(`SELECT e.id, e.first_name||' '||e.last_name||' | CE'||d.symbol||'-'||os.alias||' | '||e.id||'-'||ru.id as FULL_NAME, ru.id as registered_users_id,ru.edipi,ru.employee_id,ru.user_level FROM REGISTERED_USERS ru
+        left join employee e on e.id = ru.employee_id
+        left join office_symbol os on os.id = e.office_symbol
+        left join district d on d.id = e.district`, {}, dbSelectOptions)
        
         if (result.rows.length > 0){
             result.rows = propNamesToLowerCase(result.rows)
