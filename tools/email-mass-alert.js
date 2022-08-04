@@ -23,7 +23,17 @@ const html_body = {
     
     Note: Inventory Application will be down ${obj.when} for v0.9.2 update.<br/><br/>
 
-    <strong>New features:</strong><br/>
+    <strong>New Features:</strong><br/><br/>
+    User Registration.<br/>
+    ----New users can easily register directly from the Sign In Page.<br/><br/>
+    ENG4900 Email notifications.<br/>
+    ----HRAs and authorized users will recieve email alerts from the application on the status of a ENG4900 form.<br/><br/>
+    Ability to turn ON/OFF email notifications.<br/>
+    ----location: Click on User Information Icon on top right of screen and then "Email Notifications".<br/><br/>
+    HRA users can now approve new user registrations from employees of their offices.<br/>
+    ----Ex: when a new user tries to register with office CESAJ-EN-DG.<br/>
+    ----Every HRA account tied to CESAJ-EN-DG will be allowed to approve new users.<br/><br/>
+    Other small fixes were done to improve website.<br/><br/>  
 
   -Inventory App Notifications`,
 }
@@ -45,21 +55,22 @@ async function massEmailAlert() {
 
         for(const user of result.rows){
             const opts_obj = {...user, when: when}
-            const obj_settings = {from: 'no-reply-inventory@usace.army.mil', to:'kevin.l.alemany@usace.army.mil', subject:subject[message_type](opts_obj), html:html_body[message_type](opts_obj)}
+            const obj_settings = {from: 'no-reply-inventory@usace.army.mil', to: user.email, subject:subject[message_type](opts_obj), html:html_body[message_type](opts_obj)}
 
             if(!array_of_opts_obj.includes(obj_settings.to)){
                 //Will not send more than one email to a user.
                 array_of_opts_obj.push(obj_settings.to)
                 //console.log(obj_settings)
-                const s = {...obj_settings, to: 'kevin.l.alemany@usace.army.mil'}
+                //const s = {...obj_settings, to: 'kevin.l.alemany@usace.army.mil'}
 
-                console.log(s)
-                sendmail(s, function(err, reply) {
-                //console.log(err && err.stack);
-                //console.dir(reply);
+                console.log(obj_settings)
+                //console.log(s)
+                // sendmail(obj_settings, function(err, reply) {
+                // //console.log(err && err.stack);
+                // //console.dir(reply);
 
-                console.log(!err ? "email sent.": "")
-                });
+                // console.log(!err ? "email sent.": "")
+                // });
             }
         }
       }

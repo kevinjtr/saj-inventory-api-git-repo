@@ -492,10 +492,10 @@ module.exports = {
                 //Will not send more than one email to a user.
                 array_of_opts_obj.push(obj_settings.to)
                 //console.log(obj_settings)
-                const s = {...obj_settings, to: 'kevin.l.alemany@usace.army.mil'}
+                //const s = {...obj_settings, to: 'kevin.l.alemany@usace.army.mil'}
   
                 //console.log(s)
-                sendmail(s, function(err, reply) {
+                sendmail(obj_settings, function(err, reply) {
                   //console.log(err && err.stack);
                   //console.dir(reply);
   
