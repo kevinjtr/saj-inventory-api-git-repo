@@ -16,7 +16,7 @@ const subject = {
 const DateTimePrint = () => `Date/Time: ${moment(new Date()).format("MMMM DD, YYYY HH:mm:ss")}.<br/><br/>`
 
 const html_body = {
-    maintenance: (obj) => `Att: ${obj.first_name ? obj.first_name : ""} ${obj.last_name},<br/><br/>
+  maintenance: (obj) => `Att: ${obj.first_name ? obj.first_name : ""} ${obj.last_name},<br/><br/>
 
     Inventory Application will be down ${obj.when} for maintenance.<br/><br/>
 
@@ -97,7 +97,7 @@ async function massEmailAlert() {
 
     connection.close()
     return "done";
-  }
+}
 
 massEmailAlert()
 
