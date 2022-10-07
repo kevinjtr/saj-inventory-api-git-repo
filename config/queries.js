@@ -131,7 +131,9 @@ module.exports = {
 	e.TITLE as employee_title,
 	e.OFFICE_SYMBOL as employee_office_symbol,
 	e.WORK_PHONE as employee_work_phone,
-	ol.NAME as employee_office_location_name
+	ol.NAME as employee_office_location_name,
+	ol.latitude as employee_office_location_latitude,
+	ol.longitude as employee_office_location_longitude
 	FROM ${EQUIPMENT} eq
 	LEFT JOIN employee e
 	on eq.user_employee_id = e.id

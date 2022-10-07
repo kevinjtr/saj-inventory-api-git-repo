@@ -26,7 +26,7 @@ exports.add = async function(req, res) {
 					return res.status(200).json({
 						status: 200,
 						error: false,
-						message: 'Problem has been reported',
+						message: 'Feedback has been submitted.',
 					});
 				}
 		

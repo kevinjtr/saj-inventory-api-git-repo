@@ -77,7 +77,9 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
 							e.WORK_PHONE as employee_work_phone,
-							ol.NAME as employee_office_location_name
+							ol.NAME as employee_office_location_name,
+							ol.latitude as employee_office_location_latitude,
+							ol.longitude as employee_office_location_longitude
 							FROM ${type != "excess_equipment" ? EQUIPMENT : "EQUIPMENT"} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
@@ -132,7 +134,9 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							e.TITLE as employee_title,
 							e.OFFICE_SYMBOL as employee_office_symbol,
 							e.WORK_PHONE as employee_work_phone,
-							ol.NAME as employee_office_location_name
+							ol.NAME as employee_office_location_name,
+							ol.latitude as employee_office_location_latitude,
+							ol.longitude as employee_office_location_longitude
 							FROM ${tab_name != "excess_equipment" ? EQUIPMENT : "EQUIPMENT"} eq
 							LEFT JOIN employee e
 							on eq.user_employee_id = e.id
