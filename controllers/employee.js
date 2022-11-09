@@ -88,6 +88,60 @@ exports.getById = async function(req, res) {
 	}
 };
 
+//!SELECT EMPLOYEE BY ID
+exports.getByEDIPI = async function(req, res) {
+	const connection =  await oracledb.getConnection(dbConfig);
+
+	try{
+		let result =  await connection.execute(`SELECT
+		e.ID,
+		e.FIRST_NAME,
+		e.LAST_NAME,
+		e.TITLE,
+		e.WORK_PHONE,
+		e.email,
+		o.ALIAS as OFFICE_SYMBOL_ALIAS,
+		e.OFFICE_SYMBOL,
+		e.office_location_id,
+		div.symbol as division_symbol,
+		dis.symbol as district_symbol,
+		ol.NAME as OFFICE_LOCATION_NAME
+		FROM EMPLOYEE e
+		LEFT JOIN OFFICE_SYMBOL o
+		ON e.OFFICE_SYMBOL = o.id
+		LEFT JOIN OFFICE_LOCATION ol
+		on ol.id = e.office_location_id
+		left join registered_users ru
+		on ru.employee_id = e.id
+		left join district dis
+		on dis.id = e.district
+		left join division div
+		on div.id = e.division
+		WHERE ru.id = :0`,[req.user],dbSelectOptions)
+
+		if (result.rows.length > 0) {
+			result.rows = propNamesToLowerCase(result.rows)
+
+			res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'Successfully get single data!',
+				data: result.rows[0],
+			});
+		} else {
+			res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: {},
+			});
+		}
+	}catch(err){
+		console.log(err)
+		//logger.error(err)
+	}
+};
+
 //!SELECT EMPLOYEE BY FIELDS DATA
 exports.search = async function(req, res) {
 	const {edit_rights} = req

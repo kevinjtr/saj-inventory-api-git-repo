@@ -8,6 +8,7 @@ module.exports = function(app) {
 	//!GET
 	app.route('/employee').get(usersController.verifyToken,controller.index);
 	app.route('/employee/:id').get(usersController.verifyToken,controller.getById);
+	app.route('/employee-edipi').get(usersController.verifyToken,controller.getByEDIPI);
 	app.route('/employee/search').post(usersController.verifyToken,controller.search);
 	app.route('/employee2').get(usersController.verifyToken,controller2.index);
 	app.route('/employee2/add').post(usersController.verifyToken,controller2.add);

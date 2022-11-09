@@ -25,25 +25,25 @@ module.exports = {
 		admin - full access to the system
 
 		employee_1 - Considered a regular/standard user. Most users will be at this level. 
-			View access to the home and equipment tabs. 
+			View access to the dashboard and equipment tabs. 
 
 		employe_2 - Someone assisting with annual inventory/finding equipment but not making documents. 
-			View access to the following tabs: home, equipment, annual inventory, hra, employee, ENG4900, and change history
+			View access to the following tabs: dashboard, equipment, annual inventory, hra, employee, ENG4900, and change history
 
 		employee_3 - An authorized user. Someone who has permission to make documents and/or sign on behalf of an HRA holder. 
 		             Typically a management assistant. 
-			View access to the following tabs: home, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
+			View access to the following tabs: dashboard, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
 			Edit capabilites in the following tabs: annual inventory and ENG4900
 		
 		hra_1 - This is an HRA holder
-			View access to the following tabs:  home, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
+			View access to the following tabs:  dashboard, equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
 			Edit capabilities in the following tabs: equipment, annual inventory, hra, employee, ENG4900, change history, and authorized users
 
 */
     REGISTERED_USERS_VIEW: {
         admin:{
             admin:{view:true, edit:true},
-            home:{view:true, edit:true},
+            dashboard:{view:true, edit:true},
             equipment:{view:true, edit:true},
             annualinventory:{view:true, edit:true},
             hra:{view:true, edit:true},
@@ -56,7 +56,7 @@ module.exports = {
         },
         employee_1:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:false},
             annualinventory: {view:false, edit:false},
             hra: {view:false, edit:false},
@@ -69,7 +69,7 @@ module.exports = {
         },
         employee_2:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:false},
             annualinventory: {view:true, edit:false},
             hra: {view:true, edit:false},
@@ -82,7 +82,7 @@ module.exports = {
         },
         employee_3:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:false},
             annualinventory: {view:true, edit:true},
             hra: {view:true, edit:false},
@@ -95,7 +95,7 @@ module.exports = {
         },
     /* 	employee_4:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:false},
             annualinventory: {view:true, edit:true},
             hra: {view:true, edit:true},
@@ -108,7 +108,7 @@ module.exports = {
         }, */
         hra_1:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:true},
             annualinventory: {view:true, edit:true},
             hra: {view:true, edit:false}, //should only be able to edit their HRA info but can view all HRAs
@@ -123,7 +123,7 @@ module.exports = {
         },
         /* hra_2:{
             admin:{view:false, edit:false},
-            home: {view:true, edit:false},
+            dashboard: {view:true, edit:false},
             equipment: {view:true, edit:true},
             annualinventory: {view:true, edit:true},
             hra: {view:true, edit:true},

@@ -10,6 +10,7 @@ const certTools = require('../middleware/utils/cert-tools');
 const path = require('path')
 const multer  = require('multer')
 const upload = multer({ dest: path.join(__dirname,'../public/') })
+const DB_OFF = false
 // 	// here the query is executed
 //    });
 //const connection = require('../connect');
@@ -88,24 +89,17 @@ exports.login = async (req, res) => {
 				await certTools.UpdateUserAccessHistory(req.headers.cert)
 			}
 
-			let result =  await connection.execute(`${registered_users} where edipi = :0`,[edipi],dbSelectOptions)
-
-			if(result.rows.length > 0){
-				result.rows = propNamesToLowerCase(result.rows)
-				const {id, updated_by_full_name, user_level_alias, user_level_name, notifications} = result.rows[0]
-
-				console.log(result.rows[0])
-				//console.log(result)
+			if(DB_OFF){
 				user = {
-					id: id,
-					name: updated_by_full_name,
-					level: user_level_alias,
-					level_name: user_level_name,
-					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1,
-					notifications: notifications,
+					id: 1,
+					name: "Kevin Alemany",
+					level: "admin",
+					level_name: "Administrator",
+					access: Object.keys(REGISTERED_USERS_VIEW).includes("admin") ? REGISTERED_USERS_VIEW["admin"] : REGISTERED_USERS_VIEW.user_1,
+					notifications: 1,
+					district_office: "CESAJ-EN-DG"
 				};
 
-				//console.log(user)
 				const token_exp = Math.floor(Date.now() / 1000) + (60 * 60 * 12)//12hrs
 
 				jwt.sign({ user: user, exp: token_exp}, process.env.SECRET_KEY, (err, token) => {
@@ -117,6 +111,44 @@ exports.login = async (req, res) => {
 						exp: token_exp,
 						access: user.access,
 						message: 'Login success.',
+						district_office: user.district_office,
+						notifications: user.notifications
+					});
+				});
+
+				return;
+			}
+
+			let result =  await connection.execute(`${registered_users} where edipi = :0`,[edipi],dbSelectOptions)
+
+			if(result.rows.length > 0){
+				result.rows = propNamesToLowerCase(result.rows)
+				const {id, updated_by_full_name, user_level_alias, user_level_name, user_district_office, notifications} = result.rows[0]
+
+				console.log(result.rows[0])
+
+				user = {
+					id: id,
+					name: updated_by_full_name,
+					level: user_level_alias,
+					level_name: user_level_name,
+					access: Object.keys(REGISTERED_USERS_VIEW).includes(user_level_alias) ? REGISTERED_USERS_VIEW[user_level_alias] : REGISTERED_USERS_VIEW.user_1,
+					notifications: notifications,
+					district_office: user_district_office
+				};
+
+				const token_exp = Math.floor(Date.now() / 1000) + (60 * 60 * 12)//12hrs
+
+				jwt.sign({ user: user, exp: token_exp}, process.env.SECRET_KEY, (err, token) => {
+					res.json({
+						token: token,
+						user: user.level,
+						level_name:user.level_name,
+						user_name: user.name,
+						exp: token_exp,
+						access: user.access,
+						message: 'Login success.',
+						district_office: user.district_office,
 						notifications: user.notifications
 					});
 				});

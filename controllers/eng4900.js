@@ -10,7 +10,7 @@ const orderBy = require('lodash/orderBy')
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
-const {eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
+const {eng4900SearchQuery, whereEng4900SignFormAuth, whereEng4900SignFormSelf, eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
@@ -51,53 +51,55 @@ const andOR_multiple = {
 	'notEquals':and_
 }
 
-const queryForSearch = (id) => `SELECT 
-f.id as form_id,
-CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
-f.file_storage_id,
-f.individual_ror_prop,
-fs.status as status_alias,
-ra.alias as REQUESTED_ACTION,
-f.LOSING_HRA as losing_hra_num,
-f.updated_date,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
-CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
-CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,
-l_hra.losing_hra_first_name,
-l_hra.losing_hra_last_name,
-l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
-l_hra.losing_hra_office_symbol,
-l_hra.losing_hra_work_phone,
-f.GAINING_HRA as gaining_hra_num,
-g_hra.gaining_hra_first_name,
-g_hra.gaining_hra_last_name,
-g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
-g_hra.gaining_hra_office_symbol,
-g_hra.gaining_hra_work_phone,
-f.DATE_CREATED,
-f.FOLDER_LINK,
-f.DOCUMENT_SOURCE,
-eg.form_equipment_group_ID as equipment_group_id,
-e.id as EQUIPMENT_ID, 
-	e.BAR_TAG_NUM , 
-	e.CATALOG_NUM , 
-	e.BAR_TAG_HISTORY_ID , 
-	e.MANUFACTURER , 
-	e."MODEL", 
-	e.CONDITION , 
-	e.SERIAL_NUM , 
-	e.ACQUISITION_DATE , 
-	e.ACQUISITION_PRICE , 
-	e.DOCUMENT_NUM, 
-	e.ITEM_TYPE , 
-	e.USER_EMPLOYEE_ID
-	from ${FORM_4900} f
-	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
-	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
-	LEFT JOIN requested_action ra on ra.id = f.requested_action
-	LEFT JOIN (${eng4900_gainingHra}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
-	LEFT JOIN ( ${eng4900_losingHra}) l_hra on f.losing_hra = l_hra.losing_hra_num
-	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
+// const eng4900SearchQuery = (id) => `SELECT 
+// f.id as form_id,
+// CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
+// f.file_storage_id,
+// f.individual_ror_prop,
+// fs.status as status_alias,
+// ra.alias as REQUESTED_ACTION,
+// f.LOSING_HRA as losing_hra_num,
+// f.updated_date,
+// CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
+// CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
+// CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,
+// l_hra.losing_hra_first_name,
+// l_hra.losing_hra_last_name,
+// l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
+// l_hra.losing_hra_office_symbol,
+// l_hra.losing_hra_work_phone,
+// l_hra.losing_hra_is_registered,
+// f.GAINING_HRA as gaining_hra_num,
+// g_hra.gaining_hra_first_name,
+// g_hra.gaining_hra_last_name,
+// g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
+// g_hra.gaining_hra_office_symbol,
+// g_hra.gaining_hra_work_phone,
+// g_hra.gaining_hra_is_registered,
+// f.DATE_CREATED,
+// f.FOLDER_LINK,
+// f.DOCUMENT_SOURCE,
+// eg.form_equipment_group_ID as equipment_group_id,
+// e.id as EQUIPMENT_ID, 
+// 	e.BAR_TAG_NUM , 
+// 	e.CATALOG_NUM , 
+// 	e.BAR_TAG_HISTORY_ID , 
+// 	e.MANUFACTURER , 
+// 	e."MODEL", 
+// 	e.CONDITION , 
+// 	e.SERIAL_NUM , 
+// 	e.ACQUISITION_DATE , 
+// 	e.ACQUISITION_PRICE , 
+// 	e.DOCUMENT_NUM, 
+// 	e.ITEM_TYPE , 
+// 	e.USER_EMPLOYEE_ID
+// 	from ${FORM_4900} f
+// 	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
+// 	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
+// 	LEFT JOIN requested_action ra on ra.id = f.requested_action
+// 	LEFT JOIN (${eng4900_gainingHra}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
+// 	LEFT JOIN ( ${eng4900_losingHra}) l_hra on f.losing_hra = l_hra.losing_hra_num
+// 	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
 
 const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM FORM_EQUIPMENT E LEFT JOIN CONDITION C ON E.CONDITION = C.ID`   
 
@@ -114,12 +116,14 @@ const newQuerySelById = `SELECT
 		l_hra.losing_hra_office_symbol,
 		l_hra.losing_hra_os_alias,
 		l_hra.losing_hra_work_phone,
+		l_hra.losing_hra_is_registered,
 		f.GAINING_HRA as gaining_hra_num,
 		g_hra.gaining_hra_first_name,
 		g_hra.gaining_hra_last_name,
 		g_hra.gaining_hra_office_symbol,
 		g_hra.gaining_hra_os_alias,
 		g_hra.gaining_hra_work_phone,
+		g_hra.gaining_hra_is_registered,
 		f.DATE_CREATED,
 		f.FOLDER_LINK,
 		f.form_equipment_group_id,
@@ -143,12 +147,14 @@ const newQuerySelById = `SELECT
 			null as losing_hra_office_symbol,
 			null as losing_hra_os_alias,
 			null as losing_hra_work_phone,
+			null as losing_hra_is_registered,
 			f.GAINING_HRA as gaining_hra_num,
 			g_hra.gaining_hra_first_name,
 			g_hra.gaining_hra_last_name,
 			g_hra.gaining_hra_office_symbol,
 			g_hra.gaining_hra_os_alias,
 			g_hra.gaining_hra_work_phone,
+			g_hra.gaining_hra_is_registered,
 			f.DATE_CREATED,
 			f.FOLDER_LINK,
 			f.form_equipment_group_id,
@@ -375,7 +381,7 @@ const isNewStatusValid = (requested_action, new_status, status, is_losing_hra, i
 	return false
 }
 
-const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gaining_hra, tab_idx) => {
+const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab_idx) => {
 
 	const ids = Object.keys(FORM_4900_STATUS[requested_action])
 	const returnArray = []
@@ -510,7 +516,7 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 		}else if(status == 6){//form sign. before: 3, 5
 
 			if(requested_action == "Transfer"){
-				if(id == 6 || (id == 7 && is_gaining_hra && tab_idx == 2)){//before: 3, 5
+				if(id == 6 || (id == 7 && (is_gaining_hra || !gaining_hra_is_registered) && tab_idx == 2)){//before: 3, 5
 					returnArray.push({id:id, label:label})
 				}
 			}else{
@@ -591,7 +597,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 	const form_id = rowData.id
 
 	try{
-		let sql = queryForSearch(user_id) + ` WHERE f.ID = ${form_id}`//returns array of equipments.
+		let sql = eng4900SearchQuery(user_id) + ` WHERE f.ID = ${form_id}`//returns array of equipments.
 		let result = await connection.execute(sql,{},dbSelectOptions)
 		
 		if(isFormCompleted(status, requested_action) && result.rows.length > 0){
@@ -1126,7 +1132,7 @@ const FormsToMaterialTableFormat = (form_groups) => {
 }
 
 const getQueryForTab = (tab_name, user) => {
-	let query = queryForSearch(user)
+	let query = eng4900SearchQuery(user)
 
 	//2 (ROR), 4 (L), 6 (G) signatures required.
 
@@ -1144,54 +1150,21 @@ const getQueryForTab = (tab_name, user) => {
 		
 	} else if(tab_name == "hra_forms"){
 		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (107) AND F.REQUESTED_ACTION in (2,3,5)) 
-		UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (109) AND F.REQUESTED_ACTION in (4))) 
-		UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (103) AND F.REQUESTED_ACTION in (1))) `
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (109) AND F.REQUESTED_ACTION in (4))) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (103) AND F.REQUESTED_ACTION in (1))) `
 	} else if(tab_name == "sign_forms"){//Change: needs to be self.
 		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
-				UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-				UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-				UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-				UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
 				
 	} else if(tab_name == "completed_and_ipg_forms"){
 		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 103 AND F.REQUESTED_ACTION IN (1)) 
-		UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 107 AND F.REQUESTED_ACTION in (2,3,5))) 
-		UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 109 AND F.REQUESTED_ACTION in (4)))  `
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 107 AND F.REQUESTED_ACTION in (2,3,5))) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 109 AND F.REQUESTED_ACTION in (4)))  `
 	}
-
-	// if(tab_name == "my_forms"){
-	// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (2,3,4,5)) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4))
-	// 	//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
-	// } else if(tab_name == "hra_forms"){
-	// 	query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (2,3,4,5))
-	// 	UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (3,4,5,6,7,8,9,10,11) AND F.REQUESTED_ACTION in (1)) ) `//before AND F.STATUS NOT IN (3,9) AND F.REQUESTED_ACTION in (2,4)) 
-	// 	//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (10) AND F.REQUESTED_ACTION in (1))) `//before AND F.STATUS NOT IN (5,9) AND F.REQUESTED_ACTION in (1,3,5)))
-	// } else if(tab_name == "sign_forms"){//Change: needs to be self.
-	// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2))
-	// 			UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-	// 			UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-	// 			UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) `
-				
-	// 			//UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (1))) `
-
-
-	// 			// before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (2))
-	// 			//AND F.STATUS = 3 AND F.REQUESTED_ACTION in (2,4))) 
-
-	// 	// query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 6 AND F.REQUESTED_ACTION in (1,3,5))) `
-
-	// 	//before AND F.STATUS = 5 AND F.REQUESTED_ACTION in (1,3,5))) 
-	// } else if(tab_name == "completed_and_ipg_forms"){
-	// 	query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)})) 
-	// 	UNION (${queryForSearch(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (2,3,4,5)))
-	// 	UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 3 AND F.REQUESTED_ACTION in (1))) `
-	// 	//AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,2,3,4,5)
-	// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2)) 
-	// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (2,4))) `
-		
-	// 	//query += `UNION (${queryForSearch(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 10 AND F.REQUESTED_ACTION in (1,3,5))) `
-	// 	//before AND F.STATUS = 9 AND F.REQUESTED_ACTION in (1,3,5))) `
-	// }
 
 	return query
 }
@@ -1221,9 +1194,9 @@ const searchEng4900UpdatedData = async (form_id, connection, user) => {
 	Object.keys(tabsReturnObject).map(function(tab){
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
-				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = tabsReturnObject[tab][elem]
 				const steps = getAllStatusSteps(status, requested_action)
-				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
 				tabsReturnObject[tab][elem].all_status_steps = Object.keys(steps).map((key) => {
 					return {id:Number(key), label:steps[key]}
 				})
@@ -1272,9 +1245,9 @@ const getTabData = async (connection, user) => {
 	Object.keys(tabsReturnObject).map(function(tab){
 		if(tabsReturnObject[tab].length > 0){
 			Object.keys(tabsReturnObject[tab]).map(function(elem){
-				const {requested_action, status, is_losing_hra, is_gaining_hra} = tabsReturnObject[tab][elem]
+				const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = tabsReturnObject[tab][elem]
 				const steps = getAllStatusSteps(status, requested_action)
-				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				tabsReturnObject[tab][elem].status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
 				tabsReturnObject[tab][elem].all_status_steps = Object.keys(steps).map((key) => {
 					return {id:Number(key), label:steps[key]}
 				})	
@@ -1377,8 +1350,8 @@ exports.search2 = async function(req, res) {
 			const search_return = FormsToMaterialTableFormat(form_groups)
 
 			search_return.map(function(form_record){
-				const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
-				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+				const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = form_record
+				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
 				const steps = getAllStatusSteps(status, requested_action)
 				form_record.all_status_steps = Object.keys(steps).map((key) => {
 					return {id:Number(key), label:steps[key]}
@@ -1558,7 +1531,7 @@ exports.add = async function(req, res) {
 			result = await connection.execute(query,cells,{autoCommit:true})
 
 			if(result.rowsAffected > 0){
-				query = `${queryForSearch(req.user)} WHERE F.ROWID = :0`
+				query = `${eng4900SearchQuery(req.user)} WHERE F.ROWID = :0`
 				result = await connection.execute(query,[result.lastRowid],dbSelectOptions)
 				result.rows = propNamesToLowerCase(result.rows)
 
@@ -1569,8 +1542,8 @@ exports.add = async function(req, res) {
 				const search_return = FormsToMaterialTableFormat(form_groups)
 
 				search_return.map(function(form_record){
-					const {requested_action, status, is_losing_hra, is_gaining_hra} = form_record
-					form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, tab)
+					const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = form_record
+					form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
 					const steps = getAllStatusSteps(status, requested_action)
 					form_record.all_status_steps = Object.keys(steps).map((key) => {
 						return {id:Number(key), label:steps[key]}
@@ -1653,7 +1626,7 @@ exports.update = async function(req, res) {
 				const cell_id = newData.hasOwnProperty('form_id') ? newData.form_id : (newData.hasOwnProperty('id') ? newData.id : -1)
 
 				if(cell_id != -1 && status){
-					let from_record_result = await connection.execute(`SELECT * FROM (${queryForSearch(req.user)}) WHERE FORM_ID = :0`,[cell_id],dbSelectOptions)
+					let from_record_result = await connection.execute(`SELECT * FROM (${eng4900SearchQuery(req.user)}) WHERE FORM_ID = :0`,[cell_id],dbSelectOptions)
 
 					if(from_record_result.rows.length > 0){
 						from_record_result.rows =  propNamesToLowerCase(from_record_result.rows)
@@ -1796,7 +1769,7 @@ exports.destroy = async function(req, res) {
 		//console.log(changes)
 
 		
-		let result = await connection.execute(`${queryForSearch(req.user)} 
+		let result = await connection.execute(`${eng4900SearchQuery(req.user)} 
 		LEFT JOIN FILE_STORAGE FS ON FS.ID = F.FILE_STORAGE_ID WHERE F.ID = :0`,[id],dbSelectOptions)
 
 		console.log(result.rows)
@@ -1921,7 +1894,7 @@ exports.upload = async function(req, res) {
 
 		console.log(`notifications on: ${notifcations_active}`)
 
-		let result = await connection.execute(`SELECT * FROM (${queryForSearch(req.user)}) F 
+		let result = await connection.execute(`SELECT * FROM (${eng4900SearchQuery(req.user)}) F 
 		LEFT JOIN file_storage fs on fs.id = f.file_storage_id 
 		WHERE F.FORM_ID = :0`,[id],dbSelectOptions)
 		let new_filename = ""

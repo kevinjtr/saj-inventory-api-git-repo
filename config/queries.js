@@ -7,11 +7,17 @@ const equipment_count = {
 	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM ${EQUIPMENT} GROUP BY HRA_NUM `
 }
 
-const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias, ul.name as user_level_name, notifications FROM registered_users u
+const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias, ul.name as user_level_name,
+CASE WHEN (e.office_symbol is not null AND e.district is not null) THEN 'CE'||dis.symbol||'-'||os.alias ELSE '' END user_district_office, notifications 
+FROM registered_users u
 LEFT JOIN EMPLOYEE e
 on u.employee_id = e.id
 LEFT JOIN USER_LEVEL ul
-on u.user_level = ul.id `
+on u.user_level = ul.id
+left join office_symbol os
+on os.id = e.office_symbol
+left join district dis
+on dis.id = e.district `
 
 const registered_users_all_cols = `SELECT u.*, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME FROM registered_users u
 LEFT JOIN EMPLOYEE e
@@ -101,6 +107,116 @@ ON er.DISTRICT = dt.id
 LEFT JOIN DIVISION dn
 ON er.DIVISION = dn.id
 WHERE er.DELETED = 2`
+
+const hra_num_form_self = (id) => `SELECT 
+h.hra_num
+FROM (SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
+LEFT JOIN (${employee}) e 
+on h.employee_id = e.id
+LEFT JOIN (${equipment_count.hra}) hec
+on h.hra_num = hec.hra_num
+LEFT JOIN (${registered_users}) ur
+on ur.id = h.updated_by `
+
+const hra_num_form_all = (id) => `SELECT 
+h.hra_num
+FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
+union all
+SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
+LEFT JOIN (${employee}) e 
+on h.employee_id = e.id
+LEFT JOIN (${equipment_count.hra}) hec
+on h.hra_num = hec.hra_num
+LEFT JOIN (${registered_users}) ur
+on ur.id = h.updated_by `
+
+const hra_num_form_auth = (id) => `SELECT 
+h.hra_num
+FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
+LEFT JOIN (${employee}) e 
+on h.employee_id = e.id
+LEFT JOIN (${equipment_count.hra}) hec
+on h.hra_num = hec.hra_num
+LEFT JOIN (${registered_users}) ur
+on ur.id = h.updated_by `
+
+const hra_type = (type) => `SELECT h.hra_num as ${type}_hra_num,
+e.first_name as ${type}_hra_first_name,
+e.last_name as ${type}_hra_last_name,
+e.first_name || ' ' || e.last_name as ${type}_hra_full_name,
+e.work_phone as ${type}_hra_work_phone,
+e.office_symbol as ${type}_hra_office_symbol,
+e.office_symbol_alias as ${type}_hra_os_alias,
+CASE WHEN ru.id is not null THEN 1 ELSE 0 END ${type}_hra_is_registered
+from hra h
+left join (${employee}) e
+on h.employee_id = e.id
+left join registered_users ru
+on ru.employee_id = e.id `
+
+const eng4900SearchQuery = (id) => `SELECT 
+f.id as form_id,
+CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
+f.file_storage_id,
+f.individual_ror_prop,
+fs.status as status_alias,
+ra.alias as REQUESTED_ACTION,
+f.LOSING_HRA as losing_hra_num,
+f.updated_date,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
+CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
+CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,
+l_hra.losing_hra_first_name,
+l_hra.losing_hra_last_name,
+l_hra.losing_hra_first_name || ' ' || l_hra.losing_hra_last_name as losing_hra_full_name,
+l_hra.losing_hra_office_symbol,
+l_hra.losing_hra_work_phone,
+l_hra.losing_hra_is_registered,
+f.GAINING_HRA as gaining_hra_num,
+g_hra.gaining_hra_first_name,
+g_hra.gaining_hra_last_name,
+g_hra.gaining_hra_first_name || ' ' || g_hra.gaining_hra_last_name as gaining_hra_full_name,
+g_hra.gaining_hra_office_symbol,
+g_hra.gaining_hra_work_phone,
+g_hra.gaining_hra_is_registered,
+f.DATE_CREATED,
+f.FOLDER_LINK,
+f.DOCUMENT_SOURCE,
+eg.form_equipment_group_ID as equipment_group_id,
+e.id as EQUIPMENT_ID, 
+	e.BAR_TAG_NUM , 
+	e.CATALOG_NUM , 
+	e.BAR_TAG_HISTORY_ID , 
+	e.MANUFACTURER , 
+	e."MODEL", 
+	e.CONDITION , 
+	e.SERIAL_NUM , 
+	e.ACQUISITION_DATE , 
+	e.ACQUISITION_PRICE , 
+	e.DOCUMENT_NUM, 
+	e.ITEM_TYPE , 
+	e.USER_EMPLOYEE_ID
+	from ${FORM_4900} f
+	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
+	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
+	LEFT JOIN requested_action ra on ra.id = f.requested_action
+	LEFT JOIN (${hra_type("gaining")}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
+	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
+	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `	
+
+const whereEng4900SignFormAuth = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+
+const whereEng4900SignFormSelf = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_self(id)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
 
 module.exports = {
 	EQUIPMENT:EQUIPMENT,
@@ -246,35 +362,9 @@ module.exports = {
 	on h.hra_num = hec.hra_num
 	LEFT JOIN (${registered_users}) ur
 	on ur.id = h.updated_by `),
-	hra_num_form_all: (id) => (`SELECT 
-	h.hra_num
-	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
-	union all
-	SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
-	LEFT JOIN (${employee}) e 
-	on h.employee_id = e.id
-	LEFT JOIN (${equipment_count.hra}) hec
-	on h.hra_num = hec.hra_num
-	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by `),
-	hra_num_form_auth: (id) => (`SELECT 
-	h.hra_num
-	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
-	LEFT JOIN (${employee}) e 
-	on h.employee_id = e.id
-	LEFT JOIN (${equipment_count.hra}) hec
-	on h.hra_num = hec.hra_num
-	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by `),
-	hra_num_form_self: (id) => (`SELECT 
-	h.hra_num
-	FROM (SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
-	LEFT JOIN (${employee}) e 
-	on h.employee_id = e.id
-	LEFT JOIN (${equipment_count.hra}) hec
-	on h.hra_num = hec.hra_num
-	LEFT JOIN (${registered_users}) ur
-	on ur.id = h.updated_by `),
+	hra_num_form_all: hra_num_form_all,
+	hra_num_form_auth: hra_num_form_auth,
+	hra_num_form_self: hra_num_form_self,
 	employee_id_auth: (id) => (`select distinct e.id from employee e
 	left join registered_users ru
 	on ru.employee_id = e.id
@@ -319,15 +409,20 @@ module.exports = {
     //     LEFT JOIN office_symbol o
     //     on e.office_symbol = o.id
 	// 	WHERE h.employee_id = e.id)`,
-	eng4900_losingHra:`SELECT h.hra_num as losing_hra_num,
-		e.first_name as losing_hra_first_name,
-		e.last_name as losing_hra_last_name,
-		e.first_name || ' ' || e.last_name as losing_hra_full_name,
-		e.work_phone as losing_hra_work_phone,
-		e.office_symbol as losing_hra_office_symbol,
-		e.office_symbol_alias as losing_hra_os_alias
-		from hra h, (${employee}) e
-		WHERE h.employee_id = e.id `,
+	eng4900_losingHra: hra_type("losing"),
+	// `SELECT h.hra_num as losing_hra_num,
+	// 	e.first_name as losing_hra_first_name,
+	// 	e.last_name as losing_hra_last_name,
+	// 	e.first_name || ' ' || e.last_name as losing_hra_full_name,
+	// 	e.work_phone as losing_hra_work_phone,
+	// 	e.office_symbol as losing_hra_office_symbol,
+	// 	e.office_symbol_alias as losing_hra_os_alias,
+	// 	CASE WHEN ru.id is not null THEN 1 ELSE 0 END losing_hra_is_registered
+	// 	from hra h
+	// 	left join (${employee}) e
+	// 	on h.employee_id = e.id
+	// 	left join registered_users ru
+	// 	on ru.employee_id = e.id `,
 	// eng4900_gainingHra:`(SELECT h.hra_num as gaining_hra_num,
 	// 	e.first_name as gaining_hra_first_name,
 	// 	e.last_name as gaining_hra_last_name,
@@ -340,13 +435,60 @@ module.exports = {
     //     LEFT JOIN office_symbol o
     //     on e.office_symbol = o.id
 	//     WHERE h.employee_id = e.id)`
-	eng4900_gainingHra:`SELECT h.hra_num as gaining_hra_num,
-		e.first_name as gaining_hra_first_name,
-		e.last_name as gaining_hra_last_name,
-		e.first_name || ' ' || e.last_name as gaining_hra_full_name,
-        e.work_phone as gaining_hra_work_phone,
-		e.office_symbol as gaining_hra_office_symbol,
-		e.office_symbol_alias as gaining_hra_os_alias
-		from hra h, (${employee}) e
-        WHERE h.employee_id = e.id `
-  };
+	eng4900_gainingHra: hra_type("gaining"),
+	// `SELECT h.hra_num as gaining_hra_num,
+	// 	e.first_name as gaining_hra_first_name,
+	// 	e.last_name as gaining_hra_last_name,
+	// 	e.first_name || ' ' || e.last_name as gaining_hra_full_name,
+    //     e.work_phone as gaining_hra_work_phone,
+	// 	e.office_symbol as gaining_hra_office_symbol,
+	// 	e.office_symbol_alias as gaining_hra_os_alias,
+	// 	CASE WHEN ru.id is not null THEN 1 ELSE 0 END gaining_hra_is_registered
+	// 	from hra h
+	// 	left join (${employee}) e
+	// 	on h.employee_id = e.id
+	// 	left join registered_users ru
+	// 	on ru.employee_id = e.id `,
+	eng4900SearchQuery: eng4900SearchQuery,
+	whereEng4900SignFormAuth: whereEng4900SignFormAuth,
+	whereEng4900SignFormSelf: whereEng4900SignFormSelf
+};
+
+
+  //work in progress:
+//notifications
+//   select * from hra h
+// left join employee e
+// on e.id = h.hra_num
+// left join equipment eq
+// on eq.hra_num = h.hra_num
+// where h.hra_num = 907;
+
+
+
+// select unique(bar_tag_num) from equipment_history
+// where updated_date >= sysdate - 30
+// ;
+
+
+const hra_total_employees = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = ${hra_num} AND eq.user_employee_id is not null `;
+
+const hra_total_equipments = (hra_num) => `select count(*) as total_equipments, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = ${hra_num} `
+
+const hra_total_employees_certification_current_fy = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = 10 AND eq.user_employee_id is not null and
+eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `

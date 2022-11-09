@@ -102,6 +102,7 @@ const getQueryForTab = (tab_name, user, fetch=true) => {
 const searchEquipmentUpdatedData = async (id, connection, user) => {
 
 	let tabsReturnObject = {}
+
 	for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
 		const tab_name = ALL_EQUIPMENT_TABS[i]
 
@@ -158,6 +159,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 		}
 	}
 
+	console.log(tabsReturnObject)
 	return tabsReturnObject
 }
 
@@ -521,6 +523,7 @@ exports.search2 = async function(req, res) {
 				let {rows} = result
 				rows = propNamesToLowerCase(rows)
 				hras = [...rows]
+				console.log(hras)
 			}
 
 			result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_self(req.user)})`,{},dbSelectOptions) //fetch by destrict
@@ -528,6 +531,7 @@ exports.search2 = async function(req, res) {
 				let {rows} = result
 				rows = propNamesToLowerCase(rows)
 				my_hras = [...rows]
+				console.log(my_hras)
 			}
 
 			result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
@@ -744,7 +748,6 @@ exports.update = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	let tabsReturnObject = {}
-	console.log("You've entered the update method")
 	
 	try{
 		const {changes,undo} = req.body.params
