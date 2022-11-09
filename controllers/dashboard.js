@@ -52,7 +52,7 @@ exports.index = async function(req, res) {
 		my_equipments_cert: null,
 		last_login: null,
 		system_annoucements: [],
-		hras:[]
+		hras:[],
 	}
 
 	try{
