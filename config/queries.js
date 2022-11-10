@@ -108,8 +108,8 @@ LEFT JOIN DIVISION dn
 ON er.DIVISION = dn.id
 WHERE er.DELETED = 2`
 
-const hra_num_form_self = (id) => `SELECT 
-h.hra_num
+const hra_num_form_self = (id,name=false) => `SELECT 
+h.hra_num ${name ? `, e.first_name||' '||e.last_name as full_name`: ""}
 FROM (SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
 LEFT JOIN (${employee}) e 
 on h.employee_id = e.id
@@ -118,8 +118,8 @@ on h.hra_num = hec.hra_num
 LEFT JOIN (${registered_users}) ur
 on ur.id = h.updated_by `
 
-const hra_num_form_all = (id) => `SELECT 
-h.hra_num
+const hra_num_form_all = (id, name=false) => `SELECT 
+h.hra_num ${name ? `, e.first_name||' '||e.last_name as full_name`: ""}
 FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
 union all
 SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
@@ -130,9 +130,29 @@ on h.hra_num = hec.hra_num
 LEFT JOIN (${registered_users}) ur
 on ur.id = h.updated_by `
 
-const hra_num_form_auth = (id) => `SELECT 
-h.hra_num
+const hra_num_form_auth = (id, name=false) => `SELECT 
+h.hra_num ${name ? `, e.first_name||' '||e.last_name as full_name`: ""}
 FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})) h
+LEFT JOIN (${employee}) e 
+on h.employee_id = e.id
+LEFT JOIN (${equipment_count.hra}) hec
+on h.hra_num = hec.hra_num
+LEFT JOIN (${registered_users}) ur
+on ur.id = h.updated_by `
+
+const hra_num_form_auth_not_in_self = (id, name=false) => `SELECT 
+h.hra_num ${name ? `, e.first_name||' '||e.last_name as full_name`: ""}
+FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id}) AND
+HRA_NUM NOT IN (
+	SELECT h.hra_num
+	FROM (SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
+	LEFT JOIN (${employee}) e 
+	on h.employee_id = e.id
+	LEFT JOIN (${equipment_count.hra}) hec
+	on h.hra_num = hec.hra_num
+	LEFT JOIN (${registered_users}) ur
+	on ur.id = h.updated_by
+)) h
 LEFT JOIN (${employee}) e 
 on h.employee_id = e.id
 LEFT JOIN (${equipment_count.hra}) hec
@@ -217,6 +237,65 @@ UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(id
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+
+const whereEng4900SignFormAuthNotInSelf = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)}) AND NOT f.GAINING_HRA IN (${hra_num_form_self(id)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.GAINING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+
+const whereEng4900SignFormWithHraNum = (id, hra_num) => `WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+
+const hra_total_employees = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = ${hra_num} AND eq.user_employee_id is not null `;
+
+const hra_total_equipments = (hra_num) => `select count(*) as total_equipments, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = ${hra_num} `
+
+const hra_total_employees_cert_current_fy = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees_cert_current_fy, ${hra_num} as hra_num from hra h
+left join employee e
+on e.id = h.hra_num
+left join equipment eq
+on eq.hra_num = h.hra_num
+where h.hra_num = ${hra_num} AND eq.user_employee_id is not null and
+eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `
+
+const last_login = (id) => `select ru.edipi, uah.full_name, uah.date_accessed as from registered_users ru
+left join user_access_history uah
+on uah.edipi = ru.edipi
+where ru.id = ${id}
+order by uah.date_accessed desc
+OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY `
+
+const my_total_equipments = (id) => `select count(*) as my_total_equipments from registered_users ru
+left join employee e
+on e.id = ru.employee_id
+left join equipment eq
+on eq.user_employee_id = e.id
+where ru.id = ${id} `
+
+const my_equipments_cert_current_fy = (id) => `select count(*) as my_equipments_cert_current_fy  from registered_users ru
+left join employee e
+on e.id = ru.employee_id
+left join equipment eq
+on eq.user_employee_id = e.id
+where ru.id = ${id} AND eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `
+
+const system_annoucements = () => `select * from system_announcements order by id `
 
 module.exports = {
 	EQUIPMENT:EQUIPMENT,
@@ -364,6 +443,7 @@ module.exports = {
 	on ur.id = h.updated_by `),
 	hra_num_form_all: hra_num_form_all,
 	hra_num_form_auth: hra_num_form_auth,
+	hra_num_form_auth_not_in_self:hra_num_form_auth_not_in_self,
 	hra_num_form_self: hra_num_form_self,
 	employee_id_auth: (id) => (`select distinct e.id from employee e
 	left join registered_users ru
@@ -451,7 +531,16 @@ module.exports = {
 	// 	on ru.employee_id = e.id `,
 	eng4900SearchQuery: eng4900SearchQuery,
 	whereEng4900SignFormAuth: whereEng4900SignFormAuth,
-	whereEng4900SignFormSelf: whereEng4900SignFormSelf
+	whereEng4900SignFormSelf: whereEng4900SignFormSelf,
+	whereEng4900SignFormAuthNotInSelf: whereEng4900SignFormAuthNotInSelf,
+	whereEng4900SignFormWithHraNum: whereEng4900SignFormWithHraNum,
+	hra_total_employees: hra_total_employees,
+ 	hra_total_equipments: hra_total_equipments,
+	hra_total_employees_cert_current_fy: hra_total_employees_cert_current_fy,
+	last_login: last_login,
+	my_total_equipments: my_total_equipments,
+	my_equipments_cert_current_fy: my_equipments_cert_current_fy,
+	system_annoucements: system_annoucements,
 };
 
 
@@ -469,26 +558,3 @@ module.exports = {
 // select unique(bar_tag_num) from equipment_history
 // where updated_date >= sysdate - 30
 // ;
-
-
-const hra_total_employees = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
-left join employee e
-on e.id = h.hra_num
-left join equipment eq
-on eq.hra_num = h.hra_num
-where h.hra_num = ${hra_num} AND eq.user_employee_id is not null `;
-
-const hra_total_equipments = (hra_num) => `select count(*) as total_equipments, ${hra_num} as hra_num from hra h
-left join employee e
-on e.id = h.hra_num
-left join equipment eq
-on eq.hra_num = h.hra_num
-where h.hra_num = ${hra_num} `
-
-const hra_total_employees_certification_current_fy = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
-left join employee e
-on e.id = h.hra_num
-left join equipment eq
-on eq.hra_num = h.hra_num
-where h.hra_num = 10 AND eq.user_employee_id is not null and
-eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `

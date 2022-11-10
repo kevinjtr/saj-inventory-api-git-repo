@@ -7,10 +7,13 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const groupBy = require('lodash/groupBy');
 const orderBy = require('lodash/orderBy')
-const uniq = require('lodash/uniq');
+const uniqBy = require('lodash/uniqBy');
 const filter = require('lodash/filter');
+const moment = require('moment');
 const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
-const {eng4900SearchQuery, whereEng4900SignFormAuth, whereEng4900SignFormSelf, eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
+
+
+const {eng4900SearchQuery, whereEng4900SignFormAuthNotInSelf, whereEng4900SignFormSelf, whereEng4900SignFormWithHraNum, hra_num_form_auth_not_in_self, hra_num_form_self, hra_num_form_all,hra_total_employees, hra_total_equipments, hra_total_employees_cert_current_fy, last_login, my_total_equipments, my_equipments_cert_current_fy, system_annoucements} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
@@ -26,46 +29,210 @@ const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg
 const {form4900EmailAlert} = require("../tools/email-notifier")
 require('dotenv').config();
 
-const test_something = async () => {
-	const connection =  await oracledb.getConnection(dbConfig);
-	let result = await connection.execute(`${eng4900SearchQuery(1)}
-	 ${whereEng4900SignFormSelf(1)}`,{},dbSelectOptions)
+const getMyTotalEquipments = async (connection, id) => {
+
+	let result = await connection.execute(`${my_total_equipments(id)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].MY_TOTAL_EQUIPMENTS
+	}
+
+	return 0
+}
+
+const getMyEquipmentsCertCurrentFy = async (connection, id) => {
+
+	let result = await connection.execute(`${my_equipments_cert_current_fy(id)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].MY_EQUIPMENTS_CERT_CURRENT_FY
+	}
+
+	return 0
+}
+
+const getMyLastLogin = async (connection, id) => {
+	let result = await connection.execute(`${last_login(id)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		const return_date = moment(result.rows[0].DATE_ACCESSED).format('dddd, MMMM Do, YYYY')
+		return return_date
+	}
+
+	const return_date = moment(new Date()).format('dddd, MMMM Do, YYYY')
+	return return_date
+}
+
+const getSystemAnnoucements = async (connection) => {
+
+	let result = await connection.execute(`${system_annoucements()}`,{},dbSelectOptions)
 
 	if(result.rows.length > 0){
 		result.rows = propNamesToLowerCase(result.rows)
-		result.rows = result.rows.map(x => ({losing_hra_num: x.losing_hra_num, gaining_hra_num: x.gaining_hra_num, form_id: x.form_id, status_alias: x.status_alias,requested_action: x.requested_action}))
-		
+		return result.rows
 	}
-	
-	console.log(result.rows)
-	await connection.close()
+
+	return []
 }
 
-//test_something()
+const getHraAccounts = async (connection, id) => {
+	let return_array = []
+
+	let result = await connection.execute(`${hra_num_form_self(id,true)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		result.rows = propNamesToLowerCase(result.rows)
+		result.rows.map(x => {
+			x.is_self = true
+			return x
+		})
+		return_array = result.rows
+	}
+
+	result = await connection.execute(`${hra_num_form_auth_not_in_self(id,true)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		result.rows = propNamesToLowerCase(result.rows)
+		result.rows.map(x => {
+			x.is_self = false
+			return x
+		})
+
+		return_array = [...return_array, ...result.rows]
+	}
+
+	return return_array;
+}
+
+const getHraTotalEmployees = async (connection, hra_num) => {
+
+	let result = await connection.execute(`${hra_total_employees(hra_num)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].TOTAL_EMPLOYEES
+	}
+
+	return 0
+}
+
+const getHraTotalEquipments = async (connection, hra_num) => {
+
+	let result = await connection.execute(`${hra_total_equipments(hra_num)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].TOTAL_EQUIPMENTS
+	}
+
+	return 0
+}
+
+const getHraTotalEmployeesEquipmentCertCurrentFy = async (connection, hra_num) => {
+
+	let result = await connection.execute(`${hra_total_employees_cert_current_fy(hra_num)}`,{},dbSelectOptions)
+
+	if(result.rows.length > 0){
+		return result.rows[0].TOTAL_EMPLOYEES_CERT_CURRENT_FY
+	}
+
+	return 0
+}
+
+const getEng4900FormsToSign = async (connection, hra_num, id) => {
+	let result = await connection.execute(`${eng4900SearchQuery(id)} ${whereEng4900SignFormWithHraNum(id, hra_num)}`,{},dbSelectOptions)
+	return result.rows.length
+}
 
 exports.index = async function(req, res) {
-
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	const return_object = {
-		my_equipments: null,
-		my_equipments_cert: null,
-		last_login: null,
+		my_equipments: 0,
+		my_equipments_cert: 0,
+		my_equipments_cert_porcentage: 0,
+		last_login_string: null,
 		system_annoucements: [],
 		hras:[],
 	}
 
 	try{
-		let result =  await connection.execute('SELECT * FROM form_4900',{},dbSelectOptions)
+
 		
-		result.rows = result.rows.map(function(r){
-			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-			return r;
-		})
+		return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
+		return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
+		return_object.my_equipments_cert_porcentage = (return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100
+		return_object.last_login_string = await getMyLastLogin(connection, req.user)
+		return_object.system_annoucements = await getSystemAnnoucements(connection)
+	
+		const hras_obj_array = await getHraAccounts(connection, req.user)
+	
+		for(const hra of hras_obj_array){
+			const {hra_num, full_name, is_self} = hra
+			const temp_hra_obj = {}
+	
+			temp_hra_obj.hra_num = hra_num
+			temp_hra_obj.full_name = full_name
+			console.log("one")
+			temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
+			console.log("two")
+			temp_hra_obj.total_equipments = await getHraTotalEquipments(connection, hra_num)
+			console.log("three")
+			temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
+			console.log("four")
+			temp_hra_obj.total_equipments_cert_porcentage = (temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100
+			temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
+			console.log("five")
+	
+			console.log(temp_hra_obj)
+			return_object.hras.push(temp_hra_obj)
+		}
 
+		await connection.close()
+	
+		return res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully get dashboard data!',//return form and bartags.
+			data: return_object
+		});
 
-		response.ok(result.rows, res);
 	}catch(err){
-		//logger.error(err)
+		console.log(err)
+
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'Unable to get dashboard data!',//return form and bartags.
+			data: {}
+		});
 	}
-};
+	
+}
+
+//test_something()
+
+// exports.index = async function(req, res) {
+
+// 	const connection =  await oracledb.getConnection(dbConfig);
+
+// 	const return_object = {
+// 		my_equipments: null,
+// 		my_equipments_cert: null,
+// 		last_login: null,
+// 		system_annoucements: [],
+// 		hras:[],
+// 	}
+
+// 	try{
+// 		let result =  await connection.execute('SELECT * FROM form_4900',{},dbSelectOptions)
+		
+// 		result.rows = result.rows.map(function(r){
+// 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
+// 			return r;
+// 		})
+
+
+// 		response.ok(result.rows, res);
+// 	}catch(err){
+// 		//logger.error(err)
+// 	}
+// };
