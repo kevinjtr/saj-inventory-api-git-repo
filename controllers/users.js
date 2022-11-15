@@ -123,12 +123,13 @@ exports.login = async (req, res) => {
 
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)
-				const {id, updated_by_full_name, user_level_alias, user_level_name, user_district_office, notifications} = result.rows[0]
+				const {id, updated_by_full_name, user_level, user_level_alias, user_level_name, user_district_office, notifications} = result.rows[0]
 
 				console.log(result.rows[0])
 
 				user = {
 					id: id,
+					level_num: user_level,
 					name: updated_by_full_name,
 					level: user_level_alias,
 					level_name: user_level_name,
@@ -143,6 +144,7 @@ exports.login = async (req, res) => {
 					res.json({
 						token: token,
 						user: user.level,
+						level_num: user.level_num,
 						level_name:user.level_name,
 						user_name: user.name,
 						exp: token_exp,
@@ -284,6 +286,7 @@ exports.verifyUser = async (req, res, next) => {
 		if(result.rows.length > 0){
 			console.log(`Succesfully identified user: ${edipi}!`);
 			req.user = result.rows[0].ID
+			req.user_level_num = result.rows[0].USER_LEVEL
 			next();
 			return;
 		}
@@ -309,12 +312,12 @@ exports.verifyToken = async (req, res, next) => {
 				res.send('Access denied!!');
 			} else {
 				
+				console.log(decode)
 				if(tokenIsAuthorized(decode, req.path)){
-					console.log(req.path)
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
-					req.user_level = decode.user.level					
-
+					req.user_level_alias = decode.user.level					
+					req.user_level_num = decode.user.level_num
 					console.log('is authorized')
 					next();
 				}else{

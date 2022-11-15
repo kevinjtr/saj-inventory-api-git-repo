@@ -5,10 +5,7 @@ const path = require('path')
 const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
-const groupBy = require('lodash/groupBy');
-const orderBy = require('lodash/orderBy')
-const uniq = require('lodash/uniq');
-const filter = require('lodash/filter');
+const {orderBy, uniqBy, groupBy, uniq, filter} = require('lodash')
 const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
 const {eng4900SearchQuery, whereEng4900SignFormAuth, whereEng4900SignFormSelf, eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
@@ -776,6 +773,7 @@ const get4900HraAndEquipments = async function(connection, user, edit_rights) {
 
 			if(result.rows.length > 0){
 				hra.losing = propNamesToLowerCase(result.rows)
+				console.log(hra.losing[0])
 
 				for(let j=0;j<hra.losing.length;j++){
 					const {hra_num} = hra.losing[j]

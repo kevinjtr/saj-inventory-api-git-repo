@@ -69,6 +69,7 @@ const problem = require('./routes/problem');
 const authorizedUsers = require('./routes/authorized-users');
 const registeredUsers = require('./routes/registered-users');
 const dashboard = require('./routes/dashboard');
+const account = require('./routes/account');
 
 usersRoutes(app);
 handleError(app);
@@ -90,6 +91,7 @@ problem(app)
 authorizedUsers(app)
 registeredUsers(app)
 dashboard(app)
+account(app)
 
 if (process.env.HTTPS === 'true') {
 	const fs = require('fs');

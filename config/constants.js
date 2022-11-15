@@ -52,7 +52,8 @@ module.exports = {
             changehistory:{view:true, edit:true},
             authorizedusers:{view:true, edit:true},
             registrationviewer:{view:true,edit:true},
-		    employee2:{view:true,edit:true}
+		    employee2:{view:true,edit:true},
+            account:{view:true, edit:true},
         },
         employee_1:{
             admin:{view:false, edit:false},
@@ -60,12 +61,13 @@ module.exports = {
             equipment: {view:true, edit:false},
             annualinventory: {view:false, edit:false},
             hra: {view:false, edit:false},
-            employee: {view:true, edit:true},
+            employee: {view:false, edit:true},
             eng4900: {view:false, edit:false},
             changehistory: {view:false, edit:false},
             authorizedusers:{view:false, edit:false},
             registrationviewer:{view:false,edit:false},
-            employee2:{view:false,edit:false}
+            employee2:{view:false,edit:false},
+            account:{view:true, edit:true},
         },
         employee_2:{
             admin:{view:false, edit:false},
@@ -78,7 +80,8 @@ module.exports = {
             changehistory: {view:true, edit:false},
             authorizedusers:{view:false, edit:false},
             registrationviewer:{view:false,edit:false},
-            employee2:{view:false,edit:false}
+            employee2:{view:false,edit:false},
+            account:{view:true, edit:true},
         },
         employee_3:{
             admin:{view:false, edit:false},
@@ -91,7 +94,8 @@ module.exports = {
             changehistory: {view:true, edit:false},
             authorizedusers:{view:false, edit:false},
             registrationviewer:{view:false,edit:false},
-            employee2:{view:false,edit:false}
+            employee2:{view:false,edit:false},
+            account:{view:true, edit:true},
         },
     /* 	employee_4:{
             admin:{view:false, edit:false},
@@ -119,7 +123,8 @@ module.exports = {
             employee2:{view:true,edit:true},
             registeredusers:{view:true,edit:true},
             registrationviewer:{view:true,edit:true},
-            employee2:{view:true,edit:true}
+            employee2:{view:true,edit:true},
+            account:{view:true, edit:true},
         },
         /* hra_2:{
             admin:{view:false, edit:false},

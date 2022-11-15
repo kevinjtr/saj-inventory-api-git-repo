@@ -146,6 +146,7 @@ exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	const return_object = {
+		fiscal_year: `FY${moment(new Date()).add(3,"months").format("YY")}`,
 		my_equipments: 0,
 		my_equipments_cert: 0,
 		my_equipments_cert_porcentage: 0,
@@ -159,31 +160,30 @@ exports.index = async function(req, res) {
 		
 		return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
 		return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
-		return_object.my_equipments_cert_porcentage = (return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100
+		return_object.my_equipments_cert_porcentage = ((return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100).toFixed(1)
 		return_object.last_login_string = await getMyLastLogin(connection, req.user)
 		return_object.system_annoucements = await getSystemAnnoucements(connection)
+
+		//USER LEVEL IS ADMIN, HRA OR AUTHORIZED USER
+		console.log(`user level: ${req.user_level_num}`)
+		if([1, 9, 11].includes(req.user_level_num)){
+			const hras_obj_array = await getHraAccounts(connection, req.user)
 	
-		const hras_obj_array = await getHraAccounts(connection, req.user)
-	
-		for(const hra of hras_obj_array){
-			const {hra_num, full_name, is_self} = hra
-			const temp_hra_obj = {}
-	
-			temp_hra_obj.hra_num = hra_num
-			temp_hra_obj.full_name = full_name
-			console.log("one")
-			temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
-			console.log("two")
-			temp_hra_obj.total_equipments = await getHraTotalEquipments(connection, hra_num)
-			console.log("three")
-			temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
-			console.log("four")
-			temp_hra_obj.total_equipments_cert_porcentage = (temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100
-			temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
-			console.log("five")
-	
-			console.log(temp_hra_obj)
-			return_object.hras.push(temp_hra_obj)
+			for(const hra of hras_obj_array){
+				const {hra_num, full_name, is_self} = hra
+				const temp_hra_obj = {}
+		
+				temp_hra_obj.hra_num = hra_num
+				temp_hra_obj.full_name = full_name
+				temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
+				temp_hra_obj.total_equipments = await getHraTotalEquipments(connection, hra_num)
+				temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
+				temp_hra_obj.total_equipments_cert_porcentage = ((temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100).toFixed(1)
+				temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
+		
+				console.log(temp_hra_obj)
+				return_object.hras.push(temp_hra_obj)
+			}
 		}
 
 		await connection.close()

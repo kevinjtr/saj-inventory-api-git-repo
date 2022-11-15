@@ -15,7 +15,6 @@ const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
 	const {edit_rights} = req
-	console.log(edit_rights, req.user_level)
 	const connection =  await oracledb.getConnection(dbConfig);
 
 	try{
@@ -41,7 +40,7 @@ exports.index = async function(req, res) {
 			data: result.rows,
 			district_office_locations: district_office_locations,
 			office_symbol:result_office_symbol.rows,
-			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level)}
+			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level_alias)}
 		});
 		//response.ok(result.rows, res);
 	}catch(err){
@@ -51,7 +50,7 @@ exports.index = async function(req, res) {
 			error: true,
 			message: 'No data found!',
 			data: [],
-			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level)}
+			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level_alias)}
 		});
 		//logger.error(err)
 	}
@@ -311,7 +310,7 @@ exports.update = async function(req, res) {
 	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-		console.log(edipi)
+		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 

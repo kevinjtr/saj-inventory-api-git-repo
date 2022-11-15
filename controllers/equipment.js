@@ -427,7 +427,7 @@ exports.search = async function(req, res) {
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
 	const {edit_rights} = req
-	const accepted_user_levels = ['employee_3','hra_1','admin'].includes(req.user_level)
+	const accepted_user_levels = ['employee_3','hra_1','admin'].includes(req.user_level_alias)
 	const tab_edits = {0:false, 1:edit_rights, 2:edit_rights, 3:edit_rights, 4:false}
 	const tab_views = {0:true, 1:edit_rights, 2:edit_rights, 3: accepted_user_levels || edit_rights, 4: accepted_user_levels || edit_rights}//search and view.
 

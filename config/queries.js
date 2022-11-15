@@ -121,7 +121,7 @@ on ur.id = h.updated_by `
 const hra_num_form_all = (id, name=false) => `SELECT 
 h.hra_num ${name ? `, e.first_name||' '||e.last_name as full_name`: ""}
 FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
-union all
+union
 SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
 LEFT JOIN (${employee}) e 
 on h.employee_id = e.id
@@ -266,7 +266,7 @@ left join equipment eq
 on eq.hra_num = h.hra_num
 where h.hra_num = ${hra_num} `
 
-const hra_total_employees_cert_current_fy = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees_cert_current_fy, ${hra_num} as hra_num from hra h
+const hra_total_employees_cert_current_fy = (hra_num) => `select count(unique(eq.bar_tag_num)) as total_employees_cert_current_fy, ${hra_num} as hra_num from hra h
 left join employee e
 on e.id = h.hra_num
 left join equipment eq
@@ -401,7 +401,7 @@ module.exports = {
 	e.WORK_PHONE as hra_work_phone,
 	hec.HRA_EQUIPMENT_COUNT
 	FROM (SELECT * FROM HRA WHERE HRA_NUM IN (SELECT HRA_NUM FROM HRA_AUTHORIZED_USERS WHERE registered_users_ID = ${id})
-	union all
+	union
 	SELECT * FROM HRA WHERE EMPLOYEE_ID IN (SELECT EMPLOYEE_ID FROM registered_users WHERE ID = ${id})) h
 	LEFT JOIN (${employee}) e 
 	on h.employee_id = e.id
