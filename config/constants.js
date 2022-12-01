@@ -54,6 +54,7 @@ module.exports = {
             registrationviewer:{view:true,edit:true},
 		    employee2:{view:true,edit:true},
             account:{view:true, edit:true},
+            help:{view:true, edit:false},
         },
         employee_1:{
             admin:{view:false, edit:false},
@@ -68,6 +69,7 @@ module.exports = {
             registrationviewer:{view:false,edit:false},
             employee2:{view:false,edit:false},
             account:{view:true, edit:true},
+            help:{view:true, edit:false},
         },
         employee_2:{
             admin:{view:false, edit:false},
@@ -82,6 +84,7 @@ module.exports = {
             registrationviewer:{view:false,edit:false},
             employee2:{view:false,edit:false},
             account:{view:true, edit:true},
+            help:{view:true, edit:false},
         },
         employee_3:{
             admin:{view:false, edit:false},
@@ -96,6 +99,7 @@ module.exports = {
             registrationviewer:{view:false,edit:false},
             employee2:{view:false,edit:false},
             account:{view:true, edit:true},
+            help:{view:true, edit:false},
         },
     /* 	employee_4:{
             admin:{view:false, edit:false},
@@ -125,6 +129,7 @@ module.exports = {
             registrationviewer:{view:true,edit:true},
             employee2:{view:true,edit:true},
             account:{view:true, edit:true},
+            help:{view:true, edit:false},
         },
         /* hra_2:{
             admin:{view:false, edit:false},

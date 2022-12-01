@@ -4,8 +4,8 @@ const {dbSelectOptions} = require('../config/db-options');
 const moment = require('moment')
 const sendmail = require('sendmail')();
 const new_version = "v0.9.8"
-const message_type = "scheduled_update"
-const when = "tomorrow August 5, 2022"
+const message_type = "update_complete"
+const when = "today November 16, 2022"
 
 const subject = {
     maintenance: (obj) => `Notification: Inventory Application will be down ${obj.when} for scheduled maintenance.`,
@@ -49,16 +49,19 @@ const html_body = {
     <strong>New Features:</strong><br/><br/>
     Dashboard.<br/>
     ----HRA and Authorized HRA Users can see if they have a ENG4900 form to sign.<br/>
-    ----All Users will be able to see how many equipments they hold and see system annoucements.<br/><br/>
-    New Map on Equipment.<br/>
-    ----All Users will be able to see equipments on the Map (Note: Only equipments that are assigned to employees with an office location will display).<br/><br/>
+    ----All Users will be able to see system annoucements and how many equipments they hold.<br/><br/>
+    Equipment.<br/>
+    ----A Map that displays equipment locations was added. You can enable it by selecting "Map" on the top right of the screen. By default "Table" is selected.<br/>
+    ----Table Filtering: Cell widths are now bigger, making it easier to see the input text.<br/>
+    ----All Users will be able to see equipments on the Map (Note: Only equipments that are assigned to employees with an office location will display).<br/>
     ----Export table report to Excel was added.<br/>
-    ----All Users will have the ability to certify in "My Equipments" if they are holding an equipment for the current FY.<br/><br/>
+    ----All Users will have the ability to certify in "My Equipment" if they are holding an equipment for the current FY.<br/><br/>
     Account.<br/>
-    ----On the top right user icon, select "MANAGE MY ACCOUNT" to change your user information.<br/><br/>
+    ----On the top right user icon, select "MANAGE MY ACCOUNT" to change your user information (name, title, email, phone and office location).<br/><br/>
     Navbar User Interface was updated.<br/><br/>
     ENG4900.<br/>
-    ----Fixed block when Losing HRA tries to transfer an equipment to a non-registered Gaining HRA..<br/><br/>
+    ----Bug fix: Unable to finish a ENG4900 "Transfer" when a Losing HRA tries to transfer equipments to a non-registered Gaining HRA account that also has no Authorized Users to handle their equipments.<br/><br/>
+    Navbar User Interface was updated.<br/><br/>
 
   -Inventory App Notifications`,
 }
@@ -82,16 +85,10 @@ async function massEmailAlert() {
             if(!array_of_opts_obj.includes(obj_settings.to)){
                 //Will not send more than one email to a user.
                 array_of_opts_obj.push(obj_settings.to)
-                //console.log(obj_settings)
-                //const s = {...obj_settings, to: 'kevin.l.alemany@usace.army.mil'}
 
                 console.log(obj_settings)
-                //console.log(s)
                 // sendmail(obj_settings, function(err, reply) {
-                // //console.log(err && err.stack);
-                // //console.dir(reply);
-
-                // console.log(!err ? "email sent.": "")
+                //   console.log(!err ? "email sent.": "")
                 // });
             }
         }
