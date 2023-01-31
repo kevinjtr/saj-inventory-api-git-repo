@@ -259,7 +259,6 @@ const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_gr
 
 const isHraAndFiscalYearNotDuplicated = async (connection, binds) => {
 	let result = await connection.execute(`SELECT * FROM ANNUAL_INV WHERE HRA_NUM = :hra_num and FISCAL_YEAR = :fiscal_year `,binds,dbSelectOptions)
-	console.log('isHraAndFiscalYearNotDuplicated',result.rows.length == 0)
 	return result.rows.length == 0
 }
 

@@ -6,7 +6,7 @@ const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const {orderBy, uniqBy, groupBy, uniq, filter} = require('lodash')
-const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
+const {propNamesToLowerCase,objectDifference,containsAll,isValidDate, UserLevelHasEditPermision} = require('../tools/tools');
 const {eng4900SearchQuery, whereEng4900SignFormAuth, whereEng4900SignFormSelf, eng4900_losingHra,eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
@@ -22,6 +22,20 @@ const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
 const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg_forms"]
 const {form4900EmailAlert} = require("../tools/email-notifier")
 require('dotenv').config();
+
+const GetUser = async (connection, edipi) => {
+	const user_result = await connection.execute(`select ru.id as "id", ul.alias as "level" from registered_users ru
+	left join user_level ul
+	on ru.user_level = ul.id
+	where edipi = :0`,[edipi],dbSelectOptions)
+
+	if(user_result.rows.length == 0){
+		console.log('edipi not found.')
+		return null
+	}
+
+	return user_result.rows[0]
+}
 
 const printElements = (elements) => {
 	let str = ""
@@ -598,7 +612,6 @@ const doTransaction = async (connection, user_id, rowData) => {
 		let result = await connection.execute(sql,{},dbSelectOptions)
 		
 		if(isFormCompleted(status, requested_action) && result.rows.length > 0){
-			console.log('HERE dT-1')
 			result.rows = propNamesToLowerCase(result.rows)
 			
 			const {requested_action, status_alias, losing_hra_num, gaining_hra_num} = result.rows[0]
@@ -611,10 +624,8 @@ const doTransaction = async (connection, user_id, rowData) => {
 	
 			switch (requested_action) {
 				case "Issue":
-					console.log('HERE dT-2-i')
 					if(gaining_hra_num){
 						if(equipment_result.rows.length == 0){
-							console.log('HERE dT-3-i')
 							result = await connection.execute(formEquipmentInsertQuery(requested_action, gaining_hra_num, `ID IN (${equipment_ids_print})`),{},{autoCommit:false})
 	
 							if(result.rowsAffected != equipment_ids.length){
@@ -631,9 +642,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 					
 					break;
 				case "Transfer":
-					console.log('HERE dT-2-t')
 					if(equipment_result.rows.length > 0){
-						console.log('HERE dT-3-t')
 						equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
 						equipment_result.rows.map((equipment, i) => {
 
@@ -669,9 +678,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 					return_result = {...return_result, error:false,  message: `Equipment database was not updated.`}
 					break;
 				case "Excess":
-					console.log('HERE dT-2-e')
 					if(equipment_result.rows.length > 0){
-						console.log('HERE dT-3-e')
 						equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
 						equipment_result.rows.map((equipment, i) => {
 							if(equipment.hra_num != losing_hra_num){
@@ -683,28 +690,21 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 	
 						if(!return_result.error){
-							console.log('HERE dT-4-e')
-
 							result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`,{},{autoCommit:false})
 
 							if(result.rowsAffected == bar_tags.length){
-								console.log('HERE dT-5-e')
 								return_result = {...return_result,  message: `all equipments were discarted.`}
 							}else{
-								console.log('HERE dT-5-e')
 								return_result = {...return_result, error:true,  message: `One or more equipments could not be discarted.`}
 							}
 						}
 						
 					}else{
-						console.log('HERE dT-3-e')
 							return_result = {...return_result, error:true,  message: `No equipments where found.`}
 					}
 					break;
 				case "FOI":
-					console.log('HERE dT-2-f')
 					if(equipment_result.rows.length > 0){
-						console.log('HERE dT-3-f')
 						equipment_result.rows = propNamesToLowerCase(equipment_result.rows)
 						equipment_result.rows.map((equipment, i) => {
 
@@ -773,7 +773,6 @@ const get4900HraAndEquipments = async function(connection, user, edit_rights) {
 
 			if(result.rows.length > 0){
 				hra.losing = propNamesToLowerCase(result.rows)
-				console.log(hra.losing[0])
 
 				for(let j=0;j<hra.losing.length;j++){
 					const {hra_num} = hra.losing[j]
@@ -898,9 +897,6 @@ const formUpdate = async (connection, edipi, changes, auto_commit=true) => {
 								}
 					
 								let query = `UPDATE ${FORM_4900} SET ${cols} WHERE ID = ${cells.old.id}`
-							
-
-								console.log(query,cells.update)
 								result = await connection.execute(query,cells.update,{autoCommit:auto_commit})
 								
 								return (result.rowsAffected > 0)
@@ -955,7 +951,19 @@ exports.index = async function(req, res) {
 exports.getById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
-		console.log('select by ID')
+		const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+		req.user = user_row.id
+
 		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
 
 		
@@ -1024,19 +1032,28 @@ exports.getById = async function(req, res) {
 exports.getPdfById = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	try{
+		const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+		req.user = user_row.id
 		let result = await connection.execute(newQuerySelById,[req.params.id],dbSelectOptions)
 
 		if(result.rows.length > 0){
-			console.log('here1')
 			result.rows = propNamesToLowerCase(result.rows)
 			const {file_storage_id} = result.rows[0]
 
 			if(file_storage_id){//Found a stored PDF.
-				console.log('here2')
 				let fileStorageResult = await connection.execute("SELECT * FROM file_storage WHERE ID = :0",[file_storage_id],dbSelectOptions)
 
 				if(fileStorageResult.rows.length > 0){
-					console.log('here3')
 					fileStorageResult.rows = propNamesToLowerCase(fileStorageResult.rows)
 					const {file_name, folder} = fileStorageResult.rows[0]
 
@@ -1258,11 +1275,24 @@ const getTabData = async (connection, user) => {
 
 //!SELECT form_4900 BY FIELDS DATA
 exports.search2 = async function(req, res) {
-	const {edit_rights} = req
+	//const {edit_rights} = req
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
 	try{
+		const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+		const edit_rights = UserLevelHasEditPermision(user_row,"/eng4900")
+		req.user = user_row.id
+
 		if(edit_rights){
 			const {fields,options, tab, init} = req.body;
 			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
@@ -1473,6 +1503,19 @@ exports.add = async function(req, res) {
 	let vals = ""
 	const {tab} = req.body
 
+	const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+	req.user = user_row.id
+
 	for(const key of keys){
 		if(req.body.form[key]){
 			form[key] = req.body.form[key]
@@ -1586,7 +1629,6 @@ exports.update = async function(req, res) {
 	const {edipi} = req.headers.cert
 	let notifcations_active = false;
 
-	console.log('data',req.body.params.changes[0])
 	const db_update_results = {
 		fs_record: {deleted:false, status_downgrade:false, signature_removal: false, error:false},
 		equipment_result: {error: false},
@@ -1594,14 +1636,24 @@ exports.update = async function(req, res) {
 	}
 
 	try{
+		const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+		req.user = user_row.id
 		const {changes} = req.body.params
 
 		if(process.env.APPLICATION_ID){
 			let notifications_result = await connection.execute(`SELECT NOTIFICATIONS AS "notifications" FROM APPLICATION_SETTINGS WHERE ID = :0`,[process.env.APPLICATION_ID],dbSelectOptions)
 			notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
 		}
-
-		console.log(`notifications on: ${notifcations_active}`)
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -1632,7 +1684,6 @@ exports.update = async function(req, res) {
 						const {file_storage_id, requested_action, requested_action_alias, is_losing_hra, is_gaining_hra} = from_record_result.rows[0]
 
 						if(isNewStatusValid(requested_action, status, from_record_result.rows[0].status, is_losing_hra, is_gaining_hra)){
-							console.log('new_status is valid')
 							db_update_results.fs_record.signature_removal = requiresSignatureRemoval(status, from_record_result.rows[0].status, requested_action_alias)
 							let form_4900_changes = {}
 
@@ -1642,14 +1693,11 @@ exports.update = async function(req, res) {
 								form_4900_changes = {0:{...newData, id: cell_id}}
 							}
 
-							console.log("HERE 2 (formUpdate)",form_4900_changes)
 							db_update_results.form_4900.error = !(await formUpdate(connection, edipi, {...form_4900_changes}, false))
 	
 							if(db_update_results.fs_record.status_downgrade){
-								console.log("HERE 3 (downgrade)")
 	
 								if(db_update_results.fs_record.signature_removal && file_storage_id){
-									console.log("HERE 3 (downgrade) delete")
 
 									const binds = {
 										id: file_storage_id,
@@ -1671,7 +1719,6 @@ exports.update = async function(req, res) {
 	
 							}
 							// else if(status == 10){//form is completed.
-							// 	console.log("HERE 4 (isComplete)")
 							// 	db_update_results.form_4900.complete = true
 							// 	db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0], requested_action: requested_action})
 							// }
@@ -1717,8 +1764,7 @@ exports.update = async function(req, res) {
 
 						//error is found.
 						await connection.rollback()
-						await connection.close()
-						console.log(db_update_results)						
+						await connection.close()				
 	
 						return (
 							res.status(400).json({
@@ -1761,16 +1807,25 @@ exports.destroy = async function(req, res) {
 	let tabsReturnObject = {}
 
 	try{
+		const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+		req.user = user_row.id
 		const changes = req.body.params
 		//const id = changes.form_id
 		const id = changes.hasOwnProperty('form_id') ? changes.form_id : (changes.hasOwnProperty('id') ? changes.id : -1)
-		//console.log(changes)
-
 		
 		let result = await connection.execute(`${eng4900SearchQuery(req.user)} 
 		LEFT JOIN FILE_STORAGE FS ON FS.ID = F.FILE_STORAGE_ID WHERE F.ID = :0`,[id],dbSelectOptions)
 
-		console.log(result.rows)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 			const {file_storage_id, file_name} = result.rows[0]
@@ -1864,6 +1919,20 @@ exports.destroy = async function(req, res) {
 //!UPLOAD form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.upload = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+
+	const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+		if(!user_row){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: null
+			});
+		}
+
+	req.user = user_row.id
+
 	await connection.execute('SAVEPOINT form_update')
 	const changes = await ParseHeaders(req.headers.changes)
 	const {edipi} = req.headers.cert
@@ -1890,8 +1959,6 @@ exports.upload = async function(req, res) {
 			notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
 		}
 
-		console.log(`notifications on: ${notifcations_active}`)
-
 		let result = await connection.execute(`SELECT * FROM (${eng4900SearchQuery(req.user)}) F 
 		LEFT JOIN file_storage fs on fs.id = f.file_storage_id 
 		WHERE F.FORM_ID = :0`,[id],dbSelectOptions)
@@ -1905,24 +1972,16 @@ exports.upload = async function(req, res) {
 			db_update_results.fs_record.status_downgrade = old_status > new_status
 
 			if(isNewStatusValid(requested_action, new_status, old_status, is_losing_hra, is_gaining_hra) && status_upgrade){
-
-				console.log('here1')
-
 				if(file_storage_id > 0){
-					console.log('here2')
 					new_filename = result.rows[0].file_name
 				}else{
-					console.log('here2')
 					new_filename = Math.floor(Date.now() / 1000) + "-" + myFile.name
 				}
 
-				console.log(pdfUploadPath + new_filename)
-
 				myFile.mv(pdfUploadPath + new_filename, async function(err) {
 
-					console.log(err)
 					if(err) {
-						console.log('here3-error')
+						console.log(err)
 						return res.status(500).send(err);
 					}
 						
@@ -1935,7 +1994,6 @@ exports.upload = async function(req, res) {
 						db_update_results.form_4900.error = !(await formUpdate(connection, edipi, {...form_4900_changes}, false))
 						
 						if(isFormCompleted(new_status, requested_action)){//form is completed.
-							console.log("HERE 4 (isComplete)")
 							db_update_results.form_4900.complete = true
 							db_update_results.equipment_result = await doTransaction(connection, req.user, {...form_4900_changes[0], requested_action: requested_action})
 						}

@@ -18,7 +18,7 @@ module.exports = {
     //DB_HOST
     //DB_PORT
     //DB_SID=
-    connectString: "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=saj-ora-db05)(PORT=1521))(CONNECT_DATA=(SERVER=DEDICATED)(SID=K3CMAPP1)))",
+    connectString: "saj-ora-db05.saj.usace.army.mil:1521/K3CMAPP1.saj.usace.army.mil",
   
     // Setting externalAuth is optional.  It defaults to false.  See:
     // https://oracle.github.io/node-oracledb/doc/api.html#extauth

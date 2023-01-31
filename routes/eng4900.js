@@ -7,9 +7,9 @@ module.exports = function(app) {
 	//!GET
 	//app.route('/eng4900').get(controller.index);
 
-	app.route('/eng4900/:id').get(usersController.verifyToken,controller.getById);
-	app.route('/eng4900/pdf/:id').get(usersController.verifyToken,controller.getPdfById);
-	app.route('/eng4900/search2').post(usersController.verifyToken,controller.search2);
+	app.route('/eng4900/:id').get(controller.getById);
+	app.route('/eng4900/pdf/:id').get(controller.getPdfById);
+	app.route('/eng4900/search2').post(controller.search2);
 	app.route('/eng4900/upload/:id').post(usersController.verifyToken, controller.upload);
 
 	//app.route('/eng4900/testpdf').post(controller.testPdfBuild);

@@ -159,7 +159,6 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 		}
 	}
 
-	console.log(tabsReturnObject)
 	return tabsReturnObject
 }
 
@@ -247,7 +246,6 @@ exports.getById = async function(req, res) {
 												on eq_emp.hra_num = hra_emp.hra_num
 												WHERE id = :0`,[req.params.id],dbSelectOptions)
 
-		//console.log('getid',result)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 
@@ -296,15 +294,12 @@ exports.search = async function(req, res) {
 		cols = filter(resultC.rows.map(x => x.COLUMN_NAME.toLowerCase()),function(c){ return !c.includes('sys_') && !c.includes('id')} )
 	}
 	
-	//console.log(edit_rights)
 	try{
 		const {fields,options} = req.body;
 
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 
 		for(const parameter of searchCriteria){
-			//parameter = parameter.replace(/[0-9]/g,'')
-			//console.log(parameter)
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
 			const db_col_name = isStringColumn ? `LOWER(${eqDatabaseColNames[parameter].name})` : eqDatabaseColNames[parameter].name
 
@@ -318,8 +313,6 @@ exports.search = async function(req, res) {
 					const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
 
 					for(let i=0; i<search_values.length;i++){
-						//const operator = isStringColumn ? 'LIKE' : '='
-						//console.log('in'+i)
 						const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
 						const operator = op_chooser(query_search)
 						const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
@@ -354,10 +347,7 @@ exports.search = async function(req, res) {
 				}else{
 					//const operator = isStringColumn ? 'LIKE' : '='
 					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-					//console.log(andOR_single[options.includes[parameter]],query_search)
 					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
-
-					//console.log(val,query_search)
 					//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
 				}
 			}
@@ -477,10 +467,8 @@ exports.search2 = async function(req, res) {
 				}else{
 					//const operator = isStringColumn ? 'LIKE' : '='
 					const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-					//console.log(andOR_single[options.includes[parameter]],query_search)
 					query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
 
-					//console.log(val,query_search)
 					//query_search = blankOptions ? query_search.concat(` ${or_(query_search)} ${db_col_name} ${blankOptions} `) : query_search
 				}
 			}
@@ -523,7 +511,6 @@ exports.search2 = async function(req, res) {
 				let {rows} = result
 				rows = propNamesToLowerCase(rows)
 				hras = [...rows]
-				console.log(hras)
 			}
 
 			result =  await connection.execute(`${hra_employee} where h.hra_num in (${hra_num_form_self(req.user)})`,{},dbSelectOptions) //fetch by destrict
@@ -531,7 +518,6 @@ exports.search2 = async function(req, res) {
 				let {rows} = result
 				rows = propNamesToLowerCase(rows)
 				my_hras = [...rows]
-				console.log(my_hras)
 			}
 
 			result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
@@ -541,8 +527,6 @@ exports.search2 = async function(req, res) {
 				rows = propNamesToLowerCase(rows)
 				employees = [...rows]
 			}
-
-			//console.log(tabsReturnObject)
 
 			return res.status(200).json({
 				status: 200,
@@ -626,16 +610,12 @@ const ColumnItemExists = async (connection,table_name,rowObj,col_names) => {
 
 	if(keys.length > 0){
 		for(const col of col_names){
-			//console.log('here1')
 			if(keys.includes(col)){
-				//console.log(rowObj.data[col])
 				let result = await connection.execute(`SELECT ${col} FROM ${table_name} WHERE ${col} = :0`,[rowObj.data[col]],dbSelectOptions)
-				//console.log(`SELECT ${col} FROM ${table_name} WHERE ${col} = :0`,rowObj.data[col],rowObj.data)
 				if(result.rows.length > 0){
 					if(!return_obj.hasOwnProperty(rowObj.row)) {
 						return_obj.rows[rowObj.row] = {}
 					}
-					//console.log('equipment exists')
 					return_obj.errorFound = true;
 					return_obj.rows[rowObj.row][col]='data exists in database.'
 				}
@@ -662,7 +642,6 @@ exports.add = async function(req, res) {
 
 	try{
 		const {changes} = req.body.params
-		//console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {newData} = changes[row];
@@ -759,7 +738,6 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-				console.log(newData)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_EQUIPMENT.includes(c.COLUMN_NAME)})

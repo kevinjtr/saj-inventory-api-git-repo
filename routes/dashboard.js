@@ -5,6 +5,6 @@ module.exports = function(app) {
 	const usersController = require('../controllers/users');
 
 	//!GET
-	app.route('/dashboard').get(usersController.verifyToken,controller.index);
+	app.route('/dashboard').get(controller.index);
     //app.route('/updatesmaintenancemessages').get(usersController.verifyToken,controller.index);
 };

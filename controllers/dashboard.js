@@ -142,8 +142,33 @@ const getEng4900FormsToSign = async (connection, hra_num, id) => {
 	return result.rows.length
 }
 
+const GetUserID = async (connection, edipi) => {
+	const user_result = await connection.execute(`select ru.id as "id", ul.alias as "level" from registered_users ru
+	left join user_level ul
+	on ru.user_level = ul.id
+	where edipi = :0`,[edipi],dbSelectOptions)
+	
+	if(user_result.rows.length == 0){
+
+		console.log('edipi not found.')
+		return null
+	}
+
+	return user_result.rows[0].id
+}
+
 exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
+	req.user = await GetUserID(connection, req.headers.cert.edipi)
+
+	if(!req.user){
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'Unable to get dashboard data!',//return form and bartags.
+			data: {}
+		});
+	}
 
 	const return_object = {
 		fiscal_year: `FY${moment(new Date()).add(3,"months").format("YY")}`,
@@ -157,7 +182,7 @@ exports.index = async function(req, res) {
 
 	try{
 
-		
+		console.log("fetching start.")
 		return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
 		return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
 		return_object.my_equipments_cert_porcentage = ((return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100).toFixed(1)
@@ -165,14 +190,15 @@ exports.index = async function(req, res) {
 		return_object.system_annoucements = await getSystemAnnoucements(connection)
 
 		//USER LEVEL IS ADMIN, HRA OR AUTHORIZED USER
-		console.log(`user level: ${req.user_level_num}`)
+		//console.log(`user level: ${req.user_level_num}`)
 		if([1, 9, 11].includes(req.user_level_num)){
 			const hras_obj_array = await getHraAccounts(connection, req.user)
 	
+			
 			for(const hra of hras_obj_array){
 				const {hra_num, full_name, is_self} = hra
 				const temp_hra_obj = {}
-		
+
 				temp_hra_obj.hra_num = hra_num
 				temp_hra_obj.full_name = full_name
 				temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
@@ -181,13 +207,14 @@ exports.index = async function(req, res) {
 				temp_hra_obj.total_equipments_cert_porcentage = ((temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100).toFixed(1)
 				temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
 		
-				console.log(temp_hra_obj)
+				//console.log(temp_hra_obj)
 				return_object.hras.push(temp_hra_obj)
 			}
 		}
 
 		await connection.close()
 	
+		console.log("successfully returning data.")
 		return res.status(200).json({
 			status: 200,
 			error: false,

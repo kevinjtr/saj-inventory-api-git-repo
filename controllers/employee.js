@@ -146,8 +146,7 @@ exports.search = async function(req, res) {
 	const {edit_rights} = req
 	let query_search = '';
 	const connection =  await oracledb.getConnection(dbConfig);
-
-	console.log(req.body)
+	
 	try{
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
@@ -229,11 +228,9 @@ exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
 	try{
-		console.log(req.body.params)
 		const {changes} = req.body.params
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				let {newData} = changes[row];
 				const keys = Object.keys(newData);
 				let cols = ''
@@ -269,7 +266,6 @@ exports.add = async function(req, res) {
 
 				}
 
-				//console.log(keys)
 				// for(let i=0; i<keys.length; i++){
 				// 	if(keys[i] != 'id'){
 				// 		const comma = i ? ', ': ''
@@ -281,10 +277,7 @@ exports.add = async function(req, res) {
 				// }
 
 				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
-				//console.log(query)
-
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-				//console.log(result)
 			}
 		}
 
@@ -310,7 +303,6 @@ exports.update = async function(req, res) {
 	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 
@@ -319,15 +311,12 @@ exports.update = async function(req, res) {
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-				
-				//console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EMPLOYEE'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-					//console.log(col_names)
 					for(let i=0; i<keys.length; i++){
 						if(col_names.includes(keys[i])){
 							const comma = i && cols ? ', ': ''
@@ -337,9 +326,7 @@ exports.update = async function(req, res) {
 						}
 
 						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-							console.log(edipi)
 							result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-							console.log(result.rows)
 							if(result.rows.length > 0){
 								const registered_users_id = result.rows[0].ID
 								const comma =  cols ? ', ': ''
@@ -352,9 +339,7 @@ exports.update = async function(req, res) {
 					let query = `UPDATE EMPLOYEE SET ${cols}
 								WHERE ID = ${cells.old.id}`
 
-					//console.log(query,cells.update)
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-					//console.log(result)
 
 					connection.close()
 					return res.status(200).json({
@@ -413,7 +398,6 @@ exports.destroy = async function(req, res) {
 
 				let result = await connection.execute(`UPDATE EMPLOYEE SET DELETED = 1 ${cols} WHERE HRA_NUM = :0`,[changes[row].oldData.id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.id
-				//console.log(result)
 			}
 		}
 

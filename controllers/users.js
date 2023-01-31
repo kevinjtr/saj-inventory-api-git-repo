@@ -86,7 +86,7 @@ exports.login = async (req, res) => {
 
 		if(edipi){
 			if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
-				await certTools.UpdateUserAccessHistory(req.headers.cert)
+				//await certTools.UpdateUserAccessHistory(req.headers.cert)
 			}
 
 			if(DB_OFF){
@@ -124,9 +124,7 @@ exports.login = async (req, res) => {
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)
 				const {id, updated_by_full_name, user_level, user_level_alias, user_level_name, user_district_office, notifications} = result.rows[0]
-
-				console.log(result.rows[0])
-
+				console.log(`${updated_by_full_name} has logged in.`)
 				user = {
 					id: id,
 					level_num: user_level,
@@ -278,7 +276,6 @@ exports.verifyUser = async (req, res, next) => {
 	const {edipi} = req.headers.cert;
 	const connection =  await oracledb.getConnection(dbConfig);
 
-	//console.log(req.headers.cert)
 	if (typeof edipi !== 'undefined') {
 		let result =  await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 		connection.close()
@@ -294,7 +291,6 @@ exports.verifyUser = async (req, res, next) => {
 
 	//! Forbidden
 	res.status(400).send({message:'Forbiden call!!'});
-	//console.log(connection.on())
 };
 
 exports.verifyToken = async (req, res, next) => {
@@ -307,18 +303,16 @@ exports.verifyToken = async (req, res, next) => {
 		
 		jwt.verify(req.token, process.env.SECRET_KEY, (err,decode) => {
 
-			//console.log(decode)
 			if (err) {
 				res.send('Access denied!!');
 			} else {
 				
-				console.log(decode)
 				if(tokenIsAuthorized(decode, req.path)){
+					console.log(`${decode.user.name} is authorized to access ${req.path}`)
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
 					req.user_level_alias = decode.user.level					
 					req.user_level_num = decode.user.level_num
-					console.log('is authorized')
 					next();
 				}else{
 					console.log('not authorized')

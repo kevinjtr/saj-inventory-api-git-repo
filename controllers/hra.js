@@ -21,10 +21,7 @@ exports.index = async function(req, res) {
 	try{
 		const newHRA = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
 		let result =  await connection.execute(`${newHRA} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
-		
-		console.log(newHRA)
 
-		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 		}
@@ -70,9 +67,7 @@ exports.form = async function(req, res) {
 			if(tab_name == "hra_forms"){
 				auth_hras = edit_rights ? hra_employee_form_all(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_all(req.user)
 			}
-
-			//console.log('auth_hras',auth_hras)
-			//const auth_hras = edit_rights ? hra_employee_form_all(req.user).replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee_form_all(req.user)
+			
 			let result = await connection.execute(`${auth_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 
 			if(result.rows.length > 0){
@@ -198,8 +193,6 @@ exports.search = async function(req, res) {
 		
 
 		let query = `SELECT * from HRA WHERE ${query_search} ORDER BY FIRST_NAME,LAST_NAME`
-
-		//console.log(query)
 		let resultHra =  await connection.execute(query,{},dbSelectOptions)
 		
 		if (resultHra.rows.length > 0) {
@@ -247,7 +240,6 @@ exports.add = async function(req, res) {
 		const {changes} = req.body.params		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				let {newData} = changes[row];
 				const keys = Object.keys(newData);
 				let cols = ''
@@ -284,13 +276,9 @@ exports.add = async function(req, res) {
 					}
 
 				}
-				//console.log(keys)
 
 				let query = `INSERT INTO HRA (${cols}) VALUES (${vals})`
-				console.log(query,insert_obj)
-
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-				//console.log(result)
 			}
 		}
 
@@ -320,21 +308,17 @@ exports.update = async function(req, res) {
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				const {newData,oldData} = changes[row];
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
 				cells.update = {}
 				let cols = ''
-
-				//console.log(cells.new)
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'HRA'`,{},dbSelectOptions)
 
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-					console.log(col_names)
                     for(let i=0; i<keys.length; i++){
 						const key = keys[i].replace('hra_','')
 
@@ -360,7 +344,6 @@ exports.update = async function(req, res) {
                                 WHERE hra_num = ${cells.old.hra_num}`
 
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-					console.log(result)
 					
 					connection.close()
 					return res.status(200).json({
@@ -420,7 +403,6 @@ exports.destroy = async function(req, res) {
 
 				let result = await connection.execute(`UPDATE HRA SET DELETED = 1 ${cols} WHERE HRA_NUM = :0`,[changes[row].oldData.hra_employee_id],{autoCommit:AUTO_COMMIT.DELETE})
 				ids = (ids != '' ? ids + ', ' : ids) + changes[row].oldData.hra_employee_id
-				//console.log(result)
 			}
 		}
 
