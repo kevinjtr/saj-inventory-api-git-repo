@@ -15,10 +15,10 @@ if (process.env.NODE_ENV === 'development') {
 	app.use(cors());
 	usaceCertMiddleware = require('./middleware/usace-cert-middleware');
 } else {
-	var methods = ["log", "debug"];
-    for(var i=0;i<methods.length;i++){
-        console[methods[i]] = function(){};
-    }
+	//var methods = ["log", "debug"];
+    //for(var i=0;i<methods.length;i++){
+        //console[methods[i]] = function(){};
+    //}
 	
 	usaceCertMiddleware = require('./middleware/usace-cert-middleware_apache');
 }

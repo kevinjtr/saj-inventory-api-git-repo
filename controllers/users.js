@@ -86,7 +86,7 @@ exports.login = async (req, res) => {
 
 		if(edipi){
 			if(typeof req.headers.cert != 'undefined' && Object.keys(req.headers.cert).length > 0) {
-				//await certTools.UpdateUserAccessHistory(req.headers.cert)
+				await certTools.UpdateUserAccessHistory(req.headers.cert)
 			}
 
 			if(DB_OFF){
@@ -124,7 +124,6 @@ exports.login = async (req, res) => {
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)
 				const {id, updated_by_full_name, user_level, user_level_alias, user_level_name, user_district_office, notifications} = result.rows[0]
-				console.log(`${updated_by_full_name} has logged in.`)
 				user = {
 					id: id,
 					level_num: user_level,
@@ -308,7 +307,7 @@ exports.verifyToken = async (req, res, next) => {
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
-					console.log(`${decode.user.name} is authorized to access ${req.path}`)
+					console.log(`${decode.user.name} is authorized to access.`)
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
 					req.user_level_alias = decode.user.level					

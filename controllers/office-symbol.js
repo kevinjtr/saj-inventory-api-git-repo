@@ -19,9 +19,6 @@ exports.index = async function(req, res) {
 	try{
 		let result =  await connection.execute('SELECT * FROM OFFICE_SYMBOL',{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
-		//let new_obj = arraytoObject(result.rows,"id")
-
-		//console.log(new_obj)
 
 		res.status(200).json({
 			status: 200,

@@ -1,5 +1,4 @@
 const certUtils = require('./utils/certUtils');
-const certTools = require('./utils/cert-tools');
 
 const usaceCertMiddleware = function (req, res, next) {
   if(typeof req.connection.getPeerCertificate ==='function') {
@@ -21,10 +20,6 @@ const usaceCertMiddleware = function (req, res, next) {
         }else{
           certObj ={};
         }
-
-        // if(typeof certObj != 'undefined' && Object.keys(certObj).length > 0) {
-        //   certTools.UpdateUserAccessHistory(certObj)
-        // }
 
         req.headers.cert = certObj;
       }

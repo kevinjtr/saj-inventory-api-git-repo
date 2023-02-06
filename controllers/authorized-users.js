@@ -32,10 +32,7 @@ const getHRAs = async function(connection, edipi)  {
     var resultArray = [];
     try {
         var HRA_NUM = await connection.execute(`SELECT HRA_NUM FROM HRA FULL JOIN REGISTERED_USERS ON HRA.EMPLOYEE_ID = REGISTERED_USERS.EMPLOYEE_ID WHERE EDIPI = ${edipi}`, {}, dbSelectOptions)
-       // HRA_NUM = HRA_NUM.rows.map(x => x.HRA_NUM)
-       // HRA_NUM = propNamesToLowerCase(HRA_NUM)
-       
-       // console.log(HRA_NUM)
+        
        if (HRA_NUM.rows.length > 0){
         HRA_NUM.rows = propNamesToLowerCase(HRA_NUM.rows)
         resultArray = HRA_NUM.rows
@@ -82,7 +79,7 @@ const getNames = async function(connection) {
             resultArray = result.rows
         }
         return resultArray
-        //console.log(resultArray)
+
      /*    res.status(200).json({
             status: 200,
             error: false,
@@ -115,15 +112,13 @@ const getAuthorizedUsers = async function(connection, edipi)  {
     try {
         var HRA_NUM = await connection.execute(`SELECT HRA_NUM FROM HRA h FULL JOIN (${registered_users_sql}) ru ON h.EMPLOYEE_ID = ru.EMPLOYEE_ID WHERE EDIPI = ${edipi}`, {}, dbSelectOptions)
         HRA_NUM = HRA_NUM.rows.map(x => x.HRA_NUM)
-       // console.log(HRA_NUM)
-       // console.log(HRA_NUM.rows.length)
+
        if(HRA_NUM.length > 0){
         var resultArray = [];
 
         if (HRA_NUM.length > 1){
             let arrayPrint = printElements(HRA_NUM)
             //for( var i=0; i < HRA_NUM.length; i++){
-                //console.log(HRA_NUM.rows[i].HRA_NUM)
                 let iResult = await connection.execute(`SELECT * FROM HRA_AUTHORIZED_USERS FULL JOIN (${registered_users_sql}) ru ON HRA_AUTHORIZED_USERS.REGISTERED_USERS_ID = ru.registered_users_id WHERE HRA_NUM in (${arrayPrint}) AND DELETED = 2`, {}, dbSelectOptions)
                 resultArray = propNamesToLowerCase(iResult.rows)
                 return resultArray
@@ -139,7 +134,6 @@ const getAuthorizedUsers = async function(connection, edipi)  {
             return resultArray
         }
 
-        //console.log(resultArray)
      /*    res.status(200).json({
             status: 200,
             error: false,
@@ -220,7 +214,6 @@ exports.add = async function(req, res) {
 	const {edipi} = req.headers.cert
 	try{
 		const {changes} = req.body.params
-        console.log(changes)
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {

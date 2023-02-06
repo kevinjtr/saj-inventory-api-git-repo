@@ -1,5 +1,4 @@
 const certUtils = require('./utils/certUtils_apache');
-const certTools = require('./utils/cert-tools');
 
 const usaceCertMiddleware = function (req, res, next) {
   if(req.get('SSL_CLIENT_CERT')!=='(null)' && typeof req.get('SSL_CLIENT_CERT') !== 'undefined') {
@@ -22,10 +21,6 @@ const usaceCertMiddleware = function (req, res, next) {
         certObj ={};
       }
 
-      // if(typeof certObj != 'undefined' && Object.keys(certObj).length > 0) {
-      //   certTools.UpdateUserAccessHistory(certObj)
-      // }
-      
       req.headers.cert = certObj;
     }
   }

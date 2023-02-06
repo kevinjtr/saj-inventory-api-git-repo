@@ -73,8 +73,6 @@ exports.update = async function (req, res) {
 
                 result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'PROBLEMS_REPORTED'`, {}, dbSelectOptions)
 
-                console.log(keys)
-
                 if (result.rows.length > 0) {
 
                     //Add column for updated by in PROBLEMS_REPORTED table
@@ -83,7 +81,6 @@ exports.update = async function (req, res) {
                         result.rows = filter(result.rows, function (c) { return !BANNED_COLS.includes(c.COLUMN_NAME) })
                         let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-                        //console.log(col_names)
                         for (let i = 0; i < keys.length; i++) {
                             if (col_names.includes(keys[i])) {
                                 const comma = i && cols ? ', ' : ''
@@ -93,9 +90,7 @@ exports.update = async function (req, res) {
                             }
 
                             if (i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')) {
-                                console.log(edipi)
                                 result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
-                                console.log(result.rows)
                                 if (result.rows.length > 0) {
                                     const registered_users_id = result.rows[0].ID
                                     const comma = cols ? ', ' : ''
@@ -108,9 +103,7 @@ exports.update = async function (req, res) {
                         let query = `UPDATE PROBLEMS_REPORTED SET ${cols}
                                     WHERE ID = ${cells.old.id}`
 
-                        console.log(query, cells.update)
                         result = await connection.execute(query, cells.update, { autoCommit: AUTO_COMMIT.UPDATE })
-                        console.log(result)
                     }
 
                     connection.close()

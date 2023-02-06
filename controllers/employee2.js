@@ -39,7 +39,6 @@ exports.add = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
 	try{
-		console.log(req.body.params)
 		const {changes} = req.body.params
 
 				let {newData} = changes[0];
@@ -78,10 +77,6 @@ exports.add = async function(req, res) {
 				}
 
 				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
-				console.log(query)
-				console.log(JSON.stringify(newData))
-
-
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
 

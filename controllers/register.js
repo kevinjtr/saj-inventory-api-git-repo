@@ -182,7 +182,6 @@ exports.registrationDropDownData = async function(req, res) {
 
 	await fs.promises.writeFile(path.join(__dirname, '../dd-items.json'), JSON.stringify(return_object,null,2))
                 .then(() => {
-                    console.log('dditems saved!');
                     AddEquipments()
                 })
                 .catch(err => {
@@ -225,7 +224,6 @@ exports.add = async function(req, res) {
 		if(req.body.params.hasOwnProperty("newData")){
 			const {newData} = req.body.params
 			if(newData.first_name && newData.last_name && newData.title && newData.office_symbol && newData.work_phone && newData.division && newData.district && newData.email && newData.user_type ){
-			console.log("validation complete")
 
 			// Convert District Symbol to District Id
 			let districtQuery = `select id from district where symbol = :0`
@@ -331,7 +329,6 @@ exports.add = async function(req, res) {
 			
 										const updateQuery = `UPDATE EMPLOYEE SET ${cols}
 															WHERE ID = '${hra_employee_record.employee_id}'`
-										console.log(updateQuery)
 										let updateResult = await connection.execute(updateQuery,vals,{autoCommit:AUTO_COMMIT.ADD})
 										
 										if(updateResult.rowsAffected > 0){
@@ -428,7 +425,6 @@ exports.add = async function(req, res) {
 
 								const updateQuery = `UPDATE EMPLOYEE SET ${cols}
 													WHERE ID = '${employee_record.id}'`
-								console.log(updateQuery)
 								let updateResult = await connection.execute(updateQuery,vals,{autoCommit:AUTO_COMMIT.ADD})
 								
 								if(updateResult.rowsAffected >0){

@@ -23,6 +23,16 @@ const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg
 const {form4900EmailAlert} = require("../tools/email-notifier")
 require('dotenv').config();
 
+const DEFAULT_SEARCH_PARAMS = {
+	'fields': {},
+    'options':{
+		includes: {},
+		blanks: {}
+	  },
+    'tab': "my_forms",
+    'init': true
+}
+
 const GetUser = async (connection, edipi) => {
 	const user_result = await connection.execute(`select ru.id as "id", ul.alias as "level" from registered_users ru
 	left join user_level ul
@@ -930,6 +940,7 @@ const ParseHeaders = async (string_to_parse) => {
 //!SELECT * FROM form_4900
 exports.index = async function(req, res) {
 
+	console.log("in index...")
 	// const connection =  await oracledb.getConnection(dbConfig);
 
 	// try{
@@ -1279,143 +1290,157 @@ exports.search2 = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 
-	try{
-		const user_row = await GetUser(connection, req.headers.cert.edipi)
+	console.log("before timeout.")
 
-		if(!user_row){
-			return res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: null
-			});
-		}
-		const edit_rights = UserLevelHasEditPermision(user_row,"/eng4900")
-		req.user = user_row.id
-
-		if(edit_rights){
-			const {fields,options, tab, init} = req.body;
-			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
-
-			for(const parameter of searchCriteria){
-				const isStringColumn = eng4900DatabaseColNames[parameter].type == "string"
-				const db_col_name = isStringColumn ? `LOWER(${eng4900DatabaseColNames[parameter].name})` : eng4900DatabaseColNames[parameter].name
-
-				if(db_col_name != undefined){
-					const db_col_value = fields[parameter]
-					const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
-					const includesOperator = searchOptions[options.includes[parameter]]
-					const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
-
-					if(db_col_value.includes(';')){
-						const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
-
-						for(let i=0; i<search_values.length;i++){
-							const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
-							const operator = op_chooser(query_search)
-							const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
-							const condition = `${db_col_name} ${includesOperator} ${val} `
-
-							if(i == 0 && !query_search){
-								query_search = query_search + '(' + condition + ' '
-
-							}else if(i == 0 && query_search){
-								query_search = query_search + operator + ' ( ' + condition + ' '
-
-							}else if(i != 0 && i != search_values.length - 1){
-								query_search = query_search + operator + ' ' + condition + ' '
-
-							}else if(i == search_values.length - 1){
-								query_search = query_search  + operator + ' ' + condition + ') '
-							}
-						}
-						
-
-					}else{
-						const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
-						query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
-					}
-				}
-			}
-
-			for(const parameter in options.blanks){
-				const isStringColumn = eng4900DatabaseColNames[parameter].type == "string"
-				const db_col_name = isStringColumn ? `LOWER(${eng4900DatabaseColNames[parameter].name})` : eng4900DatabaseColNames[parameter].name
-				const blankOperator = searchBlanks[options.blanks[parameter]]
-				const and_OR = blankAndOr[options.blanks[parameter]]
-				query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
-			}
-
-			if(init){
-				const tabsReturnObject = await getTabData(connection, req.user)
-				const hras = await get4900HraAndEquipments(connection, req.user, edit_rights)
-
-				return res.status(200).json({
-					status: 200,
-					error: false,
-					message: 'Successfully get single data!',
-					data: tabsReturnObject,
-					editable: edit_rights,
-					hras: hras
-				});
-			}
-
-			let query = getQueryForTab(tab, req.user)
-
-			if(query_search){
-				query = `SELECT * FROM (${query}) WHERE ${query_search}`
-			}
-			
-			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
-			let {rows} = result
-
-			rows = propNamesToLowerCase(rows)
-
-			const form_groups = groupBy(rows, function(r) {
-				return r.form_id;
-			  });		
-
-			const search_return = FormsToMaterialTableFormat(form_groups)
-
-			search_return.map(function(form_record){
-				const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = form_record
-				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
-				const steps = getAllStatusSteps(status, requested_action)
-				form_record.all_status_steps = Object.keys(steps).map((key) => {
-					return {id:Number(key), label:steps[key]}
-				})	
-				return form_record
-			})
-
-			if(search_return.length > 0){
-				return res.status(200).json({
-					status: 200,
-					error: false,
-					message: 'Successfully get single data!',
-					data: {[ALL_ENG4900_TABS.indexOf(tab)]: search_return},
-					editable: edit_rights
-				});
-			}
-		}
-
-		return res.status(400).json({
-			status: 400,
-			error: true,
-			message: 'No data found!',
-			data: {},
-			editable: edit_rights
-		});
-	}catch(err){
-		connection.close()
-		console.log(err)
+	setTimeout(() => {
 		res.status(400).json({
 			status: 400,
 			error: true,
 			message: 'No data found!',
 			data: {},
-			editable: edit_rights
+			editable: false
 		});
-	}
+
+		console.log("after timeout.")
+	},5000)
+	// try{
+	// 	const user_row = await GetUser(connection, req.headers.cert.edipi)
+
+	// 	if(!user_row){
+	// 		return res.status(400).json({
+	// 			status: 400,
+	// 			error: true,
+	// 			message: 'No data found!',
+	// 			data: null
+	// 		});
+	// 	}
+	// 	const edit_rights = UserLevelHasEditPermision(user_row,"/eng4900")
+	// 	req.user = user_row.id
+
+	// 	if(edit_rights){
+	// 		const {fields,options, tab, init} = req.body;
+	// 		if(fields && options && tab && typeof init != undefined){
+	// 			const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
+	// 			for(const parameter of searchCriteria){
+	// 				const isStringColumn = eng4900DatabaseColNames[parameter].type == "string"
+	// 				const db_col_name = isStringColumn ? `LOWER(${eng4900DatabaseColNames[parameter].name})` : eng4900DatabaseColNames[parameter].name
+
+	// 				if(db_col_name != undefined){
+	// 					const db_col_value = fields[parameter]
+	// 					const blacklistedSearchPatterns = ["'' ) or ","'' ) and "]
+	// 					const includesOperator = searchOptions[options.includes[parameter]]
+	// 					const multiCharacter = (['LIKE','NOT LIKE'].includes(includesOperator) ? '%':'')
+
+	// 					if(db_col_value.includes(';')){
+	// 						const search_values = filter(db_col_value.split(';'),function(sv){ return sv != '' && !blacklistedSearchPatterns.includes(sv) })
+
+	// 						for(let i=0; i<search_values.length;i++){
+	// 							const op_chooser = (i == 0 ? and_ : andOR_multiple[options.includes[parameter]])
+	// 							const operator = op_chooser(query_search)
+	// 							const val = isStringColumn ? `LOWER('${multiCharacter}${search_values[i].replace(/'/,"''")}${multiCharacter}')` : search_values[i].toString().replace(/'/,"''")
+	// 							const condition = `${db_col_name} ${includesOperator} ${val} `
+
+	// 							if(i == 0 && !query_search){
+	// 								query_search = query_search + '(' + condition + ' '
+
+	// 							}else if(i == 0 && query_search){
+	// 								query_search = query_search + operator + ' ( ' + condition + ' '
+
+	// 							}else if(i != 0 && i != search_values.length - 1){
+	// 								query_search = query_search + operator + ' ' + condition + ' '
+
+	// 							}else if(i == search_values.length - 1){
+	// 								query_search = query_search  + operator + ' ' + condition + ') '
+	// 							}
+	// 						}
+							
+
+	// 					}else{
+	// 						const val = isStringColumn ? `LOWER('${multiCharacter}${db_col_value.replace(/'/,"''")}${multiCharacter}')` : db_col_value.toString().replace(/'/,"''")
+	// 						query_search = query_search.concat(`${andOR_single[options.includes[parameter]](query_search)} ${db_col_name} ${includesOperator} ${val} `)
+	// 					}
+	// 				}
+	// 			}
+
+	// 			for(const parameter in options.blanks){
+	// 				const isStringColumn = eng4900DatabaseColNames[parameter].type == "string"
+	// 				const db_col_name = isStringColumn ? `LOWER(${eng4900DatabaseColNames[parameter].name})` : eng4900DatabaseColNames[parameter].name
+	// 				const blankOperator = searchBlanks[options.blanks[parameter]]
+	// 				const and_OR = blankAndOr[options.blanks[parameter]]
+	// 				query_search = blankOperator ? query_search + `${and_(query_search)} (${db_col_name} ${blankNull[blankOperator]} null ${and_OR} ${db_col_name} ${blankOperator} ' ')` : query_search
+	// 			}
+
+	// 			if(init){
+	// 				const tabsReturnObject = await getTabData(connection, req.user)
+	// 				const hras = await get4900HraAndEquipments(connection, req.user, edit_rights)
+
+	// 				return res.status(200).json({
+	// 					status: 200,
+	// 					error: false,
+	// 					message: 'Successfully get single data!',
+	// 					data: tabsReturnObject,
+	// 					editable: edit_rights,
+	// 					hras: hras
+	// 				});
+	// 			}
+
+	// 			let query = getQueryForTab(tab, req.user)
+
+	// 			if(query_search){
+	// 				query = `SELECT * FROM (${query}) WHERE ${query_search}`
+	// 			}
+				
+	// 			let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+	// 			let {rows} = result
+
+	// 			rows = propNamesToLowerCase(rows)
+
+	// 			const form_groups = groupBy(rows, function(r) {
+	// 				return r.form_id;
+	// 			});		
+
+	// 			const search_return = FormsToMaterialTableFormat(form_groups)
+
+	// 			search_return.map(function(form_record){
+	// 				const {requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered} = form_record
+	// 				form_record.status_options = getFormStatusOptions(requested_action, status, is_losing_hra, is_gaining_hra, losing_hra_is_registered, gaining_hra_is_registered, tab)
+	// 				const steps = getAllStatusSteps(status, requested_action)
+	// 				form_record.all_status_steps = Object.keys(steps).map((key) => {
+	// 					return {id:Number(key), label:steps[key]}
+	// 				})	
+	// 				return form_record
+	// 			})
+
+	// 			if(search_return.length > 0){
+	// 				return res.status(200).json({
+	// 					status: 200,
+	// 					error: false,
+	// 					message: 'Successfully get single data!',
+	// 					data: {[ALL_ENG4900_TABS.indexOf(tab)]: search_return},
+	// 					editable: edit_rights
+	// 				});
+	// 			}
+	// 		}
+	// 	}
+
+	// 	return res.status(400).json({
+	// 		status: 400,
+	// 		error: true,
+	// 		message: 'No data found!',
+	// 		data: {},
+	// 		editable: edit_rights
+	// 	});
+	// }catch(err){
+	// 	connection.close()
+	// 	console.log(err)
+	// 	res.status(400).json({
+	// 		status: 400,
+	// 		error: true,
+	// 		message: 'No data found!',
+	// 		data: {},
+	// 		editable: edit_rights
+	// 	});
+	// }
 };
 
 const create4900EquipmentGroup = async (equipmentIds,connection) => {

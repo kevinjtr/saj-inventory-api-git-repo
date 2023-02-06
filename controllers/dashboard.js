@@ -149,7 +149,6 @@ const GetUserID = async (connection, edipi) => {
 	where edipi = :0`,[edipi],dbSelectOptions)
 	
 	if(user_result.rows.length == 0){
-
 		console.log('edipi not found.')
 		return null
 	}
@@ -182,7 +181,6 @@ exports.index = async function(req, res) {
 
 	try{
 
-		console.log("fetching start.")
 		return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
 		return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
 		return_object.my_equipments_cert_porcentage = ((return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100).toFixed(1)
@@ -190,7 +188,6 @@ exports.index = async function(req, res) {
 		return_object.system_annoucements = await getSystemAnnoucements(connection)
 
 		//USER LEVEL IS ADMIN, HRA OR AUTHORIZED USER
-		//console.log(`user level: ${req.user_level_num}`)
 		if([1, 9, 11].includes(req.user_level_num)){
 			const hras_obj_array = await getHraAccounts(connection, req.user)
 	
@@ -206,15 +203,13 @@ exports.index = async function(req, res) {
 				temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
 				temp_hra_obj.total_equipments_cert_porcentage = ((temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100).toFixed(1)
 				temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
-		
-				//console.log(temp_hra_obj)
+
 				return_object.hras.push(temp_hra_obj)
 			}
 		}
 
 		await connection.close()
 	
-		console.log("successfully returning data.")
 		return res.status(200).json({
 			status: 200,
 			error: false,

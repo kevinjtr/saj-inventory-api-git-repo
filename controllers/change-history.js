@@ -330,7 +330,6 @@ exports.hra = async function(req, res) {
 			on ur.id = hh.updated_by
             ORDER BY hh.UPDATED_DATE desc `,{},dbSelectOptions)
 
-		//console.log(`${hra_employee} ORDER BY FIRST_NAME,LAST_NAME`)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -444,13 +443,10 @@ exports.eng4900 = async function(req, res) {
 		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
 		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num`
 
-		 //console.log(query)
 		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
 
 		let result = await connection.execute(query,{},dbSelectOptions)
 
-		//console.log(result2.rows[0].EQUIPMENT_GROUP_ID)
-		//console.log('getid',result)
 		if (result.rows.length > 0) {
 
 			result.rows = propNamesToLowerCase(result.rows)
@@ -461,11 +457,7 @@ exports.eng4900 = async function(req, res) {
 			// if(eg_result.rows.length > 0){
 			// 	eg_result.rows = propNamesToLowerCase(eg_result.rows)
 			// 	result.rows[0].equipment_group = eg_result.rows
-			// 	//console.log(result.rows[0])
-	
-				
-	
-			// 	//console.log(`returning ${result.rows.length} rows`)
+
 			// 	return res.status(200).json({
 			// 		status: 200,
 			// 		error: false,

@@ -544,17 +544,79 @@ module.exports = {
 };
 
 
-  //work in progress:
-//notifications
-//   select * from hra h
+// SELECT ru.id, e.first_name, e.last_name, MAX(uah.date_accessed) as last_login_date, 
+//        CASE WHEN my_total_equipments.my_total_equipments is null THEN 0 else my_total_equipments.my_total_equipments end as my_total_equipments,
+//        CASE WHEN my_equipments_cert_current_fy.my_equipments_cert_current_fy is null THEN 0 else my_equipments_cert_current_fy.my_equipments_cert_current_fy end as my_equipments_cert_current_fy,
+//        round( (CASE WHEN (my_equipments_cert_current_fy.my_equipments_cert_current_fy is null) THEN 0 / (
+//        CASE WHEN my_total_equipments.my_total_equipments is null THEN 0 else my_total_equipments.my_total_equipments end 
+//        ) else(
+//         my_equipments_cert_current_fy.my_equipments_cert_current_fy / (
+//         CASE WHEN my_total_equipments.my_total_equipments is null THEN 0 else my_total_equipments.my_total_equipments end)
+//        )end ) * 100, 2) as percentage
+// FROM registered_users ru
+// LEFT JOIN user_access_history uah
+// ON ru.edipi = uah.edipi
+// LEFT JOIN (
+//   SELECT ru.id, count(*) as my_total_equipments
+//   FROM registered_users ru
+//   LEFT JOIN employee e
+//   ON e.id = ru.employee_id
+//   LEFT JOIN equipment eq
+//   ON eq.user_employee_id = e.id
+//   GROUP BY ru.id
+// ) my_total_equipments
+// ON ru.id = my_total_equipments.id
+// LEFT JOIN (
+//   SELECT ru.id, count(*) as my_equipments_cert_current_fy
+//   FROM registered_users ru
+//   LEFT JOIN employee e
+//   ON e.id = ru.employee_id
+//   LEFT JOIN equipment eq
+//   ON eq.user_employee_id = e.id
+//   WHERE  eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') 
+//            AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD')
+//   GROUP BY ru.id
+// ) my_equipments_cert_current_fy
+// ON ru.id = my_equipments_cert_current_fy.id
+// LEFT JOIN (
+//   SELECT id, first_name, last_name from employee
+// ) e
+// ON e.id = ru.employee_id
+// GROUP BY ru.id, uah.full_name, e.first_name,e.last_name, my_total_equipments.my_total_equipments, 
+//          my_equipments_cert_current_fy.my_equipments_cert_current_fy;
+
+
+
+// select t1.hra_num, t1.total_employees, t2.total_equipments, case when t3.total_employees_cert_current_fy is null then 0 else t3.total_employees_cert_current_fy end as total_employees_cert_current_fy,
+// round( (CASE WHEN (t3.total_employees_cert_current_fy  is null) THEN 0 / (
+// CASE WHEN t2.total_equipments is null THEN 0 else t2.total_equipments end 
+// ) else(
+// t3.total_employees_cert_current_fy  / (
+// CASE WHEN t2.total_equipments is null THEN 0 else t2.total_equipments end)
+// )end ) * 100, 2) as total_employees_cert_current_fy_percentage
+
+// from (select count(unique(eq.user_employee_id)) as total_employees, h.hra_num from hra h
 // left join employee e
 // on e.id = h.hra_num
 // left join equipment eq
 // on eq.hra_num = h.hra_num
-// where h.hra_num = 907;
-
-
-
-// select unique(bar_tag_num) from equipment_history
-// where updated_date >= sysdate - 30
-// ;
+// where eq.user_employee_id is not null
+// group by h.hra_num) t1
+// left join
+// (select count(*) as total_equipments, h.hra_num from hra h
+// left join employee e
+// on e.id = h.hra_num
+// left join equipment eq
+// on eq.hra_num = h.hra_num
+// group by h.hra_num) t2
+// on t2.hra_num = t1.hra_num
+// left join
+// (select count(unique(eq.bar_tag_num)) as total_employees_cert_current_fy, h.hra_num from hra h
+// left join employee e
+// on e.id = h.hra_num
+// left join equipment eq
+// on eq.hra_num = h.hra_num
+// where eq.user_employee_id is not null and
+// eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD')
+// group by h.hra_num) t3
+// on t2.hra_num = t3.hra_num

@@ -52,7 +52,6 @@ exports.add = async function(req, res) {
 		const {changes} = req.body.params		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				//console.log(row)
 				let {newData} = changes[row];
 				const keys = Object.keys(newData);
 				let cols = ''
@@ -64,8 +63,6 @@ exports.add = async function(req, res) {
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_RU_ADD.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
-
-					console.log(col_names)
 
 					for(let i=0; i<keys.length; i++){
 						const key = (!noReplaceCols.includes(keys[i]) ? keys[i].replace('hra_',''): keys[i])
@@ -80,13 +77,9 @@ exports.add = async function(req, res) {
 					}
 
 				}
-				//console.log(keys)
 
 				let query = `INSERT INTO REGISTERED_USERS (${cols}) VALUES (${vals})`
-				console.log(query,insert_obj)
-
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
-				//console.log(result)
 			}
 		}
 
@@ -113,8 +106,6 @@ exports.notifications = async function(req, res) {
 
 	try{
 		const num = JSON.parse(active)
-		console.log(`active: ${active}, user: ${req.user}`)
-
 		let result =  await connection.execute(`UPDATE REGISTERED_USERS SET NOTIFICATIONS = :0 WHERE ID = ${req.user}`,[Number(num)],{autoCommit:false})
 		
 		if(result.rowsAffected > 0){
