@@ -307,7 +307,6 @@ exports.verifyToken = async (req, res, next) => {
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
-					console.log(`${decode.user.name} is authorized to access.`)
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
 					req.user_level_alias = decode.user.level					

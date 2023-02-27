@@ -224,6 +224,15 @@ e.id as EQUIPMENT_ID,
 	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
 	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `	
 
+const eng4900SearchQueryHraNum = () => `SELECT f.id as form_id
+	from ${FORM_4900} f
+	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
+	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
+	LEFT JOIN requested_action ra on ra.id = f.requested_action
+	LEFT JOIN (${hra_type("gaining")}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
+	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
+	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `	
+
 const whereEng4900SignFormAuth = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
@@ -251,6 +260,13 @@ UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
 UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+
+const whereEng4900SignFormWithHraNumNoId = (hra_num) => `WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
+UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+UNION (${eng4900SearchQueryHraNum()} WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
 
 const hra_total_employees = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
 left join employee e
@@ -296,6 +312,98 @@ on eq.user_employee_id = e.id
 where ru.id = ${id} AND eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `
 
 const system_annoucements = () => `select * from system_announcements order by id `
+
+const getUserDashboardEquipment = (id) => `SELECT ru.id as "id", e.first_name as "first_name", e.last_name as "last_name", case when MAX(uah.date_accessed) is null then sysdate else MAX(uah.date_accessed) end as "last_login_string",
+CASE WHEN my_total_equipments.my_total_equipments is null THEN 0 else my_total_equipments.my_total_equipments end as "my_equipments",
+CASE WHEN my_equipments_cert_current_fy.my_equipments_cert_current_fy is null THEN 0 else my_equipments_cert_current_fy.my_equipments_cert_current_fy end as "my_equipments_cert",
+round( (CASE WHEN (my_equipments_cert_current_fy.my_equipments_cert_current_fy is null) THEN 0 / (
+CASE WHEN (my_total_equipments.my_total_equipments is null OR my_total_equipments.my_total_equipments = 0) THEN 1 else my_total_equipments.my_total_equipments end 
+) else(
+ my_equipments_cert_current_fy.my_equipments_cert_current_fy / (
+ CASE WHEN (my_total_equipments.my_total_equipments is null OR my_total_equipments.my_total_equipments = 0) THEN 1 else my_total_equipments.my_total_equipments end)
+)end ) * 100, 2) as "my_equipments_cert_porcentage"
+FROM registered_users ru
+LEFT JOIN (select uah.edipi, uah.full_name, uah.date_accessed as from registered_users ru
+	left join user_access_history uah
+	on uah.edipi = ru.edipi
+	where ru.id = ${id}
+	order by uah.date_accessed desc
+	OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY) uah
+ON ru.edipi = uah.edipi
+LEFT JOIN (
+SELECT ru.id, count(eq.id) as my_total_equipments
+FROM registered_users ru
+LEFT JOIN employee e
+ON e.id = ru.employee_id
+LEFT JOIN equipment eq
+ON eq.user_employee_id = e.id
+GROUP BY ru.id
+) my_total_equipments
+ON ru.id = my_total_equipments.id
+LEFT JOIN (
+SELECT ru.id, count(eq.id) as my_equipments_cert_current_fy
+FROM registered_users ru
+LEFT JOIN employee e
+ON e.id = ru.employee_id
+LEFT JOIN equipment eq
+ON eq.user_employee_id = e.id
+WHERE  eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') 
+	AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD')
+GROUP BY ru.id
+) my_equipments_cert_current_fy
+ON ru.id = my_equipments_cert_current_fy.id
+LEFT JOIN (
+SELECT id, first_name, last_name from employee
+) e
+ON e.id = ru.employee_id
+where ru.id = ${id}
+GROUP BY ru.id, uah.full_name, e.first_name,e.last_name, my_total_equipments.my_total_equipments, 
+  my_equipments_cert_current_fy.my_equipments_cert_current_fy `
+
+  const getHraUserDashboardEquipment = (hra_num) => `select t1.hra_num as "hra_num", (case when t4.first_name is null then '' else t4.first_name||' ' end)||t4.last_name as "full_name",
+  t1.total_employees as "total_employees", t2.total_equipments as "total_equipments", 
+  case when t3.total_employees_cert_current_fy is null then 0 else t3.total_employees_cert_current_fy end as "total_equipments_cert",
+  
+  round( (CASE WHEN (t3.total_employees_cert_current_fy  is null) THEN 0 / (
+  CASE WHEN t2.total_equipments is null OR t2.total_equipments = 0 THEN 1 else t2.total_equipments end 
+  ) else(
+  t3.total_employees_cert_current_fy  / (
+  CASE WHEN t2.total_equipments is null OR t2.total_equipments = 0 THEN 1 else t2.total_equipments end)
+  )end ) * 100, 2) as "total_equipments_cert_porcentage"
+  
+  from (select count(unique(eq.user_employee_id)) as total_employees, h.hra_num
+  from hra h
+  left join employee e
+  on e.id = h.hra_num
+  left join equipment eq
+  on eq.hra_num = h.hra_num
+  group by h.hra_num) t1
+  left join
+  (select count(unique(eq.id)) as total_equipments, h.hra_num
+  from hra h
+  left join employee e
+  on e.id = h.hra_num
+  left join equipment eq
+  on eq.hra_num = h.hra_num
+  group by h.hra_num) t2
+  on t2.hra_num = t1.hra_num
+  left join
+  (select count(unique(eq.id)) as total_employees_cert_current_fy, h.hra_num
+  from hra h
+  left join employee e
+  on e.id = h.hra_num
+  left join equipment eq
+  on eq.hra_num = h.hra_num
+  where eq.user_employee_id is not null and
+  eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD')
+  group by h.hra_num) t3
+  on t2.hra_num = t3.hra_num
+  left join (select hra_num, e.first_name, e.last_name
+  from hra h
+  left join employee e
+  on e.id = h.employee_id) t4
+  on t4.hra_num = t1.hra_num
+  where t1.hra_num = ${hra_num} `
 
 module.exports = {
 	EQUIPMENT:EQUIPMENT,
@@ -541,6 +649,8 @@ module.exports = {
 	my_total_equipments: my_total_equipments,
 	my_equipments_cert_current_fy: my_equipments_cert_current_fy,
 	system_annoucements: system_annoucements,
+	getUserDashboardEquipment: getUserDashboardEquipment,
+	getHraUserDashboardEquipment: getHraUserDashboardEquipment,
 };
 
 
@@ -587,23 +697,24 @@ module.exports = {
 
 
 
-// select t1.hra_num, t1.total_employees, t2.total_equipments, case when t3.total_employees_cert_current_fy is null then 0 else t3.total_employees_cert_current_fy end as total_employees_cert_current_fy,
+// select t1.hra_num as "hra_num", t1.total_employees as "total_employees", t2.total_equipments as "total_equipments", 
+// case when t3.total_employees_cert_current_fy is null then 0 else t3.total_employees_cert_current_fy end as "total_equipments_cert",
+
 // round( (CASE WHEN (t3.total_employees_cert_current_fy  is null) THEN 0 / (
-// CASE WHEN t2.total_equipments is null THEN 0 else t2.total_equipments end 
+// CASE WHEN t2.total_equipments is null OR t2.total_equipments = 0 THEN 1 else t2.total_equipments end 
 // ) else(
 // t3.total_employees_cert_current_fy  / (
-// CASE WHEN t2.total_equipments is null THEN 0 else t2.total_equipments end)
-// )end ) * 100, 2) as total_employees_cert_current_fy_percentage
+// CASE WHEN t2.total_equipments is null OR t2.total_equipments = 0 THEN 1 else t2.total_equipments end)
+// )end ) * 100, 2) as "total_equipments_cert_porcentage"
 
 // from (select count(unique(eq.user_employee_id)) as total_employees, h.hra_num from hra h
 // left join employee e
 // on e.id = h.hra_num
 // left join equipment eq
 // on eq.hra_num = h.hra_num
-// where eq.user_employee_id is not null
 // group by h.hra_num) t1
 // left join
-// (select count(*) as total_equipments, h.hra_num from hra h
+// (select count(unique(eq.id)) as total_equipments, h.hra_num from hra h
 // left join employee e
 // on e.id = h.hra_num
 // left join equipment eq
@@ -611,7 +722,7 @@ module.exports = {
 // group by h.hra_num) t2
 // on t2.hra_num = t1.hra_num
 // left join
-// (select count(unique(eq.bar_tag_num)) as total_employees_cert_current_fy, h.hra_num from hra h
+// (select count(unique(eq.id)) as total_employees_cert_current_fy, h.hra_num from hra h
 // left join employee e
 // on e.id = h.hra_num
 // left join equipment eq

@@ -170,5 +170,17 @@ module.exports = {
     }
     
     return false
+  },
+  UserLevelNameHasEditPermision: (level, path) => {
+    const route_to_access = path.split('/').filter(Boolean)[0].replace(/-/g, "")
+  
+    if(REGISTERED_USERS_VIEW.hasOwnProperty(level)){
+      if(REGISTERED_USERS_VIEW[level].hasOwnProperty(route_to_access)){
+        return REGISTERED_USERS_VIEW[level][route_to_access].edit
+      }
+      return level == "admin"
+    }
+    
+    return false
   }
   };

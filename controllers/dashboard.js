@@ -13,7 +13,10 @@ const moment = require('moment');
 const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
 
 
-const {eng4900SearchQuery, whereEng4900SignFormAuthNotInSelf, whereEng4900SignFormSelf, whereEng4900SignFormWithHraNum, hra_num_form_auth_not_in_self, hra_num_form_self, hra_num_form_all,hra_total_employees, hra_total_equipments, hra_total_employees_cert_current_fy, last_login, my_total_equipments, my_equipments_cert_current_fy, system_annoucements} = require('../config/queries');
+const {eng4900SearchQuery, whereEng4900SignFormAuthNotInSelf, whereEng4900SignFormSelf, whereEng4900SignFormWithHraNum,
+	 hra_num_form_auth_not_in_self, hra_num_form_self, hra_num_form_all,hra_total_employees, hra_total_equipments,
+	  hra_total_employees_cert_current_fy, last_login, my_total_equipments, my_equipments_cert_current_fy,
+	   getUserDashboardEquipment, getHraUserDashboardEquipment, system_annoucements} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
 const {rightPermision} = require('./validation/tools/user-database')
@@ -26,7 +29,8 @@ const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
 const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg_forms"]
-const {form4900EmailAlert} = require("../tools/email-notifier")
+const {form4900EmailAlert} = require("../tools/email-notifier");
+const { isDate } = require('moment');
 require('dotenv').config();
 
 const getMyTotalEquipments = async (connection, id) => {
@@ -142,25 +146,42 @@ const getEng4900FormsToSign = async (connection, hra_num, id) => {
 	return result.rows.length
 }
 
-const GetUserID = async (connection, edipi) => {
-	const user_result = await connection.execute(`select ru.id as "id", ul.alias as "level" from registered_users ru
-	left join user_level ul
-	on ru.user_level = ul.id
-	where edipi = :0`,[edipi],dbSelectOptions)
-	
-	if(user_result.rows.length == 0){
-		console.log('edipi not found.')
-		return null
-	}
+const EmployeeEquipmentData = async (connection, id) => {
+	try{
+		let result = await connection.execute(getUserDashboardEquipment(id),{},dbSelectOptions)
 
-	return user_result.rows[0].id
+		if(result.rows.length > 0){
+			result.rows[0].last_login_string = result.rows[0].last_login_string ? moment(result.rows[0].last_login_string).format('dddd, MMMM Do, YYYY') : null
+			return result.rows[0]
+		}
+	}catch(err){
+		console.log(err)
+	}
+	
+	return {}
+}
+
+const HraEquipmentData = async (connection, hra_num) => {
+	try{
+		let result = await connection.execute(getHraUserDashboardEquipment(hra_num),{},dbSelectOptions)
+
+		if(result.rows.length > 0){
+			return result.rows[0]
+		}
+	}catch(err){
+		console.log(err)
+	}
+	
+	return {}
 }
 
 exports.index = async function(req, res) {
 	const connection =  await oracledb.getConnection(dbConfig);
-	req.user = await GetUserID(connection, req.headers.cert.edipi)
+	const id = req.user || req.user_level_num
 
-	if(!req.user){
+	//req.user = await GetUserID(connection, req.headers.cert.edipi)
+
+	if(!id){
 		return res.status(400).json({
 			status: 400,
 			error: true,
@@ -169,7 +190,7 @@ exports.index = async function(req, res) {
 		});
 	}
 
-	const return_object = {
+	let return_object = {
 		fiscal_year: `FY${moment(new Date()).add(3,"months").format("YY")}`,
 		my_equipments: 0,
 		my_equipments_cert: 0,
@@ -180,29 +201,33 @@ exports.index = async function(req, res) {
 	}
 
 	try{
-
-		return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
-		return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
-		return_object.my_equipments_cert_porcentage = ((return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100).toFixed(1)
-		return_object.last_login_string = await getMyLastLogin(connection, req.user)
+		
+		// return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
+		// return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
+		// return_object.my_equipments_cert_porcentage = ((return_object.my_equipments_cert / (return_object.my_equipments == 0 ? 1 : return_object.my_equipments)) * 100).toFixed(1)
+		// return_object.last_login_string = await getMyLastLogin(connection, req.user)
+		return_object = {...return_object, ...(await EmployeeEquipmentData(connection, id))}
 		return_object.system_annoucements = await getSystemAnnoucements(connection)
 
 		//USER LEVEL IS ADMIN, HRA OR AUTHORIZED USER
-		if([1, 9, 11].includes(req.user_level_num)){
-			const hras_obj_array = await getHraAccounts(connection, req.user)
+		if([1, 9, 11].includes(id)){
+			const hras_obj_array = await getHraAccounts(connection, id)
 	
 			
 			for(const hra of hras_obj_array){
 				const {hra_num, full_name, is_self} = hra
-				const temp_hra_obj = {}
+				let temp_hra_obj = {}
 
-				temp_hra_obj.hra_num = hra_num
-				temp_hra_obj.full_name = full_name
-				temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
-				temp_hra_obj.total_equipments = await getHraTotalEquipments(connection, hra_num)
-				temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
-				temp_hra_obj.total_equipments_cert_porcentage = ((temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100).toFixed(1)
-				temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, req.user)
+				
+				temp_hra_obj = {...temp_hra_obj, ...(await HraEquipmentData(connection, hra_num))}
+				//temp_hra_obj.hra_num = hra_num
+				//temp_hra_obj.full_name = full_name
+				//temp_hra_obj.total_employees = await getHraTotalEmployees(connection, hra_num)
+				//temp_hra_obj.total_equipments = await getHraTotalEquipments(connection, hra_num)
+				//temp_hra_obj.total_equipments_cert = await getHraTotalEmployeesEquipmentCertCurrentFy(connection, hra_num)
+				//temp_hra_obj.total_equipments_cert_porcentage = ((temp_hra_obj.total_equipments_cert / (temp_hra_obj.total_equipments == 0 ? 1 : temp_hra_obj.total_equipments)) * 100).toFixed(1)
+
+				temp_hra_obj.eng4900_form_notifications = await getEng4900FormsToSign(connection, hra_num, id)
 
 				return_object.hras.push(temp_hra_obj)
 			}
