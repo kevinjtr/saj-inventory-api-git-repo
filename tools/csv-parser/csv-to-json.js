@@ -15,7 +15,9 @@ const dbSelectOptions = {
     // fetchArraySize:   100                 // internal buffer allocation size for tuning
 };
 
-module.exports = function() {
+const AUTO_COMMIT = true;
+const fix_names = [{name: 'AMANDA L. MAARIN', new:'Amanda Marin'}]
+//module.exports = function() {
     //this will generate a new field in the database if employee not found.
 
     const blacklsitedEmployeesHRA = ["Pending","Barcode"]
@@ -51,7 +53,7 @@ module.exports = function() {
             let result =  await connection.execute(query,{},dbSelectOptions)
             
             if(result.rows.length == 0){
-                result =  await connection.execute(`INSERT INTO employee (first_name,last_name) values (:0,:1)`,[employee[col1Name],employee[col2Name]],{autoCommit:true})
+                result =  await connection.execute(`INSERT INTO employee (first_name,last_name) values (:0,:1)`,[employee[col1Name],employee[col2Name]],{autoCommit: AUTO_COMMIT})
     
                 if(result.rowsAffected > 0){
                     const rowid = result.lastRowid
@@ -68,6 +70,7 @@ module.exports = function() {
     
                 return(result.rows[0])
             }{
+                console.log('STOP')
                 return({error:true})
             }
         }catch(err){
@@ -77,20 +80,21 @@ module.exports = function() {
     
     const non_bartag_cols = ['Last Name','First Name','HRA','Email']
     
-    const AddEquipments = async (filterbyHraNumber) => {
-        const connection =  await oracledb.getConnection(dbConfig);
-        
-
-        let equipments = await loadJSON(path.join(__dirname,`./output/equipments.json`))
+    const AddEquipments = async () => {
         console.log('AddEquipments')
-        if(filterbyHraNumber){
-            equipments = filter(equipments,function(e){ return enDgHras.includes(e.HRA_ID); })
-        }
+
+        const connection =  await oracledb.getConnection(dbConfig);
+        let equipments = await loadJSON(path.join(__dirname,`./output/equipments.json`))
+        
+        // if(filterbyHraNumber){
+        //     equipments = filter(equipments,function(e){ return enDgHras.includes(e.HRA_ID); })
+        // }
     
         try{
             for(let i=0;i<equipments.length;i++){
                 console.log(`equipment ${i+1} of ${equipments.length}`)
                 const equipment = equipments[i]
+
                 const bartag = equipment.PROP_ID ? Number(equipment.PROP_ID.toString().substr(0,5)) : null
     
                 if(bartag != null){
@@ -115,22 +119,33 @@ module.exports = function() {
                             equipment.USER_EMPLOYEE_ID,
                         ]
     
-                        result =  await connection.execute(`INSERT INTO equipment (
-                            BAR_TAG_NUM, 
-                            CATALOG_NUM, 
-                            BAR_TAG_HISTORY_ID, 
-                            MANUFACTURER, 
-                            MODEL, 
-                            CONDITION, 
-                            SERIAL_NUM, 
-                            ACQUISITION_DATE, 
-                            ACQUISITION_PRICE, 
-                            DOCUMENT_NUM,
-                            ITEM_TYPE, 
-                            HRA_NUM, 
-                            USER_EMPLOYEE_ID
-                        ) values (:0,:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)`,options,{autoCommit:true})
-    
+                        try{
+                            result =  await connection.execute(`INSERT INTO equipment (
+                                BAR_TAG_NUM, 
+                                CATALOG_NUM, 
+                                BAR_TAG_HISTORY_ID, 
+                                MANUFACTURER, 
+                                MODEL, 
+                                CONDITION, 
+                                SERIAL_NUM, 
+                                ACQUISITION_DATE, 
+                                ACQUISITION_PRICE, 
+                                DOCUMENT_NUM,
+                                ITEM_TYPE, 
+                                HRA_NUM, 
+                                USER_EMPLOYEE_ID
+                            ) 
+                            SELECT 
+                                :0, :1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12
+                            FROM dual
+                            WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM equipment
+                                WHERE BAR_TAG_NUM = :0) `,options,{autoCommit: AUTO_COMMIT})
+                        }catch(err){
+                            console.log('equipment could not be added')
+                        }
+
                         if(result.rowsAffected > 0){
                             const rowid = result.lastRowid
                             result =  await connection.execute('SELECT * FROM equipment where rowid = :0 ',[rowid],dbSelectOptions)
@@ -151,10 +166,10 @@ module.exports = function() {
     
     const AddEmployees = async () => {
         
-        
-        const employees = await loadJSON(path.join(__dirname,`./output/employees.json`))
+        const employees_path = path.join(__dirname,`./output/employees.json`)
+        const employees = fs.existsSync(employees_path) ? await loadJSON(employees_path) : []
         const equipments = await loadJSON(path.join(__dirname,`./output/equipments.json`))
-        console.log('AddEmployees')
+
         for(const emp of employees){
             if(!blacklsitedEmployeesHRA.includes(emp.HRA)){
                 const employee = await GetEmployeeWithID(emp,"First Name","Last Name")
@@ -231,39 +246,68 @@ module.exports = function() {
         
         const hraEmployees = await loadJSON(path.join(__dirname,`./output/hraEmployees.json`))
         const connection =  await oracledb.getConnection(dbConfig);
-        console.log('AddHraEmployees')
-        for(const tempEmp of hraEmployees){
+        console.log('AddHraEmployees',hraEmployees.length)
+
+        for(let i=0; i < hraEmployees.length; i++){
+            console.log(`Hra Employee ${i+1} of ${hraEmployees.length}`)
+            const tempEmp = hraEmployees[i]
             const employee = await GetEmployeeWithID(tempEmp,"FIRST_NAME","LAST_NAME")
     
             if(typeof tempEmp.HRA_NUM == "object"){//hra with multiple hra accounts
+                console.log('in object1')
                 for(let hra_num of tempEmp.HRA_NUM){
-                    let result =  await connection.execute('SELECT * FROM hra where hra_num = :0',[hra_num],dbSelectOptions)
-    
-                    if(result.rows.length == 0){
-                        result =  await connection.execute(`INSERT INTO hra (hra_num,employee_id) values (:0,:1)`,[hra_num,employee.id],{autoCommit:true})
-                        console.log(`HRA Added: ${employee.first_name} ${employee.last_name} (${hra_num})`)
-            
-                        if(result.rowsAffected > 0){
-                            const rowid = result.lastRowid
-                            result =  await connection.execute('SELECT * FROM hra where rowid = :0 ',[rowid],dbSelectOptions) 
-                        }
-                    }
-                }
-            }else{//hra with single hra account.
-                let result =  await connection.execute('SELECT * FROM hra where hra_num = :0',[tempEmp.HRA_NUM],dbSelectOptions)
-    
-                if(result.rows.length == 0){
-                    result =  await connection.execute(`INSERT INTO hra (hra_num,employee_id) values (:0,:1)`,[tempEmp.HRA_NUM,employee.id],{autoCommit:true})
-                    console.log(`HRA Added: ${employee.first_name} ${employee.last_name} hra(${tempEmp.HRA_NUM})`)
-        
+                    console.log('in object2')
+                    const sql = `INSERT INTO hra (hra_num, employee_id)
+                    SELECT :0, :1
+                    FROM dual
+                    WHERE NOT EXISTS (SELECT 1 FROM hra WHERE hra_num = :0) `
+
+                    let result =  await connection.execute(sql,[hra_num,employee.id],{autoCommit: AUTO_COMMIT})
+
                     if(result.rowsAffected > 0){
-                        const rowid = result.lastRowid
-                        result =  await connection.execute('SELECT * FROM hra where rowid = :0 ',[rowid],dbSelectOptions) 
+                        console.log(`HRA Added: ${employee.first_name} ${employee.last_name} (${hra_num})`)
+                        //const rowid = result.lastRowid
+                        //result =  await connection.execute('SELECT * FROM hra where rowid = :0 ',[rowid],dbSelectOptions) 
                     }
+                    
+                    // if(result.rows.length == 0){
+                    //     result =  await connection.execute(`INSERT INTO hra (hra_num,employee_id) values (:0,:1)`,[hra_num,employee.id],{autoCommit:false})
+                    //     console.log(`HRA Added: ${employee.first_name} ${employee.last_name} (${hra_num})`)
+            
+                    //     if(result.rowsAffected > 0){
+                    //         const rowid = result.lastRowid
+                    //         result =  await connection.execute('SELECT * FROM hra where rowid = :0 ',[rowid],dbSelectOptions) 
+                    //     }
+                    // }
                 }
+            }else {//hra with single hra account.
+                //let result =  await connection.execute('SELECT * FROM hra where hra_num = :0',[tempEmp.HRA_NUM],dbSelectOptions)
+                //if(result.rows.length == 0){
+
+                const sql = `INSERT INTO hra (hra_num, employee_id)
+                SELECT :0, :1
+                FROM dual
+                WHERE NOT EXISTS (SELECT 1 FROM hra WHERE hra_num = :0) `
+
+                let result =  await connection.execute(sql,[tempEmp.HRA_NUM,employee.id],{autoCommit: AUTO_COMMIT})
+
+                //result =  await connection.execute(`INSERT INTO hra (hra_num,employee_id) values (:0,:1)`,[tempEmp.HRA_NUM,employee.id],{autoCommit:false})
+                //console.log(`HRA Added: ${employee.first_name} ${employee.last_name} hra(${tempEmp.HRA_NUM})`)
+    
+                if(result.rowsAffected > 0){
+                    console.log(`HRA Added: ${employee.first_name} ${employee.last_name} hra(${tempEmp.HRA_NUM})`)
+                    //const rowid = result.lastRowid
+                    //result =  await connection.execute('SELECT * FROM hra where rowid = :0 ',[rowid],dbSelectOptions) 
+                }//else{
+                    //console.log('could not add HRA')
+                //}
+
+                   
             }
+            //}
         }
     
+        console.log('add employees')
         AddEmployees()
     }
     
@@ -442,7 +486,112 @@ module.exports = function() {
             }
     }
     
-    return {
-        run : () => {EmployeesConvert()}
+    //return {
+        //run : () => {EquipmentConvert()}
+    //}
+//}();
+
+//EquipmentConvert()
+
+const VerifyChangedHraAccounts = async () => {
+    console.log('VerifyChangedHraAccounts')
+
+    try{
+        const csvFilePath = path.join(__dirname,`./csv-files/inventory-schedule.csv`)  
+        const jsonArray = await csv({ignoreEmpty:true}).fromFile(csvFilePath);
+        const connection =  await oracledb.getConnection(dbConfig);
+
+        for(let i=0;i<jsonArray.length;i++){
+            const { HRA: hra, NAME: full_name } = jsonArray[i]
+            const first_name = full_name.split(' ')[0]
+    
+            const binds = {
+                hra: !isNaN(hra) ? Number(hra) : null
+            }
+    
+            const result = await connection.execute(`SELECT * FROM HRA H
+            LEFT JOIN EMPLOYEE E
+            ON E.ID = H.EMPLOYEE_ID
+            WHERE hra_num = :hra AND e.first_name like '%${first_name}%' `, binds, dbSelectOptions)
+    
+            if(result.rows.length == 0){
+
+                const result2 = await connection.execute(`SELECT e.first_name as "first_name", e.last_name as "last_name"  FROM HRA H
+                    LEFT JOIN EMPLOYEE E
+                    ON E.ID = H.EMPLOYEE_ID
+                    WHERE hra_num = :hra `,binds, dbSelectOptions)
+    
+                    if(result2.rows.length > 0){
+                        const person = result2.rows[0]
+                        console.log(`HRA [${hra}] ${person.first_name} ${person.last_name} - Name changed to ${full_name} `)
+                    }
+    
+            }else{
+                console.log(`HRA [${hra}] name did not changed. `)
+            }
+    
+            // const objKeys = Object.keys(jsonArray[i])
+            // const btNamesArray = filter(objKeys,function(o){ return !non_bartag_cols.includes(o);})
+            // let btArray = []
+    
+            // for(const bt_name of btNamesArray){
+            //     btArray.push({'bartag':jsonArray[i][bt_name],'item_type':bt_name.replace(/\s\d/,'')})
+            //     delete jsonArray[i][bt_name];
+            // }
+    
+            // jsonArray[i]['equipments'] = btArray
+        }
+    }catch(err){
+        console.log(err)
     }
-}();
+
+    // await fs.promises.writeFile(path.join(__dirname, './output/hras-changed.json'), JSON.stringify(jsonArray,null,2))
+    //     .then(() => {
+    //         console.log('employees saved!');
+    //         EquipmentConvert()
+    //     })
+    //     .catch(err => {
+    //     console.log('employees: Some error occured - file either not saved or corrupted file saved.');
+    //     });
+}
+
+//VerifyChangedHraAccounts()
+
+const VerifyNewOffices = async () => {
+    console.log('VerifyNewOffices')
+
+    try{
+        const csvFilePath = path.join(__dirname,`./csv-files/inventory-schedule.csv`)  
+        const jsonArray = await csv({ignoreEmpty:true}).fromFile(csvFilePath);
+        const connection =  await oracledb.getConnection(dbConfig);
+
+        for(let i=0;i<jsonArray.length;i++){
+            const { LOCATION } = jsonArray[i]
+            const location = LOCATION.replace('CESAJ-','').trim()
+
+            const binds = {
+                location: location.replace('CESAJ-','').trim()
+            }
+    
+            const result = await connection.execute(`SELECT * from office_symbol
+            where alias = :location`, binds, dbSelectOptions)
+    
+            if(result.rows.length == 0 && location){
+                console.log(`Office [${location}] is not available. `)
+            }
+        }
+    }catch(err){
+        console.log(err)
+    }
+
+    // await fs.promises.writeFile(path.join(__dirname, './output/hras-changed.json'), JSON.stringify(jsonArray,null,2))
+    //     .then(() => {
+    //         console.log('employees saved!');
+    //         EquipmentConvert()
+    //     })
+    //     .catch(err => {
+    //     console.log('employees: Some error occured - file either not saved or corrupted file saved.');
+    //     });
+}
+
+//VerifyNewOffices()
