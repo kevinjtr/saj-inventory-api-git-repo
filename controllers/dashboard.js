@@ -22,14 +22,11 @@ const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = re
 const {rightPermision} = require('./validation/tools/user-database')
 const {create4900, ValidateEng4900Signature} = require('../pdf-fill.js');
 const { Console } = require('console');
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const BANNED_COLS_FORM_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_','UPDATED_BY']
 const BANNED_COLS_ENG4900 = ['ID','UPDATED_BY','SYS_NC00008$','DELETED']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const pdfUploadPath = path.join(__dirname,'../file_storage/pdf/')
 const ALL_ENG4900_TABS = ["my_forms","hra_forms","sign_forms","completed_and_ipg_forms"]
-const {form4900EmailAlert} = require("../tools/email-notifier");
 const { isDate } = require('moment');
 require('dotenv').config();
 
@@ -176,31 +173,31 @@ const HraEquipmentData = async (connection, hra_num) => {
 }
 
 exports.index = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-	const id = req.user || req.user_level_num
-
-	//req.user = await GetUserID(connection, req.headers.cert.edipi)
-
-	if(!id){
-		return res.status(400).json({
-			status: 400,
-			error: true,
-			message: 'Unable to get dashboard data!',//return form and bartags.
-			data: {}
-		});
-	}
-
-	let return_object = {
-		fiscal_year: `FY${moment(new Date()).add(3,"months").format("YY")}`,
-		my_equipments: 0,
-		my_equipments_cert: 0,
-		my_equipments_cert_porcentage: 0,
-		last_login_string: null,
-		system_annoucements: [],
-		hras:[],
-	}
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
+		const id = req.user || req.user_level_num
+
+		if(!id){
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'Unable to get dashboard data!',//return form and bartags.
+				data: {}
+			});
+		}
+	
+		let return_object = {
+			fiscal_year: `FY${moment(new Date()).add(3,"months").format("YY")}`,
+			my_equipments: 0,
+			my_equipments_cert: 0,
+			my_equipments_cert_porcentage: 0,
+			last_login_string: null,
+			system_annoucements: [],
+			hras:[],
+		}
 		
 		// return_object.my_equipments = await getMyTotalEquipments(connection, req.user)
 		// return_object.my_equipments_cert = await getMyEquipmentsCertCurrentFy(connection, req.user)
@@ -232,8 +229,6 @@ exports.index = async function(req, res) {
 				return_object.hras.push(temp_hra_obj)
 			}
 		}
-
-		await connection.close()
 	
 		return res.status(200).json({
 			status: 200,
@@ -251,6 +246,14 @@ exports.index = async function(req, res) {
 			message: 'Unable to get dashboard data!',//return form and bartags.
 			data: {}
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 	
 }
@@ -258,8 +261,6 @@ exports.index = async function(req, res) {
 //test_something()
 
 // exports.index = async function(req, res) {
-
-// 	const connection =  await oracledb.getConnection(dbConfig);
 
 // 	const return_object = {
 // 		my_equipments: null,

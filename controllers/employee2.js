@@ -11,9 +11,10 @@ const {employeesForRegistrationAssignment,employeeByEDIPI} = require('../config/
 //!SELECT * FROM EMPLOYEE
 exports.index = async function(req, res) {
 
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(employeesForRegistrationAssignment,{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -31,14 +32,24 @@ exports.index = async function(req, res) {
 			message: 'No data found!',
 			data: []
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!INSERT EMPLOYEE
 exports.add = async function(req, res) { 
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 				let {newData} = changes[0];
@@ -99,16 +110,24 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data!'
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM EMPLOYEE
 exports.getByEDIPIWithOffice = async function(req, res) {
-
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(employeeByEDIPI(edipi),{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -126,5 +145,13 @@ exports.getByEDIPIWithOffice = async function(req, res) {
 			message: 'No data found!',
 			data: []
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

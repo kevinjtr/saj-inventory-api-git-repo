@@ -1,10 +1,7 @@
 'use strict';
 const oracledb = require('oracledb');
-const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy')
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol,employee_id_auth} = require('../config/queries');
@@ -15,9 +12,11 @@ const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 
 //!SELECT EMPLOYEE BY ID
 exports.index = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		let result =  await connection.execute(`SELECT
 		e.ID,
 		e.FIRST_NAME,
@@ -64,14 +63,24 @@ exports.index = async function(req, res) {
 	}catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDATE EMPLOYEE DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 		
 		for(const row in changes){
@@ -112,8 +121,6 @@ exports.update = async function(req, res) {
 								WHERE ID = ${cells.old.id}`
 
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-
-					connection.close()
 					return res.status(200).json({
 						status: 200,
 						error: false,
@@ -125,7 +132,6 @@ exports.update = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
@@ -134,13 +140,19 @@ exports.update = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		connection.close()
-
 		return res.status(200).json({
 			status: 400,
 			error: true,
 			message: 'Cannot update data.', //+ req.params.id
 			rowsAffected: 0
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

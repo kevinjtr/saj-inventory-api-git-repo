@@ -28,7 +28,6 @@ const arraytoObject = (array, param) => {
 }
 //SELECT * Get current users' HRAs
 const getHRAs = async function(connection, edipi)  {
-   // const connection = await oracledb.getConnection(dbConfig);
     var resultArray = [];
     try {
         var HRA_NUM = await connection.execute(`SELECT HRA_NUM FROM HRA FULL JOIN REGISTERED_USERS ON HRA.EMPLOYEE_ID = REGISTERED_USERS.EMPLOYEE_ID WHERE EDIPI = ${edipi}`, {}, dbSelectOptions)
@@ -66,7 +65,6 @@ const getHRAs = async function(connection, edipi)  {
 
 //SELECT * Registered Users Names
 const getNames = async function(connection) {
-    //const connection = await oracledb.getConnection(dbConfig);
     var resultArray = [];
     try {     
         let result = await connection.execute(`SELECT e.id, e.first_name||' '||e.last_name||' | CE'||d.symbol||'-'||os.alias||' | '||e.id||'-'||ru.id as FULL_NAME, ru.id as registered_users_id,ru.edipi,ru.employee_id,ru.user_level FROM REGISTERED_USERS ru
@@ -108,7 +106,6 @@ const registered_users_sql = `SELECT "ID" as REGISTERED_USERS_ID,EDIPI,FULL_NAME
 
 //SELECT * FROM HRA_AUTHORIZED_USERS that are authorized for a specific HRA
 const getAuthorizedUsers = async function(connection, edipi)  {
-    //const connection = await oracledb.getConnection(dbConfig);
     try {
         var HRA_NUM = await connection.execute(`SELECT HRA_NUM FROM HRA h FULL JOIN (${registered_users_sql}) ru ON h.EMPLOYEE_ID = ru.EMPLOYEE_ID WHERE EDIPI = ${edipi}`, {}, dbSelectOptions)
         HRA_NUM = HRA_NUM.rows.map(x => x.HRA_NUM)
@@ -170,22 +167,25 @@ const getAuthorizedUsers = async function(connection, edipi)  {
 
 //Single API call for dropdown data and authorized users
 exports.index = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
     const {edipi} = req.headers.cert
-
-     var return_object = {
+    let return_object = {
         registeredUsers: [],
         hras: [],
         authorizedUsers:[]
     }
 
+    let connection
     try{
+        const pool = oracledb.getPool('ADMIN');
+	    connection =  await pool.getConnection();
         const {edit_rights} = req
         return_object = {
             registeredUsers: await getNames(connection),
             hras: await getHRAs(connection, edipi),
             authorizedUsers: await getAuthorizedUsers(connection, edipi)   
         }
+
+        console.log(return_object)
 
         res.status(200).json({
             status: 200,
@@ -205,14 +205,24 @@ exports.index = async function(req, res) {
 			data: return_object,
             editable: false
 		});
-
-}
+    } finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };
+
 //ADD AUTHORIZED USER
 exports.add = async function(req, res) { 
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-	try{
+    let connection
+    try{
+        const pool = oracledb.getPool('ADMIN');
+	    connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){
@@ -280,15 +290,24 @@ exports.add = async function(req, res) {
 			message: 'Error adding new data!',
             authorizedUsers: []
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //DELETE AUTHORIZED USERS
 exports.delete = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
     const {edipi} = req.headers.cert
-
-	try{
+    let connection
+    try{
+        const pool = oracledb.getPool('ADMIN');
+	    connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){
@@ -310,7 +329,6 @@ exports.delete = async function(req, res) {
                     }
                 }
 			}
-            connection.close()
 		}
 
 		return res.status(400).json({
@@ -328,5 +346,13 @@ exports.delete = async function(req, res) {
 			message: `Cannot delete data.`,
             authorizedUsers:[],
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

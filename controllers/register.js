@@ -1,13 +1,10 @@
 'use strict';
-
 const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
 const {employee_officeSymbol} = require('../config/queries');
@@ -29,9 +26,7 @@ const sql_binds_array = (elements) => {
 	return vals
 }
 
-const getdivisions = async function() {
-    const connection =  await oracledb.getConnection(dbConfig);
-    //const returnDivision = []
+const getdivisions = async function(connection) {
 
 	try{
         let query = `SELECT * from division` 
@@ -58,8 +53,7 @@ const getdivisions = async function() {
 }
 };
 
-const getdistricts = async function() {
-    const connection =  await oracledb.getConnection(dbConfig);
+const getdistricts = async function(connection) {
 
 	try{
         let query = `SELECT * from district` 
@@ -86,35 +80,7 @@ const getdistricts = async function() {
 }
 };
 
-const getDistrictId = async function() {
-	const connection =  await oracledb.getConnection(dbConfig);
-
-	try{
-        let query = `SELECT * from district` 
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = result.rows.map(function(r){
-				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				                return r;
-				            })
-				            
-			return result.rows         
-        }   
-
-		return []   
-        
-		} 
-	catch(err){
-		console.log(err)
-		
-			return []
-	}
-}
-
-const getofficesymbols = async function() {
-    const connection =  await oracledb.getConnection(dbConfig);
+const getofficesymbols = async function(connection) {
 
 	try{
         let query = `SELECT * from office_symbol` 
@@ -141,9 +107,7 @@ const getofficesymbols = async function() {
 }
 };
 
-const getusertypes = async function() {
-    const connection =  await oracledb.getConnection(dbConfig);
-
+const getusertypes = async function(connection) {
 	try{
         let query = `SELECT * from user_level where not alias in ('admin','high','pbo','logistics')` 
 
@@ -171,26 +135,32 @@ const getusertypes = async function() {
 
 //Single API call for all dropdown data
 exports.registrationDropDownData = async function(req, res) {
-    //const connection =  await oracledb.getConnection(dbConfig);
-
 	const return_object = {
-		division: await getdivisions(),
-		district: await getdistricts(),
-		officeSymbol: await getofficesymbols(),
-		userType: await getusertypes()
+		division: [],
+		district: [],
+		officeSymbol: [],
+		userType: []
 	}
+	let connection
 
-	await fs.promises.writeFile(path.join(__dirname, '../dd-items.json'), JSON.stringify(return_object,null,2))
-                .then(() => {
-                    AddEquipments()
-                })
-                .catch(err => {
-                console.log('dditems: Some error occured - file either not saved or corrupted file saved.');
-                })
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 
-	try{
+		return_object.division = await getdivisions(connection),
+		return_object.district = await getdistricts(connection),
+		return_object.officeSymbol = await getofficesymbols(connection),
+		return_object.userType = await getusertypes(connection)
+	
+		fs.promises.writeFile(path.join(__dirname, '../dd-items.json'), JSON.stringify(return_object,null,2))
+			.then(() => {
+				//do nothing.
+			})
+			.catch(err => {
+			console.log('dditems: Some error occured - file either not saved or corrupted file saved.');
+			})
 
-		   res.status(200).json({
+		 res.status(200).json({
 			                status: 200,
 			                error: false,
 			                message: 'Successfully get single data!',
@@ -198,7 +168,7 @@ exports.registrationDropDownData = async function(req, res) {
 			            }); 
             
         
-		} 
+	} 
 	catch(err){
 		console.log(err)
 	
@@ -209,17 +179,26 @@ exports.registrationDropDownData = async function(req, res) {
 			data: return_object
 		});
 
-}
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };
 
 //INSERT EMPLOYEE
 exports.add = async function(req, res) { 
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {cn, edipi} = req.headers.cert
 	const cacArray = cn.split('.')
 	const cac_info = {first_name:cacArray[1],last_name:cacArray[0],edipi:edipi}
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		// Verify the request
 		if(req.body.params.hasOwnProperty("newData")){
 			const {newData} = req.body.params
@@ -477,169 +456,13 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'An error happened in the registration process.'
 		});
-	}  
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };
-
-//Division dropdown
-/* exports.division = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-    const returnDivision = []
-
-	try{
-        let query = `SELECT * from division` 
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = result.rows.map(function(r){
-				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				                return r;
-				            })
-				            
-				         
-        }    
-		console.log(result.rows);
-		   res.status(200).json({
-			                status: 200,
-			                error: false,
-			                message: 'Successfully get single data!',
-			                data: result.rows
-			            }); 
-            
-        
-		} 
-	catch(err){
-		console.log(err)
-		
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: []
-			});
-		//logger.error(err)
-}
-};
-
-//District dropdown
-exports.district = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-    const returnDistrict = []
-
-	try{
-        let query = `SELECT * from district` 
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = result.rows.map(function(r){
-				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				                return r;
-				            })
-				            
-				         
-        }    
-		console.log(result.rows);
-		   res.status(200).json({
-			                status: 200,
-			                error: false,
-			                message: 'Successfully get single data!',
-			                data: result.rows
-			            }); 
-            
-        
-		} 
-	catch(err){
-		console.log(err)
-		
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: []
-			});
-		//logger.error(err)
-}
-};
-
-//Office Symbol dropdown
-exports.officeSymbol = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-    const returnOfficeSymbol = []
-
-	try{
-        let query = `SELECT * from office_symbol` 
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = result.rows.map(function(r){
-				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				                return r;
-				            })
-				            
-				         
-        }    
-		console.log(result.rows);
-		   res.status(200).json({
-			                status: 200,
-			                error: false,
-			                message: 'Successfully get single data!',
-			                data: result.rows
-			            }); 
-            
-        
-		} 
-	catch(err){
-		console.log(err)
-		
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: []
-			});
-		//logger.error(err)
-}
-};
-
-//User Type dropdown
-exports.userType = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
-    const returnusertypes = []
-
-	try{
-        let query = `SELECT * from user_level` 
-
-        let result =  await connection.execute(query,{},dbSelectOptions)
-
-        if(result.rows.length > 0){
-			result.rows = result.rows.map(function(r){
-				                r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-				                return r;
-				            })
-				            
-				         
-        }    
-		console.log(result.rows);
-		   res.status(200).json({
-			                status: 200,
-			                error: false,
-			                message: 'Successfully get single data!',
-			                data: result.rows
-			            }); 
-            
-        
-		} 
-	catch(err){
-		console.log(err)
-		
-			res.status(400).json({
-				status: 400,
-				error: true,
-				message: 'No data found!',
-				data: []
-			});
-		//logger.error(err)
-}
-}; */

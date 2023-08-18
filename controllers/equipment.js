@@ -9,11 +9,12 @@ const {propNamesToLowerCase, objectDifference, isValidDate} = require('../tools/
 const {rightPermision} = require('./validation/tools/user-database')
 const {equipment_employee,hra_employee, hra_num_form_auth, hra_num_form_all, hra_num_form_self, employee_officeSymbol, EQUIPMENT, registered_users} = require('../config/queries');
 const {dbSelectOptions,eqDatabaseColNames} = require('../config/db-options');
-const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
+const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants');
+const { Console } = require('console');
 //const {and_, or_, andOR_single, andOR_multiple } = require('../config/functions')
-const BANNED_COLS_EQUIPMENT = ['ID','HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_']
+const BANNED_COLS_EQUIPMENT = ['ID','OFFICE_SYMBOL_ALIAS','SYS_']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
-const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","equipment_search","excess_equipment"]
+const ALL_EQUIPMENT_TABS = ["my_equipment","my_hra_equipment","hra_equipment","all_equipments","excess_equipment"]
 
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
@@ -40,7 +41,7 @@ const equipment_fetch_type = (type, user_id) => {
 			return `WHERE eq_emp.hra_num in (${hra_num_form_self(user_id)}) `;
 		case 'hra_equipment':
 			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) `;
-		case 'equipment_search':
+		case 'all_equipments':
 			return ` `;
 		case 'excess_equipment':
 			return `WHERE eq_emp.eq_deleted = 1 and (select user_level from registered_users where id = ${user_id} and user_level in (1,9,11)) is not null `;
@@ -165,9 +166,11 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 //!SELECT * FROM EQUIPMENT
 exports.index = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
 												RIGHT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
@@ -175,7 +178,6 @@ exports.index = async function(req, res) {
 			result.rows = propNamesToLowerCase(result.rows)
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -184,7 +186,6 @@ exports.index = async function(req, res) {
 			editable: edit_rights
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -193,16 +194,26 @@ exports.index = async function(req, res) {
 			data: [],
 			editable: edit_rights
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM EQUIPMENT
 exports.form = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
 	let hra_num_groups = {}
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * from (${hra_num_form_all(req.user)}) hra_emp
 												LEFT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num`,{},dbSelectOptions)
@@ -215,7 +226,6 @@ exports.form = async function(req, res) {
 			  });
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -224,7 +234,6 @@ exports.form = async function(req, res) {
 			editable: edit_rights
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -233,14 +242,25 @@ exports.form = async function(req, res) {
 			data: [],
 			editable: edit_rights
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT EQUIPMENT BY ID
 exports.getById = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
+
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * from (${hra_employee}) hra_emp
 												RIGHT JOIN (${equipment_employee}) eq_emp
 												on eq_emp.hra_num = hra_emp.hra_num
@@ -248,8 +268,6 @@ exports.getById = async function(req, res) {
 
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
-
-			connection.close()
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -258,7 +276,6 @@ exports.getById = async function(req, res) {
 				editable: edit_rights
 			});
 		} else {
-			connection.close()
 			res.status(400).json({
 				status: 400,
 				error: true,
@@ -268,7 +285,6 @@ exports.getById = async function(req, res) {
 			});
 		}
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 				status: 400,
@@ -278,6 +294,14 @@ exports.getById = async function(req, res) {
 				editable: edit_rights
 			});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -285,17 +309,19 @@ exports.getById = async function(req, res) {
 exports.search = async function(req, res) {
 
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
 	let cols = []
+	let connection
 
-	let resultC = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
-	if(resultC.rows.length > 0 ){
-		cols = filter(resultC.rows.map(x => x.COLUMN_NAME.toLowerCase()),function(c){ return !c.includes('sys_') && !c.includes('id')} )
-	}
-	
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {fields,options} = req.body;
+
+		let resultC = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'EQUIPMENT'`,{},dbSelectOptions)
+		if(resultC.rows.length > 0 ){
+			cols = filter(resultC.rows.map(x => x.COLUMN_NAME.toLowerCase()),function(c){ return !c.includes('sys_') && !c.includes('id')} )
+		}
 
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 
@@ -378,8 +404,6 @@ exports.search = async function(req, res) {
 		
 		if (resultEquipment.rows.length > 0) {
 			resultEquipment.rows = propNamesToLowerCase(resultEquipment.rows)
-
-			connection.close()
 			res.status(200).json({
 				status: 200,
 				error: false,
@@ -389,7 +413,6 @@ exports.search = async function(req, res) {
 				columns: cols
 			});
 		} else {
-			connection.close()
 			res.status(400).json({
 				status: 400,
 				error: true,
@@ -400,7 +423,6 @@ exports.search = async function(req, res) {
 			});
 		}
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -411,6 +433,14 @@ exports.search = async function(req, res) {
 			columns: cols
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -420,11 +450,12 @@ exports.search2 = async function(req, res) {
 	const accepted_user_levels = ['employee_3','hra_1','admin'].includes(req.user_level_alias)
 	const tab_edits = {0:false, 1:edit_rights, 2:edit_rights, 3:edit_rights, 4:false}
 	const tab_views = {0:true, 1:edit_rights, 2:edit_rights, 3: accepted_user_levels || edit_rights, 4: accepted_user_levels || edit_rights}//search and view.
-
-	const connection =  await oracledb.getConnection(dbConfig);
 	let query_search = '';
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		//if(edit_rights){
 		const {fields,options, tab, init} = req.body;
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
@@ -491,7 +522,7 @@ exports.search2 = async function(req, res) {
 		if(init){
 			for(let i=0;i<ALL_EQUIPMENT_TABS.length;i++){
 				const tab_name = ALL_EQUIPMENT_TABS[i]
-				const eq_search = tab_name != "equipment_search"
+				const eq_search = tab_name != "all_equipments"
 
 				let query = getQueryForTab(tab_name, req.user, eq_search)
 				
@@ -520,7 +551,7 @@ exports.search2 = async function(req, res) {
 				my_hras = [...rows]
 			}
 
-			result =  await connection.execute(`${employee_officeSymbol}`,{},dbSelectOptions) //fetch by district
+			result =  await connection.execute(`${employee_officeSymbol} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions) //fetch by district
 
 			if(result.rows.length > 0){
 				let {rows} = result
@@ -555,7 +586,7 @@ exports.search2 = async function(req, res) {
 				case 'hra_equipment':
 					query = ` ${query} AND ${query_search}`
 					break;
-				case 'equipment_search':
+				case 'all_equipments':
 					query += ` ${query_search != '' ? `WHERE ${query_search} `: ''} `
 					break;
 				case 'excess_equipment':
@@ -590,7 +621,6 @@ exports.search2 = async function(req, res) {
 			editable: tab_edits
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(200).json({
 			status: 400,
@@ -600,6 +630,14 @@ exports.search2 = async function(req, res) {
 			editable: tab_edits
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -636,11 +674,13 @@ const dbColumnNamesReFormat = (cols,table_name) => {
 
 //!INSERT EQUIPMENT
 exports.add = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	let tabsReturnObject = {}
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -680,14 +720,15 @@ exports.add = async function(req, res) {
 							}
 				
 							let query = `INSERT INTO ${EQUIPMENT} (${cols}) VALUES (${vals}) returning id into :id`
+
+							console.log(query)
 							insert_obj.id = {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
 
 							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
+							console.log(result)
 							if(result.outBinds.id.length > 0){
 								tabsReturnObject = await searchEquipmentUpdatedData(result.outBinds.id[0], connection, req.user)
-
-								connection.close()
 								return res.status(200).json({
 									status: 200,
 									error: false,
@@ -702,7 +743,6 @@ exports.add = async function(req, res) {
 				}
 			}
 		}
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: true,
@@ -711,7 +751,6 @@ exports.add = async function(req, res) {
 			tabChanges: tabsReturnObject
 		});
 	}catch(err){
-		connection.close()
 		console.log(err);
 		res.status(400).json({
 			status: 400,
@@ -719,21 +758,44 @@ exports.add = async function(req, res) {
 			message: 'Error adding new data!',
 			tabChanges: tabsReturnObject
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDATE EQUIPMENT DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	let tabsReturnObject = {}
-	
+	let connection
+
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes,undo} = req.body.params
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
-				const {newData,oldData} = changes[row];
+				const {newData} = changes[row];
+				let oldData
+
+				if(!newData.hasOwnProperty('id'))
+					break;
+
+				const query_old_data = equipment_employee
+				let result_old_data = await connection.execute(`${query_old_data} where eq.id = :id`,{id: newData.id},dbSelectOptions)
+
+				if(result_old_data.rows.length === 0)
+					break
+				
+				oldData = propNamesToLowerCase(result_old_data.rows)[0]
+
 				const cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
 				cells.update = {}
@@ -781,8 +843,6 @@ exports.update = async function(req, res) {
 				}
 			}
 		}
-
-		connection.close()
 		
 		res.status(200).json({
 			status: 200,
@@ -792,7 +852,6 @@ exports.update = async function(req, res) {
 			columnErrors: columnErrors
 		});
 	}catch(err){
-		connection.close()
 		console.log(err);
 		res.status(400).json({
 			status: 400,
@@ -801,15 +860,25 @@ exports.update = async function(req, res) {
 			tabChanges: {},
 			message: 'Cannot delete data with id: ' //+ req.params.id
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	let tabsReturnObject = {}
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){
@@ -824,7 +893,6 @@ exports.destroy = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -832,7 +900,6 @@ exports.destroy = async function(req, res) {
 			tabChanges: tabsReturnObject
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -840,5 +907,13 @@ exports.destroy = async function(req, res) {
 			message: `Cannot delete data`, //+ req.params.id
 			tabChanges: tabsReturnObject
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

@@ -11,12 +11,6 @@ const path = require('path')
 const multer  = require('multer')
 const upload = multer({ dest: path.join(__dirname,'../public/') })
 const DB_OFF = false
-// 	// here the query is executed
-//    });
-//const connection = require('../connect');
-/* This function saves a user to the db
-	It uses promises.
- */
 const jwt = require('jsonwebtoken');
 const {REGISTERED_USERS_VIEW} = require('../config/constants');
 
@@ -62,22 +56,13 @@ const tokenIsAuthorized = (decoded_token, path) => {
 	return false
 }
 
-const isUserAdmin = async (user_id) => {
-	const connection =  await oracledb.getConnection(dbConfig);
-	let result =  await connection.execute('SELECT "user_level" FROM registered_users WHERE id = :0',[user_id],dbSelectOptions)
-
-	if(result.rows.length > 0){
-		return result.rows[0].user_level == 1
-	}
-
-	return false
-}
-
 //!LOGIN USERS
 exports.login = async (req, res) => {
 	const edipi = req.headers.cert.edipi
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let user = {
 			id: 'n/a',
 			name: 'guest',
@@ -176,120 +161,53 @@ exports.login = async (req, res) => {
 			access: {},
 			message: 'A server error occured.'
 		});
-	}
-
-	// connection.query('SELECT * FROM users where email = ?', email, function(err, results) {
-	// 	if (err) throw err;
-	// 	var user = {
-	// 		id: results[0]['id'],
-	// 		name: results[0]['full_name'],
-	// 		email: results[0]['email']
-	// 	};
-	// 	jwt.sign({ user: user }, process.env.SECRET_KEY, (err, token) => {
-	// 		res.json({
-	// 			token: token
-	// 		});
-	// 	});
-	// });
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}	
 };
 
-// exports.post = (req, res) => {
-// 	jwt.verify(req.token, 'secretkey', (err, authData) => {
-// 		if (err) {
-// 			res.sendStatus(403);
-// 		} else {
-// 			res.json({
-// 				message: 'Post created...',
-// 				authData
-// 			});
-// 		}
-// 	});
-// };
-//!REGISTER USER
-// exports.register = async (req, res) => {
-// 	// Mock user
-// 	const { full_name, email, password } = req.body;
-// 	const connection =  await oracledb.getConnection(dbConfig);
-// 	try{
-// 		let result =  await connection.execute('INSERT into users (full_name, email, password) values (:0, :1, :2)',[ full_name, email, password ],{autoCommit:true})
-// 		result.rows = result.rows.map(function(r){
-// 			r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
-// 			return r;
-// 		})
-// 		res.status(200).json({
-// 			status: 200,
-// 			message: 'Succesfully Create New Users',
-// 			data: {
-// 				full_name: req.body.full_name,
-// 				email: req.body.email
-// 			}
-// 		});
-		
-// 	}catch(err){
-// 		console.log(err);
-// 		res.status(400).json({
-// 			status: 400,
-// 			message: 'Error Create New Users'
-// 		});
-// 	}
-
-// 	// connection.query(
-// 	// 	'INSERT into users (full_name, email, password) values (?, ?, ?)',
-// 	// 	[ full_name, email, password ],
-// 	// 	function(err) {
-// 	// 		if (err) {
-// 	// 			console.log(err);
-// 	// 			res.status(400).json({
-// 	// 				status: 400,
-// 	// 				message: 'Error Create New Users'
-// 	// 			});
-// 	// 		} else {
-// 	// 			res.status(200).json({
-// 	// 				status: 200,
-// 	// 				message: 'Succesfully Create New Users',
-// 	// 				data: {
-// 	// 					full_name: req.body.full_name,
-// 	// 					email: req.body.email
-// 	// 				}
-// 	// 			});
-// 	// 		}
-// 	// 	}
-// 	// );
-// };
-
-/* When the user from the front-end wants to use a function,
- The below code is an example of using the word authenticate to see if the
- user is actually authenticated
-*/
-// exports.getUser = (req, res) => {
-// 	res.send(req.user);
-// };
-
-// FORMAT OF TOKEN
-// Authorization: Bearer <access_token>
-
-//! Verify Token
 
 exports.verifyUser = async (req, res, next) => {
 	//! Get auth header value
 	const {edipi} = req.headers.cert;
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
+	try{
+		const {changes} = req.body.params
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 
-	if (typeof edipi !== 'undefined') {
-		let result =  await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-		connection.close()
-
-		if(result.rows.length > 0){
-			console.log(`Succesfully identified user: ${edipi}!`);
-			req.user = result.rows[0].ID
-			req.user_level_num = result.rows[0].USER_LEVEL
-			next();
-			return;
+		if (typeof edipi !== 'undefined') {
+			let result =  await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
+	
+			if(result.rows.length > 0){
+				console.log(`Succesfully identified user: ${edipi}!`);
+				req.user = result.rows[0].ID
+				req.user_level_num = result.rows[0].USER_LEVEL
+				next();
+				return;
+			}
 		}
-	}
 
-	//! Forbidden
-	res.status(400).send({message:'Forbiden call!!'});
+		//! Forbidden
+		res.status(400).send({message:'Forbiden call!!'});
+
+	}catch(err){
+		console.log(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}	
 };
 
 exports.verifyToken = async (req, res, next) => {
@@ -307,6 +225,8 @@ exports.verifyToken = async (req, res, next) => {
 			} else {
 				
 				if(tokenIsAuthorized(decode, req.path)){
+					req.user = decode.user.id
+					req.decode = decode
 					const edit_rights = tokenHasEditPermision(decode, req.path)
 					req.edit_rights = edit_rights
 					req.user_level_alias = decode.user.level					
@@ -315,9 +235,6 @@ exports.verifyToken = async (req, res, next) => {
 				}else{
 					console.log('not authorized')
 				}
-					
-				req.user = decode.user.id
-				req.decode = decode
 			}
 		});
 

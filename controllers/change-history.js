@@ -1,8 +1,6 @@
 'use strict';
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const {propNamesToLowerCase, tokenHasEditPermision} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {eng4900_losingHra,eng4900_gainingHra,registered_users} = require('../config/queries');
@@ -115,12 +113,14 @@ const getQueryForTab = (tab, user_id) => {
 
 //!SELECT * FROM EQUIPMENT HISTORY
 exports.index = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edit_rights} = req
 	const route_edit = tokenHasEditPermision(req.decode,'/changehistory')
 	const tab_edits = {0:route_edit && tokenHasEditPermision(req.decode,'/equipment'),1:route_edit && tokenHasEditPermision(req.decode,'/employee'),2:route_edit && tokenHasEditPermision(req.decode,'/hra')}
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {tab, init} = req.body;
 		let tabsReturnObject = {}
 
@@ -189,28 +189,26 @@ exports.index = async function(req, res) {
 		});
 
 
-		// let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
-		// 										RIGHT JOIN (${equipment_employee_}) eh_emp
-		// 										on eh_emp.hra_num = hra_emp.hra_num ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
+		// // let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
+		// // 										RIGHT JOIN (${equipment_employee_}) eh_emp
+		// // 										on eh_emp.hra_num = hra_emp.hra_num ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
 
-		if(result.rows.length > 0){
-			result.rows = propNamesToLowerCase(result.rows)
-			result.rows.map(x => {
-				x.deleted = x.deleted ? x.deleted != 2 : false
-				return x
-			})
-		}
+		// if(result.rows.length > 0){
+		// 	result.rows = propNamesToLowerCase(result.rows)
+		// 	result.rows.map(x => {
+		// 		x.deleted = x.deleted ? x.deleted != 2 : false
+		// 		return x
+		// 	})
+		// }
 
-		connection.close()
-		res.status(200).json({
-			status: 200,
-			error: false,
-			message: 'Successfully get equipment data!',
-			data: {equipment:result.rows},
-			editable: edit_rights,
-		});
+		// res.status(200).json({
+		// 	status: 200,
+		// 	error: false,
+		// 	message: 'Successfully get equipment data!',
+		// 	data: {equipment:result.rows},
+		// 	editable: edit_rights,
+		// });
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -219,16 +217,25 @@ exports.index = async function(req, res) {
 			data: {error:true},
 			editable: edit_rights,
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
-
 //!SELECT * FROM EQUIPMENT HISTORY
 exports.equipment = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edit_rights} = req
-
+	let connection
+	
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         const hra_employee_ = `SELECT 
         h.hra_num,
         e.id as hra_employee_id,
@@ -283,7 +290,6 @@ exports.equipment = async function(req, res) {
 			})
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -292,7 +298,6 @@ exports.equipment = async function(req, res) {
 			editable: edit_rights,
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -301,16 +306,25 @@ exports.equipment = async function(req, res) {
 			data: {error:true},
 			editable: edit_rights,
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM HRA HISTORY
 exports.hra = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edit_rights} = req
-
+	let connection
+	
 	try{
-
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         let result =  await connection.execute(`SELECT
             hh.hra_num,
             e.id as hra_employee_id,
@@ -356,15 +370,25 @@ exports.hra = async function(req, res) {
 			editable: edit_rights,
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM EMPLOYEE HISTORY
 exports.employee = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edit_rights} = req
-
+	let connection
+	
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         let result =  await connection.execute(`SELECT 
             EH.ID,
             EH.FIRST_NAME,
@@ -409,15 +433,25 @@ exports.employee = async function(req, res) {
 			editable: edit_rights,
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM FORM_4900_HISTORY
 exports.eng4900 = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edit_rights} = req
-
+	let connection
+	
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let query = `SELECT
 		f.id as form_id,
 		ra.alias as REQUESTED_ACTION,
@@ -466,7 +500,6 @@ exports.eng4900 = async function(req, res) {
 			// 	});
 			// }
 
-			connection.close()
 			return res.status(200).json({
 				status: 200,
 				error: false,
@@ -476,7 +509,6 @@ exports.eng4900 = async function(req, res) {
 			});
 		}
 
-		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
@@ -486,7 +518,6 @@ exports.eng4900 = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err)
-		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
@@ -495,5 +526,13 @@ exports.eng4900 = async function(req, res) {
 			editable: edit_rights,
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

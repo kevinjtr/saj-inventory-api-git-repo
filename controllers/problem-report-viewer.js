@@ -19,8 +19,10 @@ const arraytoObject = (array, param) => {
 }
 //SELECT * FROM PROBLEMS_REPORTED
 exports.index = async function (req, res) {
-    const connection = await oracledb.getConnection(dbConfig);
-    try {
+    let connection
+	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         const {edit_rights} = req
         let result = await connection.execute(`SELECT * FROM PROBLEMS_REPORTED WHERE DELETED = 'No' ORDER BY DATE_REPORTED DESC`, {}, dbSelectOptions)
         result.rows = propNamesToLowerCase(result.rows)
@@ -44,16 +46,25 @@ exports.index = async function (req, res) {
             editable: false
         });
 
-    }
+    } finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };
 
 //UPDATE PROBLEMS_REPORTED DATA
-exports.update = async function (req, res) {
-    const connection = await oracledb.getConnection(dbConfig);
+exports.update = async function (req, res) {  
     let columnErrors = { rows: {}, errorFound: false }
     const { edipi } = req.headers.cert
-
-    try {
+    let connection
+	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         const { changes, undo } = req.body.params
 
 
@@ -106,8 +117,6 @@ exports.update = async function (req, res) {
                         result = await connection.execute(query, cells.update, { autoCommit: AUTO_COMMIT.UPDATE })
                     }
 
-                    connection.close()
-
                     return (
                         res.status(200).json({
                             status: 200,
@@ -122,9 +131,6 @@ exports.update = async function (req, res) {
             }
         }
 
-        connection.close()
-
-
         return (
             res.status(200).json({
                 status: 200,
@@ -135,7 +141,6 @@ exports.update = async function (req, res) {
             })
         )
     } catch (err) {
-        connection.close()
         console.log(err);
         res.status(400).json({
             status: 400,
@@ -143,5 +148,13 @@ exports.update = async function (req, res) {
             columnErrors: columnErrors,
             message: 'Cannot delete data'
         });
-    }
+    } finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };

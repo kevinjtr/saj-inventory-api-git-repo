@@ -4,22 +4,25 @@ const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {employee_officeSymbol, hra_employee, hra_employee_form_all, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
+const {employee_officeSymbol, hra_employee, hra_employee_edit_rights, hra_employee_form_all, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
 const {rightPermision} = require('./validation/tools/user-database')
 const noReplaceCols = ['hra_num']
 
-const BANNED_COLS_HRA = ['HRA_NUM','OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
-const BANNED_COLS_HRA_ADD = ['OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
+const BANNED_COLS_HRA = ['HRA_NUM','NAME','OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
+const BANNED_COLS_HRA_ADD = ['NAME','OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
+
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
 	//const {edit_rights} = req
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
-		const newHRA = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
+		const newHRA = edit_rights ? hra_employee_edit_rights : hra_employee
 		let result =  await connection.execute(`${newHRA} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 
 		if (result.rows.length > 0) {
@@ -44,17 +47,27 @@ exports.index = async function(req, res) {
 			editable: edit_rights
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM HRA
 exports.form = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
 	const TABS = ["my_forms","hra_forms"]
 	const tabsReturnObject = {}	
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		for(let i=0;i<TABS.length;i++){
 			const tab_name = TABS[i]
 			const hra = {}
@@ -79,7 +92,7 @@ exports.form = async function(req, res) {
 					hra.losing[j].equipments = propNamesToLowerCase(result.rows)
 				}
 
-				const all_hras = edit_rights ? hra_employee.replace('SELECT','SELECT\ne.id as hra_employee_id,\nur.updated_by_full_name,\n') : hra_employee
+				const all_hras = edit_rights ? hra_employee_edit_rights : hra_employee
 				result = await connection.execute(`${all_hras} ORDER BY FIRST_NAME,LAST_NAME`,{},dbSelectOptions)
 				
 				hra.gaining = propNamesToLowerCase(result.rows)
@@ -88,7 +101,6 @@ exports.form = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -99,7 +111,6 @@ exports.form = async function(req, res) {
 
 	}catch(err){
 		console.log(err)
-		connection.close()
 		res.status(400).json({
 			status: 400,
 			error: true,
@@ -108,14 +119,25 @@ exports.form = async function(req, res) {
 			editable: edit_rights
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT HRA BY HRA_NUM
 exports.getById = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+		
 		let result =  await connection.execute(`${hra_employee}
 												WHERE hra_num = :0
 												ORDER BY FIRST_NAME,LAST_NAME`,[req.params.hra_hum],dbSelectOptions)
@@ -143,6 +165,14 @@ exports.getById = async function(req, res) {
 	}catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -150,8 +180,11 @@ exports.getById = async function(req, res) {
 exports.search = async function(req, res) {
 	const {edit_rights} = req
 	let query_search = '';
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
 			const db_col_name = `LOWER(TO_CHAR(${(!noReplaceCols.includes(parameter) ? parameter.replace('hra_',''): parameter)}))`
@@ -228,15 +261,24 @@ exports.search = async function(req, res) {
 			editable: edit_rights
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!INSERT HRA
 exports.add = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -295,20 +337,41 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data!'
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDATE HRA DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
-				const {newData,oldData} = changes[row];
+				const {newData} = changes[row];
+				let oldData
+
+				if(!newData.hasOwnProperty('hra_num'))
+					break;
+
+				const query_old_data = hra_employee_edit_rights
+				let result_old_data = await connection.execute(`${query_old_data} where h.hra_num = :hra_num`,{hra_num: newData.hra_num},dbSelectOptions)
+
+				if(result_old_data.rows.length === 0)
+					break
+				
+				oldData = propNamesToLowerCase(result_old_data.rows)[0]
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
 				cells.update = {}
@@ -318,7 +381,6 @@ exports.update = async function(req, res) {
 				if(result.rows.length > 0){
 					result.rows = filter(result.rows,function(c){ return !BANNED_COLS_HRA.includes(c.COLUMN_NAME)})
 					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
-
                     for(let i=0; i<keys.length; i++){
 						const key = keys[i].replace('hra_','')
 
@@ -343,9 +405,9 @@ exports.update = async function(req, res) {
                     let query = `UPDATE HRA SET ${cols}
                                 WHERE hra_num = ${cells.old.hra_num}`
 
+								console.log(query)
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					
-					connection.close()
 					return res.status(200).json({
 						status: 200,
 						error: false,
@@ -357,8 +419,7 @@ exports.update = async function(req, res) {
 				}
 			}
 		}
-
-		connection.close()
+		
 		return res.status(200).json({
 			status: 200,
 			error: true,
@@ -367,24 +428,31 @@ exports.update = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-
-		connection.close()
 		return res.status(200).json({
 			status: 400,
 			error: true,
 			message: 'Cannot delete data.' //+ req.params.id
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!DELETE HRA (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
 	let ids = ''
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-
+	let connection
 	try{
 		const {changes} = req.body.params
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -418,5 +486,13 @@ exports.destroy = async function(req, res) {
 			error: true,
 			message: `Cannot delete data. ${err}` //+ req.params.id
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

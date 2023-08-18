@@ -10,8 +10,10 @@ const {employee_registration} = require('../config/queries');
 
 //SELECT * FROM REGISTRATIONS
 exports.index = async function (req, res) {
-    const connection = await oracledb.getConnection(dbConfig);
-    try {
+    let connection
+	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         const {edit_rights} = req
         let result = await connection.execute(employee_registration, {}, dbSelectOptions)
         result.rows = propNamesToLowerCase(result.rows)
@@ -34,15 +36,24 @@ exports.index = async function (req, res) {
             editable: false
         });
 
-    }
+    }  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}	
 };
 
 // Marked registration as deleted
 exports.destroy = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const id = req.body.params
 
 				let cols = ''
@@ -69,5 +80,13 @@ exports.destroy = async function(req, res) {
 			error: true,
 			message: `Cannot delete data. ${err}` //+ req.params.id
 		});
-	}
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}	
 };

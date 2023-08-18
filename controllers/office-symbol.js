@@ -15,8 +15,11 @@ const arraytoObject = (array,param) => {
 }
 //!SELECT * FROM OFFICE SYMBOL
 exports.index = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		let result =  await connection.execute('SELECT * FROM OFFICE_SYMBOL',{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -36,12 +39,19 @@ exports.index = async function(req, res) {
 			data: []
         });
         
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT * FROM OFFICE SYMBOL
 // exports.index2 = async function(req, res) {
-// 	const connection =  await oracledb.getConnection(dbConfig);
 // 	try{
 // 		let result =  await connection.execute('SELECT * FROM OFFICE_SYMBOL',{},dbSelectOptions)
 // 		result.rows = propNamesToLowerCase(result.rows)
@@ -68,8 +78,10 @@ exports.index = async function(req, res) {
 
 //!SELECT OFFICE SYMBOL BY ID
 exports.getById = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * FROM OFFICE_SYMBOL WHERE id = :0`,[req.params.id],dbSelectOptions)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
@@ -91,5 +103,13 @@ exports.getById = async function(req, res) {
 	}catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

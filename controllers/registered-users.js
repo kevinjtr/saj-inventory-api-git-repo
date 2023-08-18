@@ -17,10 +17,11 @@ exports.index = async function(req, res) {
 
 //!SELECT * FROM REGISTERED_USERS
 exports.getByEDIPI = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.params
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT e.first_name||' '||e.last_name as FULL_NAME, ru.id,ru.edipi,ru.employee_id,ru.user_level,ru.notifications FROM REGISTERED_USERS ru
 		left join employee e on e.id = ru.employee_id
 		WHERE ru.EDIPI = ${edipi}`,{},dbSelectOptions)
@@ -41,14 +42,23 @@ exports.getByEDIPI = async function(req, res) {
 			message: 'No data found!',
 			data: []
 		});
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!INSERT REGISTERED_USERS
 exports.add = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params		
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -96,15 +106,24 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data!'
 		});
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDate REGISTERED_USERS
 exports.notifications = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {active} = req.params
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const num = JSON.parse(active)
 		let result =  await connection.execute(`UPDATE REGISTERED_USERS SET NOTIFICATIONS = :0 WHERE ID = ${req.user}`,[Number(num)],{autoCommit:false})
 		
@@ -134,5 +153,13 @@ exports.notifications = async function(req, res) {
 			message: 'No data found!',
 			data: []
 		});
+	}  finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

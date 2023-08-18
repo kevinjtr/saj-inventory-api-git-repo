@@ -5,8 +5,6 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 
 const dbSelectOptions = {
     outFormat: oracledb.OUT_FORMAT_OBJECT,   // query result format
@@ -19,7 +17,6 @@ const dbSelectOptions = {
 exports.index = async function(req, res) {
 
     // console.log('here at index form_4844')
-	// const connection =  await oracledb.getConnection(dbConfig);
 
 	// try{
     //     console.log('extract form_4844')
@@ -40,7 +37,6 @@ exports.index = async function(req, res) {
 
 //!SELECT form_4844 BY ID
 exports.getById = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
 	// try{
 	// 	let result =  await connection.execute(`SELECT * FROM form_4844 WHERE id = :0`,[req.params.id],dbSelectOptions)
 	// 	console.log('getid',result)
@@ -71,7 +67,8 @@ exports.getById = async function(req, res) {
 
 //!SELECT form_4844 BY FIELDS DATA
 exports.search = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnForms = []
 
 	try{
@@ -111,7 +108,6 @@ exports.search = async function(req, res) {
 
 //!INSERT form_4844
 exports.add = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
 	// // const item_type = req.body.item_type ? req.body.item_type : 'no data' || ternary operator
 	// const { item_type } = req.body;
 
@@ -135,7 +131,6 @@ exports.add = async function(req, res) {
 
 //!UPDATE form_4844 DATA
 exports.update = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
 	// const { item_type } = req.body;
 
 	// if (!item_type) {
@@ -163,7 +158,6 @@ exports.update = async function(req, res) {
 
 //!DELETE form_4844 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
-	// const connection =  await oracledb.getConnection(dbConfig);
 
 	// try{
 	// 	let result =  await connection.execute(`DELETE from form_4844 WHERE id = :0`,[req.params.id],{autoCommit:true})
@@ -193,7 +187,8 @@ exports.destroy = async function(req, res) {
 
 //Funding dropdown
 exports.funding = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnFunding = []
 
 	try{
@@ -234,7 +229,8 @@ exports.funding = async function(req, res) {
 
 //Reportable Item Control Code dropdown
 exports.reportableControlCode = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnFunding = []
 
 	try{
@@ -275,7 +271,8 @@ exports.reportableControlCode = async function(req, res) {
 
 //Condition dropdown
 exports.condition = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnCondition = []
 
 	try{
@@ -316,7 +313,8 @@ exports.condition = async function(req, res) {
 
 //Utilization dropdown
 exports.utilization = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnUtilization  = []
 
 	try{
@@ -357,7 +355,8 @@ exports.utilization = async function(req, res) {
 
 //Classification dropdown
 exports.classification = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnClassification  = []
 
 	try{
@@ -398,7 +397,8 @@ exports.classification = async function(req, res) {
 
 //Classification dropdown
 exports.piliferableCode = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnPiliferableCode  = []
 
 	try{
@@ -439,7 +439,8 @@ exports.piliferableCode = async function(req, res) {
 
 //Logistics Control Code dropdown
 exports.logisticsControlCode = async function(req, res) {
-    const connection =  await oracledb.getConnection(dbConfig);
+    const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
     const returnLogisticsControlCode  = []
 
 	try{

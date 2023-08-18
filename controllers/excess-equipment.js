@@ -10,10 +10,11 @@ const {rightPermision} = require('./validation/tools/user-database')
 
 //!SELECT EXCESSED EQUIPMENT FROM EQUIPMENT
 exports.index = async function(req, res) {
-	const edit_rights = await rightPermision(req.headers.cert.edipi)
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
         let query = `SELECT * FROM EQUIPMENT WHERE DELETED = 1`
 		let result =  await connection.execute(query,{},dbSelectOptions)
 		
@@ -42,5 +43,13 @@ exports.index = async function(req, res) {
 			editable: edit_rights
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

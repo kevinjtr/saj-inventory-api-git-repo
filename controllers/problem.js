@@ -9,11 +9,12 @@ const moment = require('moment')
 
 //INSERT PROBLEM
 exports.add = async function(req, res) { 
-	const connection =  await oracledb.getConnection(dbConfig);
 	const edipi = req.headers.cert.edipi
 	const today = moment(new Date()).format('MM-DD-yyyy').toString()
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		// Verify the request
 		if(req.body.params.hasOwnProperty("newData")){
 			const {newData} = req.body.params
@@ -46,5 +47,13 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data.'
 		});
-	}  
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 };

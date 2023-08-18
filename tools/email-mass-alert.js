@@ -67,7 +67,10 @@ const html_body = {
 }
 
 async function massEmailAlert() {
-    const connection =  await oracledb.getConnection(dbConfig);
+  let connection
+	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 
     let sql = `select e.first_name as "first_name", e.last_name as "last_name", e.email as "email", ru.notifications as "notifications" from registered_users ru
     left join employee e on e.id = ru.employee_id
@@ -92,22 +95,27 @@ async function massEmailAlert() {
                 // });
             }
         }
-      }
+    }
 
-    connection.close()
     return "done";
+  }catch(err){
+    console.log(err)
+  } finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
 }
 
 massEmailAlert()
 
-
-
-//form4900EmailAlert()
-
 //console.log("This should print first.")
 
 //console.log(queryForSearch(1))
-//const connection =  await oracledb.getConnection(dbConfig);
 
 //Cases:
 //Notice: You have a new ENG4900 form that requires your signature.

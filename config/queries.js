@@ -1,4 +1,3 @@
-
 const EQUIPMENT = "(SELECT * FROM EQUIPMENT WHERE DELETED != 1)"
 const FORM_4900 = "(SELECT * FROM FORM_4900 WHERE DELETED != 1)"
 
@@ -6,7 +5,6 @@ const equipment_count = {
 	employee:`SELECT COUNT(*) as EMPLOYEE_EQUIPMENT_COUNT, USER_EMPLOYEE_ID FROM ${EQUIPMENT} GROUP BY USER_EMPLOYEE_ID`,
 	hra:`SELECT COUNT(*) as HRA_EQUIPMENT_COUNT, HRA_NUM FROM ${EQUIPMENT} GROUP BY HRA_NUM `
 }
-
 const registered_users = `SELECT u.id, u.user_level, e.first_name||' '||e.last_name as UPDATED_BY_FULL_NAME, ul.alias as user_level_alias, ul.name as user_level_name,
 CASE WHEN (e.office_symbol is not null AND e.district is not null) THEN 'CE'||dis.symbol||'-'||os.alias ELSE '' END user_district_office, notifications 
 FROM registered_users u
@@ -444,6 +442,25 @@ module.exports = {
 	on ur.id = eq.updated_by
 	LEFT JOIN OFFICE_LOCATION ol
 	on ol.id = e.office_location_id `,
+	hra_employee_edit_rights:`SELECT
+	e.id as hra_employee_id,
+	ur.updated_by_full_name,
+	h.hra_num,
+	e.first_name || ' ' || e.last_name as hra_full_name,
+	e.first_name hra_first_name,
+	e.last_name hra_last_name,
+	e.TITLE as hra_title,
+	e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
+	e.WORK_PHONE as hra_work_phone,
+	hec.HRA_EQUIPMENT_COUNT,
+	e.OFFICE_LOCATION_NAME as hra_office_location_name
+	FROM hra h
+	LEFT JOIN (${employee}) e 
+	on h.employee_id = e.id
+	LEFT JOIN (${equipment_count.hra}) hec
+	on h.hra_num = hec.hra_num
+	LEFT JOIN (${registered_users}) ur
+	on ur.id = h.updated_by `,
 	hra_employee:`SELECT 
 	h.hra_num,
 	e.first_name || ' ' || e.last_name as hra_full_name,

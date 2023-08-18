@@ -6,10 +6,10 @@ const {dbSelectOptions} = require('../config/db-options');
 
 //!SELECT * FROM HRA
 exports.index = async function(req, res) {
-
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * FROM HRA WHERE DELETED != 1`,{},dbSelectOptions)
 		
 		if (result.rows.length > 0) {
@@ -31,5 +31,13 @@ exports.index = async function(req, res) {
 			message: 'No data found!',
 			data: [],//result.rows
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

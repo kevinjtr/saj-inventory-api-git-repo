@@ -8,6 +8,8 @@ const cors = require('cors');
 const path = require('path');
 const csv = require('./tools/csv-parser/csv-to-json')
 const fileUpload = require('express-fileupload');
+const dbConfig = require('./dbconfig.js');
+const oracledb = require('oracledb');
 
 let usaceCertMiddleware;
 
@@ -51,15 +53,13 @@ app.use(fileUpload({
 
 const usersRoutes = require('./routes/users');
 const handleError = require('./routes/routes');
-const productsRoutes = require('./routes/products');
-const categoriesRoutes = require('./routes/categories');
 const equipmentRoutes = require('./routes/equipment');
 const eng4900Routes = require('./routes/eng4900');
 const employee = require('./routes/employee');
 const hra = require('./routes/hra');
 const officeSymbol = require('./routes/office-symbol');
 const conditionRoutes = require('./routes/condition');
-const eng4844Routes = require('./routes/eng4844');
+//const eng4844Routes = require('./routes/eng4844');
 const changeHistoryRoutes = require('./routes/change-history');
 const annualInventoryRoutes = require('./routes/annual-inventory');
 const dbPopulateRoutes = require('./routes/db-populate.js');
@@ -73,15 +73,13 @@ const account = require('./routes/account');
 
 usersRoutes(app);
 handleError(app);
-productsRoutes(app);
-categoriesRoutes(app);
 equipmentRoutes(app);
 eng4900Routes(app);
 employee(app);
 hra(app);
 officeSymbol(app);
 conditionRoutes(app);
-eng4844Routes(app);
+//eng4844Routes(app);
 changeHistoryRoutes(app)
 annualInventoryRoutes(app)
 dbPopulateRoutes(app)
@@ -93,27 +91,30 @@ registeredUsers(app)
 dashboard(app)
 account(app)
 
-if (process.env.HTTPS === 'true') {
-	const fs = require('fs');
-	const https = require('https');
-	const httpsOptions = {
-		key: fs.readFileSync(path.join(__dirname, 'private/server.key')),
-		cert: fs.readFileSync(path.join(__dirname, 'private/server.cert')),
-		requestCert: true,
-		rejectUnauthorized: false
-	};
-	const httpsServer = https.createServer(httpsOptions, app);
-	httpsServer.timeout = 240000;
-	httpsServer.listen(port);
-	console.info(`Server is listening on https://localhost:${port}`);
-	//csv.run()
-} else {
-	const http = require('http');
-	const httpServer = http.createServer(app);
-	httpServer.timeout = 240000;
-	httpServer.listen(port);
-	console.info(`Server is listening on http://localhost:${port}`);
-}
+const adminPool = oracledb.createPool(dbConfig);
 
-//app.listen(port);
-//console.log('Started');
+Promise.all([adminPool]).then(function(pools){
+	console.info(`Created ${pools[0].poolAlias} Pool`);
+
+	if (process.env.HTTPS === 'true') {
+		const fs = require('fs');
+		const https = require('https');
+		const httpsOptions = {
+			key: fs.readFileSync(path.join(__dirname, 'private/server.key')),
+			cert: fs.readFileSync(path.join(__dirname, 'private/server.cert')),
+			requestCert: true,
+			rejectUnauthorized: false
+		};
+		const httpsServer = https.createServer(httpsOptions, app);
+		httpsServer.timeout = 240000;
+		httpsServer.listen(port);
+		console.info(`Server is listening on https://localhost:${port}`);
+		//csv.run()
+	} else {
+		const http = require('http');
+		const httpServer = http.createServer(app);
+		httpServer.timeout = 240000;
+		httpServer.listen(port);
+		console.info(`Server is listening on http://localhost:${port}`);
+	}
+})

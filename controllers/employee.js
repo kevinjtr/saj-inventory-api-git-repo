@@ -3,8 +3,6 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const filter = require('lodash/filter');
 const groupBy = require('lodash/groupBy')
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol,employee_id_auth} = require('../config/queries');
@@ -13,11 +11,13 @@ const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 //!SELECT * FROM EMPLOYEE
+
 exports.index = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const newEmployee = (edit_rights ? employee_officeSymbol.replace('SELECT',`SELECT 
 		ur.updated_by_full_name,
 		case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`) : employee_officeSymbol.replace('e.ID,',`case when e.id in (${employee_id_auth(req.user)}) then 1 else 0 end employee_update_rights,`)) + ` WHERE e.id in (${employee_id_auth(req.user)}) `
@@ -29,7 +29,6 @@ exports.index = async function(req, res) {
 		result_office_loc.rows = propNamesToLowerCase(result_office_loc.rows)
 
 		const district_office_locations = groupBy(result_office_loc.rows,'district')
-
 		let result_office_symbol =  await connection.execute(`SELECT id as office_symbol,alias as office_symbol_alias FROM OFFICE_SYMBOL order by alias asc`,{},dbSelectOptions)
 		result_office_symbol.rows = propNamesToLowerCase(result_office_symbol.rows)
 
@@ -53,14 +52,25 @@ exports.index = async function(req, res) {
 			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level_alias)}
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT EMPLOYEE BY ID
 exports.getById = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		let result =  await connection.execute(`SELECT * FROM employee WHERE id = :0 ORDER BY FIRST_NAME,LAST_NAME`,[req.params.id],dbSelectOptions)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
@@ -81,17 +91,27 @@ exports.getById = async function(req, res) {
 				editable: edit_rights
 			});
 		}
-	}catch(err){
+	} catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT EMPLOYEE BY ID
 exports.getByEDIPI = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		let result =  await connection.execute(`SELECT
 		e.ID,
 		e.FIRST_NAME,
@@ -138,6 +158,14 @@ exports.getByEDIPI = async function(req, res) {
 	}catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -145,9 +173,11 @@ exports.getByEDIPI = async function(req, res) {
 exports.search = async function(req, res) {
 	const {edit_rights} = req
 	let query_search = '';
-	const connection =  await oracledb.getConnection(dbConfig);
-	
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		const searchCriteria = filter(Object.keys(req.body),function(k){ return req.body[k] != ''});
 		for(const parameter of searchCriteria){
 			const db_col_name = `LOWER(TO_CHAR(${parameter}))`
@@ -218,6 +248,14 @@ exports.search = async function(req, res) {
 			editable: edit_rights
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -225,9 +263,12 @@ exports.search = async function(req, res) {
 
 //!INSERT EMPLOYEE
 exports.add = async function(req, res) { 
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
 		const {changes} = req.body.params
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
@@ -294,19 +335,41 @@ exports.add = async function(req, res) {
 			error: true,
 			message: 'Error adding new data!'
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDATE EMPLOYEE DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
+	let connection
 	try{
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
+
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
+				const { newData } = changes[row];
+				let oldData
 
-				const {newData,oldData} = changes[row];
+				if(!newData.hasOwnProperty('id'))
+					break;
+
+				let result_old_data = await connection.execute(`select * from employee where id = :id`,{id: newData.id},dbSelectOptions)
+
+				if(result_old_data.rows.length === 0)
+					break
+				
+				oldData = propNamesToLowerCase(result_old_data.rows)[0]
+
 				let cells = {new:objectDifference(oldData,newData,'tableData'),old:oldData}
 				const keys = Object.keys(cells.new)
 				cells.update = {}
@@ -340,8 +403,6 @@ exports.update = async function(req, res) {
 								WHERE ID = ${cells.old.id}`
 
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
-
-					connection.close()
 					return res.status(200).json({
 						status: 200,
 						error: false,
@@ -353,7 +414,6 @@ exports.update = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		return res.status(400).json({
 			status: 400,
 			error: true,
@@ -362,23 +422,31 @@ exports.update = async function(req, res) {
 		});
 	}catch(err){
 		console.log(err);
-		connection.close()
-
 		return res.status(200).json({
 			status: 400,
 			error: true,
 			message: 'Cannot update data.', //+ req.params.id
 			rowsAffected: 0
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!DELETE EQUIPMENT (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
 	let ids = ''
-	const connection =  await oracledb.getConnection(dbConfig);
 	const {edipi} = req.headers.cert
+	let connection
 	try{
+		pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){

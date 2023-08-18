@@ -6,8 +6,10 @@ const {dbSelectOptions} = require('../config/db-options');
 
 //!SELECT * FROM CONDITION
 exports.index = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute('SELECT * FROM CONDITION',{},dbSelectOptions)
 		result.rows = propNamesToLowerCase(result.rows)
 
@@ -18,7 +20,7 @@ exports.index = async function(req, res) {
 			data: result.rows
         });
         
-	}catch(err){
+	} catch(err){
 		console.log(err)
 		res.status(400).json({
 			status: 400,
@@ -27,13 +29,23 @@ exports.index = async function(req, res) {
 			data: []
         });
         
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT CONDITIONL BY ID
 exports.getById = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result =  await connection.execute(`SELECT * FROM CONDITION WHERE id = :0`,[req.params.id],dbSelectOptions)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
@@ -52,8 +64,16 @@ exports.getById = async function(req, res) {
 				data: []
 			});
 		}
-	}catch(err){
+	} catch(err){
 		console.log(err)
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };

@@ -42,7 +42,8 @@ const fix_names = [{name: 'AMANDA L. MAARIN', new:'Amanda Marin'}]
     
     async function GetEmployeeWithID(employee,col1Name,col2Name) {
     
-        const connection =  await oracledb.getConnection(dbConfig);
+        const pool = oracledb.getPool('ADMIN');
+	    const connection =  await pool.getConnection();
         //const result = {rows:[]}
     
         try{
@@ -83,7 +84,8 @@ const fix_names = [{name: 'AMANDA L. MAARIN', new:'Amanda Marin'}]
     const AddEquipments = async () => {
         console.log('AddEquipments')
 
-        const connection =  await oracledb.getConnection(dbConfig);
+        const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
         let equipments = await loadJSON(path.join(__dirname,`./output/equipments.json`))
         
         // if(filterbyHraNumber){
@@ -245,7 +247,8 @@ const fix_names = [{name: 'AMANDA L. MAARIN', new:'Amanda Marin'}]
     const AddHraEmployees = async () => {
         
         const hraEmployees = await loadJSON(path.join(__dirname,`./output/hraEmployees.json`))
-        const connection =  await oracledb.getConnection(dbConfig);
+        const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
         console.log('AddHraEmployees',hraEmployees.length)
 
         for(let i=0; i < hraEmployees.length; i++){
@@ -499,7 +502,8 @@ const VerifyChangedHraAccounts = async () => {
     try{
         const csvFilePath = path.join(__dirname,`./csv-files/inventory-schedule.csv`)  
         const jsonArray = await csv({ignoreEmpty:true}).fromFile(csvFilePath);
-        const connection =  await oracledb.getConnection(dbConfig);
+        const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
 
         for(let i=0;i<jsonArray.length;i++){
             const { HRA: hra, NAME: full_name } = jsonArray[i]
@@ -563,7 +567,8 @@ const VerifyNewOffices = async () => {
     try{
         const csvFilePath = path.join(__dirname,`./csv-files/inventory-schedule.csv`)  
         const jsonArray = await csv({ignoreEmpty:true}).fromFile(csvFilePath);
-        const connection =  await oracledb.getConnection(dbConfig);
+        const pool = oracledb.getPool('ADMIN');
+	const connection =  await pool.getConnection();
 
         for(let i=0;i<jsonArray.length;i++){
             const { LOCATION } = jsonArray[i]

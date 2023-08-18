@@ -13,8 +13,6 @@ const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = re
 const {rightPermision} = require('./validation/tools/user-database');
 const { Console } = require('winston/lib/winston/transports');
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
-//const connection =  oracledb.getConnection(dbConfig);
-//const connection = require('../connect');
 const BANNED_COLS_ANNUAL_INV = ['ID','HRA_NUM','ANNUAL_INV_EQUIPMENT_GROUP_ID','FISCAL_YEAR','FOLDER_LINK','HAS_FLIPL','UPDATED_BY']
 const ACCEPTED_USER_INPUT_COLS = ["FISCAL_YEAR","HRA_NUM"]
 
@@ -46,10 +44,11 @@ const andOR_multiple = {
 //!SELECT * FROM ANNUAL_INV
 exports.index = async function(req, res) {
     const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
+	let connection
 
 	try{
-
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		let result = await connection.execute(hra_employee_form_all(req.user),{},dbSelectOptions)
 
 		if(result.rows.length > 0){
@@ -60,7 +59,6 @@ exports.index = async function(req, res) {
 			LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
 			LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
 			on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)})`,{},dbSelectOptions)
-			connection.close()
 	
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)         
@@ -105,15 +103,24 @@ exports.index = async function(req, res) {
             editable: edit_rights,
 			hras:[]
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!SELECT ANNUAL_INV BY ID
 exports.getById = async function(req, res) {
 	const {edit_rights} = req
-	const connection =  await oracledb.getConnection(dbConfig);
-	
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		//ALL Equipments are fetched. Even deleted equipments.
         let result =  await connection.execute(`SELECT EQ.hra_num,
 		AI.fiscal_year,
@@ -156,8 +163,6 @@ exports.getById = async function(req, res) {
 		WHERE ai.id = :0 and EQ.hra_num in (${hra_num_form_all(req.user)})
 		order by EQ.employee_full_name asc`,[req.params.id],dbSelectOptions)		
 
-        connection.close()
-
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 
@@ -187,6 +192,14 @@ exports.getById = async function(req, res) {
             data: [],
             editable: edit_rights
         });
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
@@ -264,11 +277,12 @@ const isHraAndFiscalYearNotDuplicated = async (connection, binds) => {
 
 //!INSERT ANNUAL_INV
 exports.add = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
 	let eGroupId = -1
-
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
 		for(const row in changes){
@@ -298,7 +312,6 @@ exports.add = async function(req, res) {
 									eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
 
 									if(eGroupId == -1){
-										connection.close()
 										return res.status(200).json({
 											status: 200,
 											error: true,
@@ -346,7 +359,6 @@ exports.add = async function(req, res) {
 		
 								if(result.rows.length > 0){
 									result.rows = propNamesToLowerCase(result.rows)
-									connection.close()
 		
 									return (
 										res.status(200).json({
@@ -369,7 +381,6 @@ exports.add = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		res.status(400).json({
 			status: 400,
 			error: true,
@@ -377,7 +388,6 @@ exports.add = async function(req, res) {
 			columnErrors: columnErrors
 		});
 	}catch(err){
-		connection.close()
 		columnErrors = {...columnErrors,errorFound:true}
 		console.log(err);
 		res.status(400).json({
@@ -386,15 +396,24 @@ exports.add = async function(req, res) {
 			message: 'Error adding new data!',
 			columnErrors: columnErrors
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!UPDATE ANNUAL_INV DATA
 exports.update = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
 	let columnErrors = {rows:{},errorFound:false}
-
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes,undo} = req.body.params
 		
 		for(const row in changes){
@@ -462,8 +481,6 @@ exports.update = async function(req, res) {
 						if(result.rows.length > 0){
 							result.rows = propNamesToLowerCase(result.rows)
 
-							connection.close()
-
 							return (
 								res.status(200).json({
 									status: 200,
@@ -479,7 +496,6 @@ exports.update = async function(req, res) {
 				}
 			}
 		}
-		connection.close()
 		
 		return (
 			res.status(400).json({
@@ -490,7 +506,6 @@ exports.update = async function(req, res) {
 			})
 		)
 	}catch(err){
-		connection.close()
 		console.log(err);
 		res.status(400).json({
 			status: 400,
@@ -498,14 +513,23 @@ exports.update = async function(req, res) {
 			columnErrors:columnErrors,
 			message: 'Cannot delete data with id: ' //+ req.params.id
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
 
 //!DELETE ANNUAL_INV (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
 exports.destroy = async function(req, res) {
-	const connection =  await oracledb.getConnection(dbConfig);
-
-	try{
+	let connection
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 		let ids = ''
 		for(const row in changes){
@@ -518,19 +542,25 @@ exports.destroy = async function(req, res) {
 			}
 		}
 
-		connection.close()
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: `Successfully delete data with ids: ${ids}` //+ req.params.id
 		});
 	}catch(err){
-		connection.close()
 		console.log(err)
 		res.status(400).json({
 			status: 400,
 			error: true,
 			message: `Cannot delete data` //+ req.params.id
 		});
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
 	}
 };
