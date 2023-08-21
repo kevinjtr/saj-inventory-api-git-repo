@@ -929,8 +929,6 @@ const ParseHeaders = async (string_to_parse) => {
 //!SELECT * FROM form_4900
 exports.index = async function (req, res) {
 
-	console.log("in index...")
-
 	// try{
 	// 	let result =  await connection.execute('SELECT * FROM form_4900',{},dbSelectOptions)
 
@@ -1923,8 +1921,6 @@ exports.upload = async function (req, res) {
 
 			if (process.env.APPLICATION_ID) {
 				let notifications_result = await connection.execute(`SELECT NOTIFICATIONS AS "notifications" FROM APPLICATION_SETTINGS WHERE ID = :0`, [process.env.APPLICATION_ID], dbSelectOptions)
-
-				console.log(notifications_result)
 				notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
 			}
 

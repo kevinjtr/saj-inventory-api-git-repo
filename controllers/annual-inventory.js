@@ -298,82 +298,85 @@ exports.add = async function(req, res) {
 
 				let result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INV'`,{},dbSelectOptions)
 
-				if(result.rows.length > 0 && isAllDataAvailable && isDateWithinRange && isHraAndFiscalYearValid){
-					result.rows = filter(result.rows,function(x){ return ACCEPTED_USER_INPUT_COLS.includes(x.COLUMN_NAME)})
-					let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
+				if(!(result.rows.length > 0 && isAllDataAvailable && isDateWithinRange && isHraAndFiscalYearValid)){
+					break
+				}
+				
+				result.rows = filter(result.rows,function(x){ return ACCEPTED_USER_INPUT_COLS.includes(x.COLUMN_NAME)})
+				let col_names = result.rows.map(x => x.COLUMN_NAME.toLowerCase())
 
-					if(keys.length > 0){                      
-                        for(let i=0; i<keys.length; i++){
-                            if(col_names.includes(keys[i])){
-								const isHraNum = keys[i] == 'hra_num'
+				if(keys.length > 0){                      
+					for(let i=0; i<keys.length; i++){
+						if(col_names.includes(keys[i])){
+							const isHraNum = keys[i] == 'hra_num'
 
-								if(isHraNum){
-									const EQ_GROUP_ID_COL_NAME = "annual_inv_equipment_group_id"
-									eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
+							if(isHraNum){
+								const EQ_GROUP_ID_COL_NAME = "annual_inv_equipment_group_id"
+								eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
 
-									if(eGroupId == -1){
-										return res.status(200).json({
-											status: 200,
-											error: true,
-											message: 'Error adding new data!',
-											columnErrors : columnErrors
-										});
-									}
-
-									let comma =  i && cols ? ', ': ''
-									cols = cols + comma + EQ_GROUP_ID_COL_NAME
-									vals = vals + comma + ':' + EQ_GROUP_ID_COL_NAME
-									insert_obj[EQ_GROUP_ID_COL_NAME] = eGroupId
+								if(eGroupId == -1){
+									return res.status(200).json({
+										status: 200,
+										error: true,
+										message: 'Error adding new data!',
+										columnErrors : columnErrors
+									});
 								}
-								
-                                let comma =  cols ? ', ': ''
-                                cols = cols + comma + keys[i]
-								vals = vals + comma + ':' + keys[i]
-								insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
-								(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
-                                if(i == keys.length - 1){
-									comma = cols ? ', ': ''
-									cols = cols + comma + 'updated_by'
-									vals = vals + comma + ':' + 'updated_by'
-									insert_obj['updated_by'] = req.user
-                                }
-                            }
-                        }
+								let comma =  i && cols ? ', ': ''
+								cols = cols + comma + EQ_GROUP_ID_COL_NAME
+								vals = vals + comma + ':' + EQ_GROUP_ID_COL_NAME
+								insert_obj[EQ_GROUP_ID_COL_NAME] = eGroupId
+							}
+							
+							let comma =  cols ? ', ': ''
+							cols = cols + comma + keys[i]
+							vals = vals + comma + ':' + keys[i]
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
-						if(insert_obj.hra_num && insert_obj.fiscal_year){
-							let query = `MERGE INTO ANNUAL_INV
-							USING (SELECT 1 FROM DUAL) m
-							ON (hra_num = :hra_num AND fiscal_year = :fiscal_year)
-							WHEN NOT MATCHED THEN
-							INSERT (${cols})
-							VALUES (${vals})`
+							if(i == keys.length - 1){
+								comma = cols ? ', ': ''
+								cols = cols + comma + 'updated_by'
+								vals = vals + comma + ':' + 'updated_by'
+								insert_obj['updated_by'] = req.user
+							}
+						}
+					}
 
-							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+					if(insert_obj.hra_num && insert_obj.fiscal_year){
+						let query = `MERGE INTO ANNUAL_INV
+						USING (SELECT 1 FROM DUAL) m
+						ON (hra_num = :hra_num AND fiscal_year = :fiscal_year)
+						WHEN NOT MATCHED THEN
+						INSERT (${cols})
+						VALUES (${vals})`
 
-							if(result.rowsAffected != 0){
-								result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
-									LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
-									LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-									on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
-		
-								if(result.rows.length > 0){
-									result.rows = propNamesToLowerCase(result.rows)
-		
-									return (
-										res.status(200).json({
-											status: 200,
-											error: false,
-											message: 'Successfully added new data!',
-											changes: result.rows,//req.body,
-											columnErrors: columnErrors
-										})
-									)
-								}
+						result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
+
+						if(result.rowsAffected != 0){
+							result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
+								LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+								LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
+								on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
+	
+							if(result.rows.length > 0){
+								result.rows = propNamesToLowerCase(result.rows)
+	
+								return (
+									res.status(200).json({
+										status: 200,
+										error: false,
+										message: 'Successfully added new data!',
+										changes: result.rows,//req.body,
+										columnErrors: columnErrors
+									})
+								)
 							}
 						}
 					}
 				}
+				
 
 				if(!isAllDataAvailable || !isDateWithinRange){
 					columnErrors = {...columnErrors,errorFound:true}

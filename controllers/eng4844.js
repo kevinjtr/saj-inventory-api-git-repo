@@ -414,7 +414,7 @@ exports.piliferableCode = async function(req, res) {
 				            
 				         
         }    
-		console.log(result.rows);
+
 		   res.status(200).json({
 			                status: 200,
 			                error: false,
@@ -456,7 +456,7 @@ exports.logisticsControlCode = async function(req, res) {
 				            
 				         
         }    
-		console.log(result.rows);
+
 		   res.status(200).json({
 			                status: 200,
 			                error: false,

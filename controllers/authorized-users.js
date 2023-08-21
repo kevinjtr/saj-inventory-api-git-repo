@@ -185,8 +185,6 @@ exports.index = async function(req, res) {
             authorizedUsers: await getAuthorizedUsers(connection, edipi)   
         }
 
-        console.log(return_object)
-
         res.status(200).json({
             status: 200,
             error: false,

@@ -720,13 +720,9 @@ exports.add = async function(req, res) {
 							}
 				
 							let query = `INSERT INTO ${EQUIPMENT} (${cols}) VALUES (${vals}) returning id into :id`
-
-							console.log(query)
 							insert_obj.id = {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
-
 							result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
-							console.log(result)
 							if(result.outBinds.id.length > 0){
 								tabsReturnObject = await searchEquipmentUpdatedData(result.outBinds.id[0], connection, req.user)
 								return res.status(200).json({

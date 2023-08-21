@@ -288,12 +288,15 @@ on eq.hra_num = h.hra_num
 where h.hra_num = ${hra_num} AND eq.user_employee_id is not null and
 eq.status_date between TO_DATE(TO_CHAR(add_months(sysdate,-9),'YYYY')|| '' ||'-10-01','YYYY-MM-DD') AND TO_DATE(TO_CHAR(add_months(sysdate,3),'YYYY')|| '' ||'-09-01','YYYY-MM-DD') `
 
-const last_login = (id) => `select ru.edipi, uah.full_name, uah.date_accessed as from registered_users ru
-left join user_access_history uah
-on uah.edipi = ru.edipi
-where ru.id = ${id}
-order by uah.date_accessed desc
-OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY `
+const last_login = (id) => `SELECT ru.edipi, uah.full_name, uah.date_accessed
+FROM registered_users ru
+LEFT JOIN user_access_history uah ON uah.edipi = ru.edipi
+WHERE ru.id = ${id}
+ORDER BY uah.date_accessed DESC
+OFFSET CASE WHEN (SELECT COUNT(*) FROM user_access_history uah
+left join registered_users ru
+on ru.edipi = uah.edipi WHERE ru.id = ${id}) = 1 THEN 0 ELSE 1 END ROWS
+FETCH NEXT 1 ROWS ONLY; `
 
 const my_total_equipments = (id) => `select count(*) as my_total_equipments from registered_users ru
 left join employee e

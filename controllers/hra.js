@@ -404,8 +404,7 @@ exports.update = async function(req, res) {
         
                     let query = `UPDATE HRA SET ${cols}
                                 WHERE hra_num = ${cells.old.hra_num}`
-
-								console.log(query)
+								
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					
 					return res.status(200).json({

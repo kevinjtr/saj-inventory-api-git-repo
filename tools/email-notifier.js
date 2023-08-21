@@ -16,15 +16,16 @@ const ACTION_BY_STATUS = {
   11: {label:"PBO", type:"pbo"},
 }
 
-const STEPS_TO_SIGN_FORM = `To sign this document, please execute the following steps:<br/><br/>
-    Go to Corps Inventory Control Application - https://sajgis.saj.usace.army.mil/inventory.<br/>
-    Click on ENG4900.<br/>
-    Click on SIGN FORMS.<br/>
-    Click on the "View PDF" Icon of your form record to download document.<br/>
-    Open PDF and sign.<br/>
-    Click "Upload PDF" to upload signed document.<br/>
-    Select "Completed..." and attach signed PDF or "Form Reject" if you do not approve.<br/><br/>
-    If you have already signed your document, please disregard this email.`
+//const STEPS_TO_SIGN_FORM = 
+// `To sign this document, please execute the following steps:<br/><br/>
+//     Go to Corps Inventory Control Application - https://sajgis.saj.usace.army.mil/inventory.<br/>
+//     Click on ENG4900.<br/>
+//     Click on SIGN FORMS.<br/>
+//     Click on the "View PDF" Icon of your form record to download document.<br/>
+//     Open PDF and sign.<br/>
+//     Click "Upload PDF" to upload signed document.<br/>
+//     Select "Completed..." and attach signed PDF or "Form Reject" if you do not approve.<br/><br/>
+//     If you have already signed your document, please disregard this email.`
 
 const printEquipmentsWithBreaks = (elements) => {
   let str = ""
@@ -62,7 +63,7 @@ const subject = {
   form_4900_excess_signature_rejected_notification: (obj) => `Notification: ENG4900 - ${obj.id} was rejected`,
 }
 
-const DateTimePrint = (obj) => `${obj.updated_date ? `Date/Time: ${moment(obj.updated_date).format("MMMM DD, YYYY HH:mm:ss")}.<br/><br/>` : ""}`
+const DateTimePrint = (obj) => `${obj.updated_date ? `Date/Time: ${moment(obj.updated_date).format("MMMM DD, YYYY HH:mm:ss")} EST.<br/><br/>` : ""}`
 
 const html_body = {
 
@@ -77,8 +78,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_issue_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) ${obj.notify_is_hra ? `needs your ${HraIssueSignatureTypeLabel(obj)}`: `requires ${HraIssueSignatureTypeLabel(obj)}`} signature.<br/><br/>
@@ -90,11 +90,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  ${STEPS_TO_SIGN_FORM}<br/><br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_issue_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected.<br/><br/>
@@ -108,9 +104,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
 
   form_4900_trf_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
@@ -124,8 +118,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_trf_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
@@ -142,11 +135,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  ${STEPS_TO_SIGN_FORM}<br/><br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_trf_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
@@ -165,11 +154,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  ${STEPS_TO_SIGN_FORM}<br/><br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_trf_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
@@ -188,11 +173,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  ${STEPS_TO_SIGN_FORM}<br/><br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
 
   form_4900_excess_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
@@ -206,8 +187,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_excess_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
   
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) needs${obj.hra_type == obj.action && ACTION_BY_STATUS[obj.status].type == obj.action && obj.notify_is_hra ? " your": ""} ${ACTION_BY_STATUS[obj.status].label} signature.<br/><br/>
@@ -220,11 +200,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  ${STEPS_TO_SIGN_FORM}<br/><br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_excess_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
@@ -243,9 +219,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
   form_4900_excess_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
@@ -264,9 +238,7 @@ const html_body = {
   ${DateTimePrint(obj)}
 
   Equipment list:<br/>
-  ${printEquipmentsWithBreaks(obj.equipments)}<br/>
-
-  -Inventory App Notifications`,
+  ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
 
   // losing_hra_signature_required: (obj) => `Att: ${obj.hra_full_name},<br/><br/>
   // You have a new form awaiting signature.`,
@@ -285,6 +257,67 @@ const html_body = {
 
   // new_user_registration_pending:""
 }
+
+const getHtml2 = (message_type, opts_obj) => `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+  <meta http-equiv="Content-Type" content="text/html charset=UTF-8" />
+  <html lang="en">
+  
+    <head></head>
+    <div id="__react-email-preview" style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0">The sales intelligence platform that helps you uncover qualified leads.
+  
+    <body style="background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Roboto,Oxygen-Sans,Ubuntu,Cantarell,&quot;Helvetica Neue&quot;,sans-serif">
+      <table align="center" role="presentation" cellSpacing="0" cellPadding="0" border="0" width="100%" style="max-width:37.5em;margin:0 auto;padding:20px 0 48px">
+        <tr style="width:100%">
+          <td><img alt="Inventory" src="https://www.nicepng.com/png/detail/516-5161278_any-device-icon-smartphone-tablet-pc.png" width="75" height="50" style="display:block;outline:none;border:none;text-decoration:none;margin:0 auto" />
+          <br/><br/>
+          ${html_body[message_type](opts_obj)}
+            <table style="text-align:center" align="center" border="0" cellPadding="0" cellSpacing="0" role="presentation" width="100%">
+              <tbody>
+                <tr>
+                  <td><a href="https://sajgis.saj.usace.army.mil/inventory/eng4900" target="_blank" style="background-color:#5F51E8;border-radius:3px;color:#fff;font-size:16px;text-decoration:none;text-align:center;display:inline-block;p-x:12px;p-y:12px;line-height:100%;max-width:100%;padding:12px 12px"><span><!--[if mso]><i style="letter-spacing: 12px;mso-font-width:-100%;mso-text-raise:18" hidden>&nbsp;</i><![endif]--></span><span style="background-color:#5F51E8;border-radius:3px;color:#fff;font-size:16px;text-decoration:none;text-align:center;display:inline-block;p-x:12px;p-y:12px;max-width:100%;line-height:120%;text-transform:none;mso-padding-alt:0px;mso-text-raise:9px">Sign my Document</span><span><!--[if mso]><i style="letter-spacing: 12px;mso-font-width:-100%" hidden>&nbsp;</i><![endif]--></span></a></td>
+                </tr>
+              </tbody>
+            </table>
+            <hr style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:#cccccc;margin:20px 0" />
+            <p style="font-size:12px;line-height:24px;margin:16px 0;color:#8898aa">This email was sent from the SAJ Inventory Application Notification System.</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+  
+  </html>
+  `
+
+const getHtml = (message_type, opts_obj) => `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">
+<meta http-equiv="Content-Type" content="text/html charset=UTF-8" />
+<html lang="en">
+
+  <head>
+    <style type="text/css">
+        .tg  {border-collapse:collapse;border-color:#ccc;border-spacing:0;}
+        .tg td{background-color:#fff;border-color:#ccc;border-style:solid;border-width:1px;color:#333;
+          font-family:Arial, sans-serif;font-size:14px;overflow:hidden;padding:10px 5px;word-break:normal;}
+        .tg th{background-color:#f0f0f0;border-color:#ccc;border-style:solid;border-width:1px;color:#333;
+          font-family:Arial, sans-serif;font-size:14px;font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+        .tg .tg-0lax{text-align:left;vertical-align:top}
+    </style>
+  </head>
+  <div id="__eba-email-preview" style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0">EBA Import Notification
+  </div>
+
+  <body style="margin-left:auto;margin-right:auto;margin-top:auto;margin-bottom:auto;background-color:rgb(255,255,255);font-family:ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans&quot;, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;">
+    <table align="center" role="presentation" cellSpacing="0" cellPadding="0" border="0" width="100%" style="max-width:37.5em;margin-left:auto;margin-right:auto;margin-top:40px;margin-bottom:40px;width:465px;border-radius:0.25rem;border-width:1px;border-style:solid;border-color:rgb(234,234,234);padding:20px">
+      <tr style="width:100%">
+        <td>
+          <h1 style="margin-left:0px;margin-right:0px;margin-top:24px;margin-bottom:24px;padding:0px;text-align:center;font-size:24px;font-weight:400;color:rgb(0,0,0)"><strong>SAJ Inventory App Notifications</strong></h1>
+          ${html_body[message_type](opts_obj)}
+          <hr style="width:100%;border:none;border-top:1px solid #eaeaea;margin-left:0px;margin-right:0px;margin-top:26px;margin-bottom:26px;border-width:1px;border-style:solid;border-color:rgb(234,234,234)" />
+          <p style="font-size:10px;line-height:24px;margin:10px 0;color:rgb(102,102,102)">This email was sent from the SAJ Inventory Application Notification System.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`
 
 module.exports = {
   form4900EmailAlert: async function (id) {
@@ -488,7 +521,7 @@ module.exports = {
               for(const user of result.rows){
                 //user.notify_email
                 const opts_obj = {...user, equipments: result_equipment.rows, requested_action_alias: requested_action_alias, hra_type:user.hra_type, action: action, status:status, previous_status:previous_status}
-                const obj_settings = {from: 'no-reply-inventory@usace.army.mil', to:user.notify_email, subject:subject[message_type](opts_obj), html:html_body[message_type](opts_obj)}
+                const obj_settings = {from: 'no-reply-inventory@usace.army.mil', to:user.notify_email, subject:subject[message_type](opts_obj), html:getHtml2(message_type,opts_obj)}
     
                 if(!array_of_opts_obj.includes(obj_settings.to)){
                   //Will not send more than one email to a user.

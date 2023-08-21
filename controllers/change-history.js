@@ -232,7 +232,6 @@ exports.index = async function(req, res) {
 exports.equipment = async function(req, res) {
 	const {edit_rights} = req
 	let connection
-	
 	try{
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
@@ -281,7 +280,9 @@ exports.equipment = async function(req, res) {
     
 		let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
 												RIGHT JOIN (${equipment_employee_}) eh_emp
-												on eh_emp.hra_num = hra_emp.hra_num ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
+												on eh_emp.hra_num = hra_emp.hra_num 
+												where eh_emp.ID = ${req.params.id}
+												ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -294,7 +295,7 @@ exports.equipment = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get equipment data!',
-			data: {equipment:result.rows},
+			data: result.rows,
 			editable: edit_rights,
 		});
 	}catch(err){

@@ -11,10 +11,10 @@ module.exports = function(app) {
 
 	//app.route('/eng4844/:id').get(controller.getById);
 	
-	//app.route('/change-history/equipment').get(usersController.verifyToken,controller.equipment);
-    //app.route('/change-history/hra').get(usersController.verifyToken,controller.hra);
-    //app.route('/change-history/employee').get(usersController.verifyToken,controller.employee);
-    //app.route('/change-history/eng4900').get(usersController.verifyToken,controller.eng4900);
+	app.route('/change-history/equipment/:id').get(controller.equipment);
+    app.route('/change-history/hra/:hra_num').get(usersController.verifyToken,controller.hra);
+    app.route('/change-history/employee/:id').get(usersController.verifyToken,controller.employee);
+    app.route('/change-history/eng4900/:id').get(usersController.verifyToken,controller.eng4900);
 
 	app.route('/change-history').post(usersController.verifyToken,controller.index);
     //app.route('/change-history/eng4844/').get(controller.eng4844);
