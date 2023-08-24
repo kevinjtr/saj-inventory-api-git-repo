@@ -125,7 +125,7 @@ const HraNumFormat = (n) => {
     return n
 }
 
-var create4900Json = async function(form_data){
+var create4900Json = async function(user, form_data, signatures){
 
     //   fs.writeFile('eng4900-form-data.json',JSON.stringify(form_data,null,2),function (err) {
     //     if (err) return console.log(err);
@@ -137,8 +137,6 @@ var create4900Json = async function(form_data){
     for(const key of keys){//remove null values.
         form_data[key] = form_data[key] ? form_data[key] : ""
     }
-
-    console.log(form_data)
 
     let data = [
         {name: "inv_app_id", type:"textfield", data: 'IA4900-' + form_data.form_id},
@@ -183,9 +181,9 @@ var create4900Json = async function(form_data){
 }
 
 module.exports = {
-    create4900 : async (data) => {
+    create4900 : async (user, data, signatures=[]) => {
         try{
-            await create4900Json(data)
+            await create4900Json(user, data, signatures)
             return true
         }catch(err){
             console.log(err)

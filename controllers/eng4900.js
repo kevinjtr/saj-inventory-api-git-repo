@@ -110,7 +110,8 @@ const equipment_condition = `SELECT E.*,C.ALIAS AS CONDITION_ALIAS FROM FORM_EQU
 
 const newQuerySelById = `SELECT
 		f.id as form_id,
-		CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
+		f.form_signature_group_id as form_signature_group_id,
+		f.status as status,
 		f.file_storage_id,
 		f.individual_ror_prop,
 		f.updated_date,
@@ -141,7 +142,8 @@ const newQuerySelById = `SELECT
 		UNION (
 			SELECT
 			f.id as form_id,
-			CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
+			f.form_signature_group_id as form_signature_group_id,
+			f.status as status,
 			f.file_storage_id,
 			f.individual_ror_prop,
 			f.updated_date,
@@ -874,13 +876,6 @@ const formUpdate = async (connection, edipi, changes, auto_commit = true) => {
 										cols = cols + comma + keys[i] + ' = :' + keys[i]
 										cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
 											(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
-
-										//DELETE - TESING 
-										if (keys[i] == "status") {
-											if (cells.update[keys[i]] < 100) {
-												cells.update[keys[i]] = cells.update[keys[i]] + 100
-											}
-										}
 									}
 
 									if (i == keys.length - 1 && typeof edipi != 'undefined') {
@@ -978,7 +973,7 @@ exports.getById = async function (req, res) {
 			if (eg_result.rows.length > 0) {
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 				result.rows[0].equipment_group = eg_result.rows
-				create4900(result.rows[0])
+				create4900(req.user, result.rows[0])
 
 				return res.status(200).json({
 					status: 200,
@@ -1077,10 +1072,23 @@ exports.getPdfById = async function (req, res) {
 				if (eg_result.rows.length > 0) {
 					eg_result.rows = propNamesToLowerCase(eg_result.rows)
 					result.rows[0].equipment_group = eg_result.rows
-					const result_pdf = await create4900(result.rows[0])
+					let form_signatures_array = []
+					if(result.rows[0].form_signture_group_id){
+						let form_signature_result = await connection.execute(`SELECT * FROM FORM_SIGNATURE_GROUP FSG
+							LEFT JOIN FORM_SIGNATURE FS
+							ON FS.ID = FORM_SIGNATURE_ID
+							LEFT JOIN FORM_SIGNATURE_TYPE FST
+							ON FST.ID = FS.FORM_SIGNATURE_TYPE`, [result.rows[0].form_signture_group_id], dbSelectOptions)
+
+						if(form_signature_result.rows.length > 0){
+							form_signatures_array = propNamesToLowerCase(form_signature_result.rows)
+						}
+					}
+
+					const result_pdf = await create4900(req.user, result.rows[0], form_signatures_array)
 
 					if (result_pdf) {
-						var file = path.join(__dirname, '../output/output_eng4900.pdf');
+						var file = path.join(__dirname, `../output/output-eng4900-${req.user}.pdf`);
 
 						fs.readFile(file, function (err, data) {
 							res.contentType("application/pdf");
@@ -1157,21 +1165,21 @@ const getQueryForTab = (tab_name, user) => {
 		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_self(user)} ) AND F.REQUESTED_ACTION in (2,3,4,5)) `
 
 	} else if (tab_name == "hra_forms") {
-		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (107) AND F.REQUESTED_ACTION in (2,3,5)) 
-		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (109) AND F.REQUESTED_ACTION in (4))) 
-		UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS > 100 AND F.STATUS NOT IN (103) AND F.REQUESTED_ACTION in (1))) `
+		query += `WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (7) AND F.REQUESTED_ACTION in (2,3,5)) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (9) AND F.REQUESTED_ACTION in (4))) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS NOT IN (3) AND F.REQUESTED_ACTION in (1))) `
 	} else if (tab_name == "sign_forms") {//Change: needs to be self.
-		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2)) 
-				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-				UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (102, 104) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (106) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (108) AND F.REQUESTED_ACTION in (4))) `
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
+				UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
 
 	} else if (tab_name == "completed_and_ipg_forms") {
-		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 103 AND F.REQUESTED_ACTION IN (1)) 
-		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 107 AND F.REQUESTED_ACTION in (2,3,5))) 
-		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 109 AND F.REQUESTED_ACTION in (4)))  `
+		query += `WHERE (f.GAINING_HRA IN (${hra_num_form_all(user)}) AND F.STATUS = 3 AND F.REQUESTED_ACTION IN (1)) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 7 AND F.REQUESTED_ACTION in (2,3,5))) 
+		UNION (${eng4900SearchQuery(user)} WHERE (f.LOSING_HRA IN (${hra_num_form_all(user)} ) AND F.STATUS = 9 AND F.REQUESTED_ACTION in (4)))  `
 	}
 
 	return query
@@ -1270,11 +1278,11 @@ const getTabData = async (connection, user) => {
 exports.search2 = async function (req, res) {
 	let query_search = '';
 	let connection
+	const edit_rights = UserLevelNameHasEditPermision(req.user_level_alias, "/eng4900")
 
 	try {
 		const pool = oracledb.getPool('ADMIN');
 		connection = await pool.getConnection();
-		const edit_rights = UserLevelNameHasEditPermision(req.user_level_alias, "/eng4900")
 
 		if (edit_rights) {
 			const { fields, options, tab, init } = req.body;
@@ -1545,7 +1553,7 @@ exports.add = async function (req, res) {
 				}
 
 				//DELETE - TESTING PURPOSES
-				cells.status = 101
+				cells.status = 1
 				cols = cols + ', status'
 				vals = vals + ', :' + 'status'
 
@@ -2008,6 +2016,146 @@ exports.upload = async function (req, res) {
 		}
 	} catch (err) {
 		res.status(400).send({ msg: 'File not uploaded!' });
+	} finally {
+		console.log('closing connection...')
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
+};
+
+const form_status_to_signature_type = {
+	3: {id: 1},
+	5: {id: 2},
+	7: {id: 3},
+	9: {id: 4},
+	11: {id: 5},
+}
+
+//!SIGN form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
+exports.sign = async function (req, res) {
+	let connection
+
+	try {
+		const pool = oracledb.getPool('ADMIN');
+		connection = await pool.getConnection();
+
+		await connection.execute('SAVEPOINT form_update')
+		const changes = req.body.params
+		const { id, status: new_status } = changes
+
+		console.log(changes)
+		const { edipi } = req.headers.cert
+		let notifcations_active = false;
+		let fsGroupId
+		const db_update_results = {
+			fs_record: { deleted: false, status_downgrade: false, signature_removal: false, error: false },
+			equipment_result: { error: false },
+			form_4900: { complete: false, error: false }
+		}		
+
+		if (process.env.APPLICATION_ID) {
+			let notifications_result = await connection.execute(`SELECT NOTIFICATIONS AS "notifications" FROM APPLICATION_SETTINGS WHERE ID = :0`, [process.env.APPLICATION_ID], dbSelectOptions)
+			notifcations_active = notifications_result.rows.length > 0 ? Boolean(notifications_result.rows[0].notifications) : false
+		}
+
+		let result = await connection.execute(`SELECT * FROM (${eng4900SearchQuery(req.user)}) F 
+			LEFT JOIN file_storage fs on fs.id = f.file_storage_id
+			WHERE F.FORM_ID = :0`, [id], dbSelectOptions)
+
+		result.rows = propNamesToLowerCase(result.rows)
+		const { requested_action, requested_action_alias, is_losing_hra, is_gaining_hra, form_signature_group_id, file_storage_id } = result.rows[0]
+		const old_status = result.rows[0].status
+		const status_upgrade = new_status > old_status
+		db_update_results.fs_record.status_downgrade = old_status > new_status
+
+		if (!(isNewStatusValid(requested_action, new_status, old_status, is_losing_hra, is_gaining_hra) && status_upgrade && !file_storage_id))
+			return res.status(400).send({ msg: 'Unable to sign document!' });
+
+		if(form_signature_group_id){
+			//validate form_signature_group_id sent.
+			let result_signatures = await connection.execute(`SELECT FSG.FORM_SIGNATURE_GROUP_ID as "form_signature_group_id" FROM FORM_SIGNATURE_GROUP FSG
+			LEFT JOIN FORM_SIGNATURE FS ON FS.ID = FSG.FORM_SIGNATURE_ID
+			WHERE FSG.FORM_SIGNATURE_GROUP_ID = :0`, [form_signature_group_id], dbSelectOptions)
+
+			if(result_signatures.rows.length === 0){
+				res.status(400).send({ msg: 'Unable to sign document!' });
+					return;
+			}
+
+			fsGroupId = result_signatures.rows[0].form_signature_group_id
+		}else {
+			//create new form_signature_group_id.
+			let result = await connection.execute(`SELECT SEQ_FORM_SIGNATURE_GROUP_ID.nextval from dual`,{},dbSelectOptions)
+			fsGroupId = result.rows[0].NEXTVAL
+		}
+
+		const signature_type = form_status_to_signature_type[new_status].id
+
+		let sql = `insert into form_signature (form_signature_type, signature) values (:form_signature_type, :signature) returning id into :id`
+		result = await connection.execute(sql, {
+			form_signature_type: signature_type,
+			signature: req.headers.cert.cn
+		}, { autoCommit: true });
+
+		if(result.rows.length === 0)
+			return res.status(400).send({ msg: 'Unable to sign document!' });
+
+		const form_signature_id = result.rows[0].ID
+
+		sql = `insert into form_signature_group (form_signature_type, signature) values (:fsGroupId, :form_signature_id)`
+		result = await connection.execute(sql, {
+			fsGroupId: fsGroupId,
+			form_signature_id: form_signature_id
+		}, { autoCommit: true });
+
+		if(result.rowsAffected === 0)
+			return res.status(400).send({ msg: 'Unable to sign document!' });
+
+		// query = `UPDATE ${FORM_4900} SET (form_signature_group_id, status) values (:fsGroupId, :status) WHERE ID = :id`
+		// result = await connection.execute(query, {id: id, 
+		// 	fsGroupId: fsGroupId,
+		// 	status: new_status,
+		// }, { autoCommit: true })
+
+		const form_4900_changes = { 0: { ...changes, id: id, form_signature_group_id: fsGroupId } }
+		db_update_results.form_4900.error = !(await formUpdate(connection, edipi, { ...form_4900_changes }, false))
+
+		if (isFormCompleted(new_status, requested_action)) {//form is completed.
+			db_update_results.form_4900.complete = true
+			db_update_results.equipment_result = await doTransaction(connection, req.user, { ...form_4900_changes[0], requested_action: requested_action })
+		}
+
+		if (!isTransactionErrorFound(db_update_results)) {
+			await connection.commit()
+			const tabsReturnObject = await getTabData(connection, req.user)
+
+			if (notifcations_active) {
+				form4900EmailAlert(id)
+			}
+
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				msg: 'Form was signed!',
+				tabUpdatedData: tabsReturnObject,
+			})
+			
+		} else {
+			await connection.rollback()
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				msg: 'Unable to sign document!',
+				tabUpdatedData: {},
+			})
+		}
+	} catch (err) {
+		res.status(400).send({ msg: 'Unable to sign document!' });
 	} finally {
 		console.log('closing connection...')
 		if (connection) {

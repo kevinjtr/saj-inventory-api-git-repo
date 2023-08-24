@@ -174,7 +174,8 @@ on ru.employee_id = e.id `
 
 const eng4900SearchQuery = (id) => `SELECT 
 f.id as form_id,
-CASE WHEN f.status > 100 THEN f.status - 100 ELSE f.status END status,
+f.form_signature_group_id as form_signature_group_id,
+f.status as status,
 f.file_storage_id,
 f.individual_ror_prop,
 fs.status as status_alias,
