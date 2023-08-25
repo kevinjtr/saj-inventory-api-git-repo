@@ -1,7 +1,7 @@
 //var exec = require('child_process').execFile;
 //const XLSX = require('xlsx')
 //const xml2js = require('xml2js');
-const { PDFDocument } = require('pdf-lib')
+const { PDFDocument, degrees, rgb, StandardFonts,  } = require('pdf-lib')
 const util = require('util')
 const fs = require('fs');
 //const parser = new xml2js.Parser({ attrkey: "ATTR" });
@@ -19,6 +19,16 @@ const SIGN_DATE_FIELD_NAME = {
     PBO_GAINING:"f Date_2",
     LOGISTICS_RECEIVED:"b Date_4",
     LOGISTICS_POSTED_BY:"b Date_5"
+}
+
+const signature_fields_type_to_name = {
+    1: {sign_field: {name: 'C. Signature', 1: {y: 471.2328, x: 347.9688}, 2: {y: 613.503, x: 348.469}}, date_field: { name: 'b. Date' }},
+    2: {sign_field: {name: '14a. Losing HRH Signature', 1: {y: 39.5638, x: 393.129}, 2: {y: 182.831, x: 394.127}}, date_field: { name: 'b Date_2' }},
+    3: {sign_field: {name: '15a. Gaining HRH Signature', 1: {y: 400.477, x: 392.131}, 2: {y: 543.745, x: 393.628}}, date_field: { name: 'b Date_3' }},
+    // 4: 'e. Losing Command Signature', date_field: 'f Date',
+    // 5: 'e. Gaining Command Signature', date_field: 'f Date_2',
+    // 6: '18a. Received By', date_field: 'b Date_4',
+    // 7: '19a. Posted By', date_field: 'b Date_5',
 }
 
 function formatPhoneNumber(phoneNumberString) {
@@ -63,15 +73,101 @@ const eng4900Signature = async (pdf,person) => {
     return flag
 }
 
-var fillEng4900PDF = async function(data){
+function splitString(str, n) {
+    if (str.length <= n) {
+      return [str];
+    } else {
+      const result = [];
+      for (let i = 0; i < str.length; i += n) {
+        result.push(str.substr(i, n));
+      }
+      return result;
+    }
+  }
+
+function transformTimeFormat(input) {
+    const [hours, minutes] = input.split(':');
+    const formattedHours = parseInt(hours, 10).toString();
+    const formattedMinutes = minutes;
+
+    return `${formattedHours}:'${formattedMinutes}'`;
+}
+
+async function run_test(pdfDoc, form, field, form_signature){
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const signature_text_lines = splitString(form_signature.signature, 26)
+    const sign_field = form.getField(field.name)
+    const page = pdfDoc.getPage(0)
+    form.removeField(sign_field);
+
+    for(let i=0; i<signature_text_lines.length;i++){
+        s_text = signature_text_lines[i]
+        page.drawText(s_text, {
+        y: field[1].y + 2,
+        x: field[1].x - (i ? 5 : 15),
+        //width: 141.516,
+        //height: 27.9936,
+        font: helvetica,
+        size: 9.2,
+        color: rgb(0, 0, 0),
+        //lineHeight: 24,
+        //opacity: 0.75,
+        //textColor: rgb(0, 0, 0),
+        //backgroundColor: rgb(255,255,255 ),
+        //borderColor: rgb(1, 1, 1),
+        //borderWidth: 0,
+        rotate: degrees(90),
+        //opacity: 0,
+        //font: ubuntuFont,
+        })
+    }
+
+    page.drawText('Digitally signed by', {
+        y: field[2].y + 2,
+        x: field[2].x - 18,
+        font: helvetica,
+        size: 5.8,
+        color: rgb(0, 0, 0),
+        rotate: degrees(90),
+        })      
+        
+    page.drawText(form_signature.signature, {
+        y: field[2].y + 2,
+        x: field[2].x - 11,
+        font: helvetica,
+        size: 5.8,
+        color: rgb(0, 0, 0),
+        rotate: degrees(90),
+        })
+
+    const date = moment(form_signature.date_signed).format('YYYY.MM.DD HH.mm.ss')
+    const time_zone = transformTimeFormat(moment(form_signature.date_signed).format('Z'))
+    page.drawText(`Date: ${date} ${time_zone}`, {
+        y: field[2].y + 2,
+        x: field[2].x - 4.5,
+        font: helvetica,
+        size: 5.8,
+        color: rgb(0, 0, 0),
+        rotate: degrees(90),
+        })
+}
+
+var fillEng4900PDF = async function(user, data, signatures){
     const readFile = util.promisify(fs.readFile)
     function getStuff() {
         return readFile(path.join(__dirname,'./forms/eng4900.pdf'))
     }
 
     const file = await getStuff()
-    const pdfDoc = await PDFDocument.load(file)
-    const form = pdfDoc.getForm()
+    let pdfDoc = await PDFDocument.load(file)
+    let form = pdfDoc.getForm()
+    
+    console.log(signatures)
+    for(let i=0; i< signatures.length; i++){
+        let s = signatures[i]
+        const form_label = signature_fields_type_to_name[s.form_signature_type]
+        await run_test(pdfDoc, form, form_label.sign_field, s)
+    }
 
     for(const field of data){
 
@@ -96,7 +192,7 @@ var fillEng4900PDF = async function(data){
 
     const pdfBytes = await pdfDoc.save()
 
-    await fs.promises.writeFile(path.join(__dirname,'./output/output_eng4900.pdf'), pdfBytes, () => {
+    await fs.promises.writeFile(path.join(__dirname,`./output/output-eng4900-${user}.pdf`), pdfBytes, () => {
         console.log('PDF created!')
     })
 }
@@ -177,7 +273,7 @@ var create4900Json = async function(user, form_data, signatures){
         data = [...data,...equipment_template]
     }
 
-    await fillEng4900PDF(data)
+    await fillEng4900PDF(user, data, signatures)
 }
 
 module.exports = {

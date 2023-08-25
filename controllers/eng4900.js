@@ -973,7 +973,24 @@ exports.getById = async function (req, res) {
 			if (eg_result.rows.length > 0) {
 				eg_result.rows = propNamesToLowerCase(eg_result.rows)
 				result.rows[0].equipment_group = eg_result.rows
-				create4900(req.user, result.rows[0])
+
+				let form_signatures_array = []
+
+				console.log(result.rows[0])
+				if(result.rows[0].form_signature_group_id){
+					let form_signature_result = await connection.execute(`SELECT * FROM FORM_SIGNATURE_GROUP FSG
+						LEFT JOIN FORM_SIGNATURE FS
+						ON FS.ID = FORM_SIGNATURE_ID
+						LEFT JOIN FORM_SIGNATURE_TYPE FST
+						ON FST.ID = FS.FORM_SIGNATURE_TYPE
+						WHERE FSG.FORM_SIGNATURE_GROUP_ID = :0 `, [result.rows[0].form_signature_group_id], dbSelectOptions)
+
+					if(form_signature_result.rows.length > 0){
+						form_signatures_array = propNamesToLowerCase(form_signature_result.rows)
+					}
+				}
+
+				await create4900(req.user, result.rows[0], form_signatures_array)
 
 				return res.status(200).json({
 					status: 200,
@@ -1025,10 +1042,10 @@ exports.getPdfById = async function (req, res) {
 		const pool = oracledb.getPool('ADMIN');
 		connection = await pool.getConnection();
 		let result = await connection.execute(newQuerySelById, [req.params.id], dbSelectOptions)
-
+		
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
-			const { file_storage_id } = result.rows[0]
+			const { file_storage_id, form_signature_group_id } = result.rows[0]
 
 			if (file_storage_id) {//Found a stored PDF.
 				let fileStorageResult = await connection.execute("SELECT * FROM file_storage WHERE ID = :0", [file_storage_id], dbSelectOptions)
@@ -1073,13 +1090,13 @@ exports.getPdfById = async function (req, res) {
 					eg_result.rows = propNamesToLowerCase(eg_result.rows)
 					result.rows[0].equipment_group = eg_result.rows
 					let form_signatures_array = []
-					if(result.rows[0].form_signture_group_id){
+					if(form_signature_group_id){
 						let form_signature_result = await connection.execute(`SELECT * FROM FORM_SIGNATURE_GROUP FSG
 							LEFT JOIN FORM_SIGNATURE FS
 							ON FS.ID = FORM_SIGNATURE_ID
 							LEFT JOIN FORM_SIGNATURE_TYPE FST
-							ON FST.ID = FS.FORM_SIGNATURE_TYPE`, [result.rows[0].form_signture_group_id], dbSelectOptions)
-
+							ON FST.ID = FS.FORM_SIGNATURE_TYPE
+							WHERE FSG.FORM_SIGNATURE_GROUP_ID = :0 `, [form_signature_group_id], dbSelectOptions)
 						if(form_signature_result.rows.length > 0){
 							form_signatures_array = propNamesToLowerCase(form_signature_result.rows)
 						}
@@ -2032,8 +2049,8 @@ const form_status_to_signature_type = {
 	3: {id: 1},
 	5: {id: 2},
 	7: {id: 3},
-	9: {id: 4},
-	11: {id: 5},
+	9: {id: 5},
+	11: {id: 7},
 }
 
 //!SIGN form_4900 (THIS OPTION WON'T BE AVAILABLE TO ALL USERS).
@@ -2047,8 +2064,6 @@ exports.sign = async function (req, res) {
 		await connection.execute('SAVEPOINT form_update')
 		const changes = req.body.params
 		const { id, status: new_status } = changes
-
-		console.log(changes)
 		const { edipi } = req.headers.cert
 		let notifcations_active = false;
 		let fsGroupId
@@ -2099,15 +2114,16 @@ exports.sign = async function (req, res) {
 		let sql = `insert into form_signature (form_signature_type, signature) values (:form_signature_type, :signature) returning id into :id`
 		result = await connection.execute(sql, {
 			form_signature_type: signature_type,
-			signature: req.headers.cert.cn
+			signature: req.headers.cert.cn,
+			id: {type: oracledb.NUMBER, dir: oracledb.BIND_OUT}
 		}, { autoCommit: true });
 
-		if(result.rows.length === 0)
+		if(result.outBinds.id.length === 0)
 			return res.status(400).send({ msg: 'Unable to sign document!' });
 
-		const form_signature_id = result.rows[0].ID
+		const form_signature_id = result.outBinds.id[0]
 
-		sql = `insert into form_signature_group (form_signature_type, signature) values (:fsGroupId, :form_signature_id)`
+		sql = `insert into form_signature_group (form_signature_group_id, form_signature_id) values (:fsGroupId, :form_signature_id)`
 		result = await connection.execute(sql, {
 			fsGroupId: fsGroupId,
 			form_signature_id: form_signature_id

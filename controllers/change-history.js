@@ -451,6 +451,7 @@ exports.eng4900 = async function(req, res) {
 	let connection
 	
 	try{
+		const {id} = req.params
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
 		let query = `SELECT
@@ -476,7 +477,7 @@ exports.eng4900 = async function(req, res) {
 		f.temporary_loan
 		from form_4900 f, requested_action ra,
 		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num`
+		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num and f.id = ${id}`
 
 		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
 
