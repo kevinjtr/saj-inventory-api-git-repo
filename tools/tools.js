@@ -1,7 +1,17 @@
 const fs = require('fs')
 const {REGISTERED_USERS_VIEW} = require('../config/constants')
+const orderBy = require('lodash/orderBy')
+
+const printElements = (elements) => {
+  let str = ""
+  for (let i = 0; i < elements.length; i++) {
+    str = str + (i ? ', ' : '') + elements[i]
+  }
+  return str
+}
 
 module.exports = {
+    printElements: printElements,
     propNamesToLowerCase: (rows) => {
       const returnRows = rows.map(function(r){
 				r = Object.keys(r).reduce((c, k) => (c[k.toLowerCase()] = r[k], c), {});
@@ -182,5 +192,32 @@ module.exports = {
     }
     
     return false
+  },FormsToMaterialTableFormat: (form_groups) => {
+
+    let form_return = []
+  
+    for (const id in form_groups) {
+      const { form_id, status, losing_hra_num, losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias, updated_date } = form_groups[id][0]
+  
+      form_return.push({
+        bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
+        document_source: document_source,
+        form_id: form_id,
+        gaining_hra: gaining_hra_num ? `${gaining_hra_num} - ${gaining_hra_full_name}` : '',
+        losing_hra: losing_hra_num ? `${losing_hra_num} - ${losing_hra_full_name}` : '',
+        status: status,
+        originator: originator,
+        is_losing_hra: is_losing_hra,
+        is_gaining_hra: is_gaining_hra,
+        requested_action: requested_action,
+        status_alias: status_alias,
+        updated_date: updated_date,
+      })
+    }
+  
+    form_return = orderBy(form_return, ['updated_date', 'form_id'],
+      ['desc', 'desc']);
+  
+    return (form_return)
   }
   };

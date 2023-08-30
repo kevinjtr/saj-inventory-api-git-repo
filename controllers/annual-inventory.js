@@ -5,7 +5,7 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const uniq = require('lodash/uniq');
 const filter = require('lodash/filter');
-const {propNamesToLowerCase,objectDifference,containsAll} = require('../tools/tools');
+const {propNamesToLowerCase,objectDifference,containsAll,printElements} = require('../tools/tools');
 const {eng4900_losingHra,eng4900_gainingHra,hra_employee_no_count,equipment_employee,registered_users,hra_num_form_all, hra_employee_form_all, EQUIPMENT} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull} = require('../config/constants')
@@ -15,15 +15,6 @@ const { Console } = require('winston/lib/winston/transports');
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const BANNED_COLS_ANNUAL_INV = ['ID','HRA_NUM','ANNUAL_INV_EQUIPMENT_GROUP_ID','FISCAL_YEAR','FOLDER_LINK','HAS_FLIPL','UPDATED_BY']
 const ACCEPTED_USER_INPUT_COLS = ["FISCAL_YEAR","HRA_NUM"]
-
-const printElements = (elements) => {
-	let str = ""
-	for(let i=0; i<elements.length; i++){
-		str = str + (i ? ',' : '') + elements[i]
-	}
-	return str
-}
-
 const and_ = (q) => q != '' ? 'AND' : ''
 const or_ = (q) => q != '' ? 'OR' : ''
 

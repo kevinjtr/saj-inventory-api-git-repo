@@ -6,7 +6,7 @@ const response = require('../response');
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const { orderBy, uniqBy, groupBy, uniq, filter } = require('lodash')
-const { propNamesToLowerCase, objectDifference, containsAll, isValidDate, UserLevelNameHasEditPermision } = require('../tools/tools');
+const { propNamesToLowerCase, objectDifference, containsAll, isValidDate, UserLevelNameHasEditPermision, FormsToMaterialTableFormat, printElements } = require('../tools/tools');
 const { eng4900SearchQuery, whereEng4900SignFormAuth, whereEng4900SignFormSelf, eng4900_losingHra, eng4900_gainingHra, hra_num_form_self, hra_num_form_all, hra_employee_form_self, hra_employee_form_all, hra_employee, EQUIPMENT, FORM_4900 } = require('../config/queries');
 const { dbSelectOptions, eng4900DatabaseColNames } = require('../config/db-options');
 const { BLANKS_DEFAULT, searchOptions, searchBlanks, blankAndOr, blankNull } = require('../config/constants')
@@ -29,14 +29,6 @@ const DEFAULT_SEARCH_PARAMS = {
 	},
 	'tab': "my_forms",
 	'init': true
-}
-
-const printElements = (elements) => {
-	let str = ""
-	for (let i = 0; i < elements.length; i++) {
-		str = str + (i ? ', ' : '') + elements[i]
-	}
-	return str
 }
 
 const and_ = (q) => q != '' ? 'AND' : ''
@@ -1134,35 +1126,6 @@ exports.getPdfById = async function (req, res) {
 		}
 	}
 };
-
-const FormsToMaterialTableFormat = (form_groups) => {
-
-	let form_return = []
-
-	for (const id in form_groups) {
-		const { form_id, status, losing_hra_num, losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias, updated_date } = form_groups[id][0]
-
-		form_return.push({
-			bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
-			document_source: document_source,
-			form_id: form_id,
-			gaining_hra: gaining_hra_num ? `${gaining_hra_num} - ${gaining_hra_full_name}` : '',
-			losing_hra: losing_hra_num ? `${losing_hra_num} - ${losing_hra_full_name}` : '',
-			status: status,
-			originator: originator,
-			is_losing_hra: is_losing_hra,
-			is_gaining_hra: is_gaining_hra,
-			requested_action: requested_action,
-			status_alias: status_alias,
-			updated_date: updated_date,
-		})
-	}
-
-	form_return = orderBy(form_return, ['updated_date', 'form_id'],
-		['desc', 'desc']);
-
-	return (form_return)
-}
 
 const getQueryForTab = (tab_name, user) => {
 	let query = eng4900SearchQuery(user)

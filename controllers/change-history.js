@@ -1,11 +1,12 @@
 'use strict';
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
-const {propNamesToLowerCase, tokenHasEditPermision} = require('../tools/tools');
+const {propNamesToLowerCase, tokenHasEditPermision, FormsToMaterialTableFormat } = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {eng4900_losingHra,eng4900_gainingHra,registered_users} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,registered_users, eng4900SearchQuery} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
 const ALL_CHANGE_HISTORY_TABS = ["equipment","employee","hra"]
+const groupBy = require('lodash/groupBy')
 
 const employee_ = `SELECT
 e.ID,
@@ -454,68 +455,30 @@ exports.eng4900 = async function(req, res) {
 		const {id} = req.params
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
-		let query = `SELECT
-		f.id as form_id,
-		ra.alias as REQUESTED_ACTION,
-		f.LOSING_HRA as losing_hra_num,
-		l_hra.losing_hra_first_name,
-		l_hra.losing_hra_last_name,
-		l_hra.losing_hra_office_symbol,
-		l_hra.losing_hra_os_alias,
-		l_hra.losing_hra_work_phone,
-		f.GAINING_HRA as gaining_hra_num,
-		g_hra.gaining_hra_first_name,
-		g_hra.gaining_hra_last_name,
-		g_hra.gaining_hra_office_symbol,
-		g_hra.gaining_hra_os_alias,
-		g_hra.gaining_hra_work_phone,
-		f.DATE_CREATED,
-		f.FOLDER_LINK,
-		f.equipment_group_id,
-		f.expiration_date,
-		TO_CHAR(f.expiration_date,'mm/dd/yyyy') as expiration_date_print,
-		f.temporary_loan
-		from form_4900 f, requested_action ra,
-		(${eng4900_losingHra}) l_hra, (${eng4900_gainingHra}) g_hra
-		where ra.id = f.requested_action and f.losing_hra = l_hra.losing_hra_num and f.gaining_hra = g_hra.gaining_hra_num and f.id = ${id}`
+		let query = `${eng4900SearchQuery(req.user, false)}
+		where f.id = :id`
 
-		//let result =  await connection.execute(query,[req.params.id],dbSelectOptions)
+		let result = await connection.execute(query,{id: id},dbSelectOptions)
 
-		let result = await connection.execute(query,{},dbSelectOptions)
-
-		if (result.rows.length > 0) {
-
-			result.rows = propNamesToLowerCase(result.rows)
-
-			// result.rows[0].equipment_group = []
-			// let eg_result = await connection.execute(newQuerySelById2,[result.rows[0].equipment_group_id],dbSelectOptions)
-
-			// if(eg_result.rows.length > 0){
-			// 	eg_result.rows = propNamesToLowerCase(eg_result.rows)
-			// 	result.rows[0].equipment_group = eg_result.rows
-
-			// 	return res.status(200).json({
-			// 		status: 200,
-			// 		error: false,
-			// 		message: 'Successfully get single data!',//return form and bartags.
-			// 		data: result.rows[0]
-			// 	});
-			// }
-
-			return res.status(200).json({
-				status: 200,
-				error: false,
-				message: 'Successfully get single data!',//return form and no bartags.
-				data: result.rows[0],
+		if (result.rows.length === 0) {
+			return res.status(400).json({
+				status: 400,
+				error: true,
+				message: 'No data found!',
+				data: [],
 				editable: edit_rights,
 			});
 		}
 
-		return res.status(400).json({
-			status: 400,
-			error: true,
-			message: 'No data found!',
-			data: [],
+		result.rows = propNamesToLowerCase(result.rows)
+		const form_groups = groupBy(rows,'form_id');
+		const return_result = FormsToMaterialTableFormat(form_groups)
+
+		return res.status(200).json({
+			status: 200,
+			error: false,
+			message: 'Successfully get single data!',//return form and no bartags.
+			data: return_result,
 			editable: edit_rights,
 		});
 	}catch(err){

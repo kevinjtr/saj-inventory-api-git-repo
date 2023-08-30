@@ -1,21 +1,13 @@
 'use strict';
 const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
-const { propNamesToLowerCase, objectDifference } = require('../tools/tools');
+const { propNamesToLowerCase, objectDifference, printElements } = require('../tools/tools');
 const { dbSelectOptions } = require('../config/db-options');
 const { rightPermision } = require('./validation/tools/user-database')
 const AUTO_COMMIT = { ADD: true, UPDATE: true, DELETE: true }
 const BANNED_COLS = ['ID']
 const filter = require('lodash/filter');
 const { exitOnError } = require('winston');
-
-const printElements = (elements) => {
-	let str = ""
-	for(let i=0; i<elements.length; i++){
-		str = str + (i ? ',' : '') + elements[i]
-	}
-	return str
-}
 
 const arraytoObject = (array, param) => {
     let obj = {}

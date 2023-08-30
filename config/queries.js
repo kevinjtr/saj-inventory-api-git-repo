@@ -1,5 +1,43 @@
 const EQUIPMENT = "(SELECT * FROM EQUIPMENT WHERE DELETED != 1)"
 const FORM_4900 = "(SELECT * FROM FORM_4900 WHERE DELETED != 1)"
+const FORM_4900_HISTORY = `(SELECT
+	id,
+	REQUESTED_ACTION,
+	form_signature_group_id,
+	FORM_EQUIPMENT_GROUP_ID,
+	status,
+	file_storage_id,
+	individual_ror_prop,
+	LOSING_HRA,
+	updated_date,
+	GAINING_HRA,
+	DATE_CREATED,
+	FOLDER_LINK,
+	deleted,
+	TEMPORARY_LOAN,
+	EXPIRATION_DATE,
+	updated_by,
+	DOCUMENT_SOURCE
+	FROM FORM_4900 WHERE DELETED != 1
+	UNION ALL
+	SELECT id,
+	REQUESTED_ACTION,
+	form_signature_group_id,
+	FORM_EQUIPMENT_GROUP_ID,
+	status,
+	file_storage_id,
+	individual_ror_prop,
+	LOSING_HRA,
+	updated_date,
+	GAINING_HRA,
+	DATE_CREATED,
+	FOLDER_LINK,
+	deleted,
+	TEMPORARY_LOAN,
+	EXPIRATION_DATE,
+	updated_by,
+	DOCUMENT_SOURCE FROM FORM_4900_HISTORY)`
+
 
 const equipment_count = {
 	employee:`SELECT COUNT(*) as EMPLOYEE_EQUIPMENT_COUNT, USER_EMPLOYEE_ID FROM ${EQUIPMENT} GROUP BY USER_EMPLOYEE_ID`,
@@ -172,7 +210,7 @@ on h.employee_id = e.id
 left join registered_users ru
 on ru.employee_id = e.id `
 
-const eng4900SearchQuery = (id) => `SELECT 
+const eng4900SearchQuery = (id,no_history=true) => `SELECT 
 f.id as form_id,
 f.form_signature_group_id as form_signature_group_id,
 f.status as status,
@@ -215,13 +253,13 @@ e.id as EQUIPMENT_ID,
 	e.DOCUMENT_NUM, 
 	e.ITEM_TYPE , 
 	e.USER_EMPLOYEE_ID
-	from ${FORM_4900} f
+	from ${no_history ? FORM_4900 : FORM_4900_HISTORY} f
 	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
 	LEFT JOIN form_equipment e on e.id = eg.form_equipment_id
 	LEFT JOIN requested_action ra on ra.id = f.requested_action
 	LEFT JOIN (${hra_type("gaining")}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
 	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
-	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `	
+	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
 
 const eng4900SearchQueryHraNum = () => `SELECT f.id as form_id
 	from ${FORM_4900} f
