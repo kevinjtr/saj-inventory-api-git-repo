@@ -8,6 +8,30 @@ const {rightPermision} = require('./validation/tools/user-database')
 const ALL_CHANGE_HISTORY_TABS = ["equipment","employee","hra"]
 const groupBy = require('lodash/groupBy')
 
+function getChangesWithDate(data, ignore=[]) {
+	const changes = [];
+  
+	for (let i = 1; i < data.length; i++) {
+	  if (data[i].updated_date) {
+  
+		for (const prop in data[i]) {
+		  if (data[i][prop] !== data[i - 1][prop] && !ignore.includes(prop)) {
+			changes.push({
+			  property: prop,
+			  newValue: data[i - 1][prop],
+			  oldValue: data[i][prop],
+			  updated_date: data[i].updated_date,
+			  updated_by_full_name: data[i].updated_by_full_name
+			});
+		  }
+		}
+		
+	  }
+	}
+  
+	return groupBy(changes,'property');
+  }
+
 const employee_ = `SELECT
 e.ID,
 e.FIRST_NAME,
@@ -234,6 +258,7 @@ exports.equipment = async function(req, res) {
 	const {edit_rights} = req
 	let connection
 	try{
+		const {id} = req.params
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
         const hra_employee_ = `SELECT 
@@ -249,6 +274,46 @@ exports.equipment = async function(req, res) {
         LEFT JOIN (${employee_}) e 
         on h.employee_id = e.id`
         
+		const EquipmentHistory = `select eh.ID,
+        eh.BAR_TAG_NUM,
+        eh.CATALOG_NUM,
+        eh.BAR_TAG_HISTORY_ID,
+        eh.MANUFACTURER,
+        eh.MODEL,
+        eh.CONDITION,
+        eh.SERIAL_NUM,
+        eh.ACQUISITION_DATE,
+        eh.ACQUISITION_PRICE,
+        eh.DOCUMENT_NUM,
+        eh.ITEM_TYPE,
+        eh.HRA_NUM,
+		eh.status,
+		eh.deleted,
+		null as updated_date,
+		eh.updated_by,
+		1 as current_record
+        FROM equipment eh
+		UNION ALL
+		select eh.ID,
+        eh.BAR_TAG_NUM,
+        eh.CATALOG_NUM,
+        eh.BAR_TAG_HISTORY_ID,
+        eh.MANUFACTURER,
+        eh.MODEL,
+        eh.CONDITION,
+        eh.SERIAL_NUM,
+        eh.ACQUISITION_DATE,
+        eh.ACQUISITION_PRICE,
+        eh.DOCUMENT_NUM,
+        eh.ITEM_TYPE,
+        eh.HRA_NUM,
+		eh.status,
+		eh.deleted,
+		eh.updated_date,
+		eh.updated_by,
+		0 as current_record
+        FROM equipment_history eh`
+
         const equipment_employee_ = `SELECT
         eh.ID,
         eh.BAR_TAG_NUM,
@@ -263,17 +328,13 @@ exports.equipment = async function(req, res) {
         eh.DOCUMENT_NUM,
         eh.ITEM_TYPE,
         eh.HRA_NUM,
-        e.id as employee_id,
         e.first_name || ' ' || e.last_name as employee_full_name,
-        e.first_name employee_first_name,
-        e.last_name employee_last_name,
-        e.TITLE as employee_title,
-        e.OFFICE_SYMBOL as employee_office_symbol,
-		e.WORK_PHONE as employee_work_phone,
 		eh.deleted,
 		eh.updated_date,
-		ur.UPDATED_BY_FULL_NAME
-        FROM equipment_history eh
+		ur.UPDATED_BY_FULL_NAME,
+		eh.status,
+		current_record
+        FROM (${EquipmentHistory}) eh
         LEFT JOIN employee e
 		on eh.user_employee_id = e.id
 		LEFT JOIN (${registered_users}) ur
@@ -282,8 +343,8 @@ exports.equipment = async function(req, res) {
 		let result =  await connection.execute(`SELECT * from (${hra_employee_}) hra_emp
 												RIGHT JOIN (${equipment_employee_}) eh_emp
 												on eh_emp.hra_num = hra_emp.hra_num 
-												where eh_emp.ID = ${req.params.id}
-												ORDER BY eh_emp.updated_date desc`,{},dbSelectOptions)
+												where eh_emp.ID = :id
+												ORDER BY eh_emp.updated_date desc`,{id: id},dbSelectOptions)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -296,7 +357,7 @@ exports.equipment = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get equipment data!',
-			data: result.rows,
+			data: getChangesWithDate(result.rows,['current_record', 'updated_by_full_name', 'updated_date']),
 			editable: edit_rights,
 		});
 	}catch(err){
@@ -305,7 +366,7 @@ exports.equipment = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true},
+			data: [],
 			editable: edit_rights,
 		});
 	} finally {
@@ -324,28 +385,28 @@ exports.hra = async function(req, res) {
 	const {edit_rights} = req
 	let connection
 	
+	const HraUnion = `(SELECT HRA_NUM, EMPLOYEE_ID, DELETED, UPDATED_BY, NULL AS UPDATED_DATE, 1 as CURRENT_RECORD  FROM HRA H
+	UNION ALL
+	SELECT HRA_NUM, EMPLOYEE_ID, DELETED, UPDATED_BY, UPDATED_DATE, 0 as CURRENT_RECORD FROM HRA_HISTORY HH)`
+
 	try{
+		const { hra_num } = req.params
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
         let result =  await connection.execute(`SELECT
             hh.hra_num,
-            e.id as hra_employee_id,
             e.first_name || ' ' || e.last_name as hra_full_name,
-            e.first_name hra_first_name,
-            e.last_name hra_last_name,
-            e.TITLE as hra_title,
-            e.OFFICE_SYMBOL_alias as hra_office_symbol_alias,
-			e.WORK_PHONE as hra_work_phone,
 			hh.deleted,
 			hh.updated_date,
-			ur.UPDATED_BY_FULL_NAME
-            FROM hra_history hh
+			ur.UPDATED_BY_FULL_NAME,
+			hh.current_record
+            FROM ${HraUnion} hh
             LEFT JOIN (${employee_}) e 
 			on hh.employee_id = e.id
 			LEFT JOIN (${registered_users}) ur
 			on ur.id = hh.updated_by
-            ORDER BY hh.UPDATED_DATE desc `,{},dbSelectOptions)
-
+			where hh.hra_num = :hra_num
+            ORDER BY hh.UPDATED_DATE desc `,{hra_num: hra_num},dbSelectOptions)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -358,7 +419,7 @@ exports.hra = async function(req, res) {
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: {hra:result.rows},
+			data: getChangesWithDate(result.rows,['current_record', 'updated_by_full_name', 'updated_date']),
 			editable: edit_rights,
 		});
 
@@ -368,7 +429,7 @@ exports.hra = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true},//result.rows
+			data: [],//result.rows
 			editable: edit_rights,
 		});
 		//logger.error(err)
