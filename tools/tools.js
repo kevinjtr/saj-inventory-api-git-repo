@@ -197,7 +197,7 @@ module.exports = {
     let form_return = []
   
     for (const id in form_groups) {
-      const { form_id, status, losing_hra_num, losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias, updated_date } = form_groups[id][0]
+      const { form_id, status, losing_hra_num, losing_hra_full_name, gaining_hra_num, gaining_hra_full_name, document_source, originator, is_losing_hra, is_gaining_hra, requested_action, status_alias, updated_date, file_storage } = form_groups[id][0]
   
       form_return.push({
         bar_tags: printElements(form_groups[id].map(x => x.bar_tag_num)),
@@ -212,6 +212,7 @@ module.exports = {
         requested_action: requested_action,
         status_alias: status_alias,
         updated_date: updated_date,
+        file_storage: file_storage,
       })
     }
   

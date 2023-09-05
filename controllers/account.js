@@ -105,12 +105,12 @@ exports.update = async function(req, res) {
 							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 						}
 
-						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-							result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
+						if (i == keys.length - 1 && typeof edipi != 'undefined') {
+							result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
 
-							if(result.rows.length > 0){
+							if (result.rows.length > 0) {
 								const registered_users_id = result.rows[0].ID
-								const comma =  cols ? ', ': ''
+								const comma = cols ? ', ' : ''
 								cols = cols + comma + 'updated_by = :updated_by'
 								cells.update['updated_by'] = registered_users_id
 							}

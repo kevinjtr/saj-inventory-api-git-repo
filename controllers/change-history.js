@@ -8,28 +8,27 @@ const {rightPermision} = require('./validation/tools/user-database')
 const ALL_CHANGE_HISTORY_TABS = ["equipment","employee","hra"]
 const groupBy = require('lodash/groupBy')
 
-function getChangesWithDate(data, ignore=[]) {
-	const changes = [];
-  
-	for (let i = 1; i < data.length; i++) {
-	  if (data[i].updated_date) {
-  
-		for (const prop in data[i]) {
-		  if (data[i][prop] !== data[i - 1][prop] && !ignore.includes(prop)) {
-			changes.push({
-			  property: prop,
-			  newValue: data[i - 1][prop],
-			  oldValue: data[i][prop],
-			  updated_date: data[i].updated_date,
-			  updated_by_full_name: data[i].updated_by_full_name
-			});
-		  }
-		}
-		
-	  }
+function getChangesWithDate(data, ignore=[]) { 
+	const return_data = []
+	if(data.length === 1){
+		return return_data
 	}
-  
-	return groupBy(changes,'property');
+
+	for (let i = 1; i < data.length; i++) {
+		if (data[i].updated_date) {
+			data[i-1].updated_date = data[i].updated_date
+			return_data.push(data[i - 1])
+
+			if(i === data.length - 1){
+				data[i].updated_date = null
+				return_data.push(data[i])
+			}
+		}
+	}
+
+	return_data.push
+	
+	return return_data
   }
 
 const employee_ = `SELECT
@@ -287,6 +286,7 @@ exports.equipment = async function(req, res) {
         eh.DOCUMENT_NUM,
         eh.ITEM_TYPE,
         eh.HRA_NUM,
+		eh.user_employee_id,
 		eh.status,
 		eh.deleted,
 		null as updated_date,
@@ -307,6 +307,7 @@ exports.equipment = async function(req, res) {
         eh.DOCUMENT_NUM,
         eh.ITEM_TYPE,
         eh.HRA_NUM,
+		eh.user_employee_id,
 		eh.status,
 		eh.deleted,
 		eh.updated_date,
@@ -333,7 +334,7 @@ exports.equipment = async function(req, res) {
 		eh.updated_date,
 		ur.UPDATED_BY_FULL_NAME,
 		eh.status,
-		current_record
+		eh.current_record
         FROM (${EquipmentHistory}) eh
         LEFT JOIN employee e
 		on eh.user_employee_id = e.id
@@ -344,7 +345,7 @@ exports.equipment = async function(req, res) {
 												RIGHT JOIN (${equipment_employee_}) eh_emp
 												on eh_emp.hra_num = hra_emp.hra_num 
 												where eh_emp.ID = :id
-												ORDER BY eh_emp.updated_date desc`,{id: id},dbSelectOptions)
+												ORDER BY eh_emp.current_record desc, eh_emp.updated_date desc`,{id: id},dbSelectOptions)
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -406,7 +407,7 @@ exports.hra = async function(req, res) {
 			LEFT JOIN (${registered_users}) ur
 			on ur.id = hh.updated_by
 			where hh.hra_num = :hra_num
-            ORDER BY hh.UPDATED_DATE desc `,{hra_num: hra_num},dbSelectOptions)
+            ORDER BY hh.current_record desc, hh.UPDATED_DATE desc `,{hra_num: hra_num},dbSelectOptions)
 		if (result.rows.length > 0) {
 			result.rows = propNamesToLowerCase(result.rows)
 			result.rows.map(x => {
@@ -414,7 +415,7 @@ exports.hra = async function(req, res) {
 				return x
 			})
 		}
-
+		
 		res.status(200).json({
 			status: 200,
 			error: false,
@@ -448,8 +449,42 @@ exports.hra = async function(req, res) {
 exports.employee = async function(req, res) {
 	const {edit_rights} = req
 	let connection
-	
+	const EmployeeHistory = `SELECT 
+	EH.ID,
+	EH.FIRST_NAME,
+	EH.LAST_NAME,
+	EH.TITLE,
+	EH.OFFICE_SYMBOL,
+	EH.WORK_PHONE,
+	EH.DELETED,
+	NULL AS UPDATED_DATE,
+	EH.UPDATED_BY,
+	EH.DIVISION,
+	EH.DISTRICT,
+	EH.EMAIL,
+	EH.OFFICE_LOCATION_ID,
+	1 AS CURRENT_RECORD
+FROM EMPLOYEE EH
+UNION ALL
+SELECT 
+	EH.ID,
+	EH.FIRST_NAME,
+	EH.LAST_NAME,
+	EH.TITLE,
+	EH.OFFICE_SYMBOL,
+	EH.WORK_PHONE,
+	EH.DELETED,
+	EH.UPDATED_DATE,
+	EH.UPDATED_BY,
+	EH.DIVISION,
+	EH.DISTRICT,
+	EH.EMAIL,
+	EH.OFFICE_LOCATION_ID,
+	0 AS CURRENT_RECORD
+FROM EMPLOYEE_HISTORY EH`
+
 	try{
+		const {id} = req.params
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
         let result =  await connection.execute(`SELECT 
@@ -459,15 +494,25 @@ exports.employee = async function(req, res) {
             EH.TITLE,
             EH.OFFICE_SYMBOL,
             EH.WORK_PHONE,
-			O.ALIAS as OFFICE_SYMBOL_ALIAS,
 			EH.DELETED,
 			EH.UPDATED_DATE,
 			EH.UPDATED_BY,
+			EH.DIVISION,
+			EH.DISTRICT,
+			EH.EMAIL,
+			EH.OFFICE_LOCATION_ID,
+			O.ALIAS as OFFICE_SYMBOL_ALIAS,
+			OL.NAME as OFFICE_LOCATION_NAME,
 			ur.UPDATED_BY_FULL_NAME
-		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
+		FROM (${EmployeeHistory}) EH 
+		LEFT JOIN OFFICE_SYMBOL O
+		ON EH.OFFICE_SYMBOL = O.ID
 		LEFT JOIN (${registered_users}) ur
 		on ur.id = eh.updated_by
-        ORDER BY EH.UPDATED_DATE desc`,{},dbSelectOptions)
+		LEFT JOIN OFFICE_LOCATION OL
+		ON OL.ID = EH.OFFICE_LOCATION_ID
+		where EH.ID = :id
+        ORDER BY eh.current_record desc, EH.UPDATED_DATE desc`,{id: id},dbSelectOptions)
 
 		if(result.rows.length > 0){
 			result.rows = propNamesToLowerCase(result.rows)
@@ -477,12 +522,11 @@ exports.employee = async function(req, res) {
 			})
 		}
 		
-
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
-			data: {employee:result.rows},
+			data: getChangesWithDate(result.rows,['current_record', 'updated_by_full_name', 'updated_date','office_location_id']),
 			editable: edit_rights,
 		});
 		//response.ok(result.rows, res);
@@ -492,7 +536,7 @@ exports.employee = async function(req, res) {
 			status: 400,
 			error: true,
 			message: 'No data found!',
-			data: {error:true},
+			data: [],
 			editable: edit_rights,
 		});
 		//logger.error(err)
@@ -532,14 +576,11 @@ exports.eng4900 = async function(req, res) {
 		}
 
 		result.rows = propNamesToLowerCase(result.rows)
-		const form_groups = groupBy(rows,'form_id');
-		const return_result = FormsToMaterialTableFormat(form_groups)
-
 		return res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',//return form and no bartags.
-			data: return_result,
+			data: result.rows,
 			editable: edit_rights,
 		});
 	}catch(err){

@@ -7,7 +7,7 @@ const {propNamesToLowerCase,objectDifference, includes_} = require('../tools/too
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol,employee_id_auth} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
-const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_"]
+const BANNED_COLS = ['ID','OFFICE_SYMBOL_ALIAS','UPDATED_DATE',"UPDATED_BY_FULL_NAME","SYS_","UPDATED_BY"]
 const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 //!SELECT * FROM EMPLOYEE
@@ -388,11 +388,12 @@ exports.update = async function(req, res) {
 							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 						}
 
-						if(i == keys.length - 1 && typeof edipi != 'undefined'  && !keys.includes('updated_by')){
-							result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
-							if(result.rows.length > 0){
+						if (i == keys.length - 1 && typeof edipi != 'undefined') {
+							result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
+
+							if (result.rows.length > 0) {
 								const registered_users_id = result.rows[0].ID
-								const comma =  cols ? ', ': ''
+								const comma = cols ? ', ' : ''
 								cols = cols + comma + 'updated_by = :updated_by'
 								cells.update['updated_by'] = registered_users_id
 							}
@@ -402,6 +403,7 @@ exports.update = async function(req, res) {
 					let query = `UPDATE EMPLOYEE SET ${cols}
 								WHERE ID = ${cells.old.id}`
 
+								console.log(query)
 					result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					return res.status(200).json({
 						status: 200,
@@ -454,6 +456,17 @@ exports.destroy = async function(req, res) {
 				//const {id} = changes[row].oldData
 				let cols = ''
 
+				if (i == keys.length - 1 && typeof edipi != 'undefined') {
+					result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
+
+					if (result.rows.length > 0) {
+						const registered_users_id = result.rows[0].ID
+						const comma = cols ? ', ' : ''
+						cols = cols + comma + 'updated_by = :updated_by'
+						cells.update['updated_by'] = registered_users_id
+					}
+				}
+				
 				if(typeof edipi != 'undefined'){
 					let result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0',[edipi],dbSelectOptions)
 					if(result.rows.length > 0){

@@ -96,6 +96,7 @@ e.OFFICE_SYMBOL,
 e.office_location_id,
 e.DIVISION,
 e.DISTRICT,
+e.email,
 ol.NAME as OFFICE_LOCATION_NAME,
 eec.EMPLOYEE_EQUIPMENT_COUNT
 FROM EMPLOYEE e
@@ -220,6 +221,7 @@ fs.status as status_alias,
 ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
 f.updated_date,
+case when f.file_storage_id is null then 0 else 1 end as file_storage,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
 CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,
@@ -252,6 +254,10 @@ e.id as EQUIPMENT_ID,
 	e.ACQUISITION_PRICE , 
 	e.DOCUMENT_NUM, 
 	e.ITEM_TYPE , 
+	${no_history ? '' : `f.updated_by,
+	RUE.first_name as updated_by_first_name,
+	RUE.last_name as updated_by_last_name,
+	RUE.first_name || ' ' || RUE.last_name as updated_by_full_name,`}
 	e.USER_EMPLOYEE_ID
 	from ${no_history ? FORM_4900 : FORM_4900_HISTORY} f
 	LEFT JOIN form_equipment_group eg on eg.form_equipment_group_id = f.form_equipment_group_id
@@ -259,7 +265,11 @@ e.id as EQUIPMENT_ID,
 	LEFT JOIN requested_action ra on ra.id = f.requested_action
 	LEFT JOIN (${hra_type("gaining")}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
 	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
-	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `
+	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id
+	${no_history ? '' : `LEFT JOIN REGISTERED_USERS RU
+	ON RU.ID = F.UPDATED_BY
+	LEFT JOIN EMPLOYEE RUE
+	ON RUE.ID = RU.EMPLOYEE_ID`} `
 
 const eng4900SearchQueryHraNum = () => `SELECT f.id as form_id
 	from ${FORM_4900} f
