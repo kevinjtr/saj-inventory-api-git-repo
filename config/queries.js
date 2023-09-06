@@ -95,7 +95,9 @@ o.ALIAS as OFFICE_SYMBOL_ALIAS,
 e.OFFICE_SYMBOL,
 e.office_location_id,
 e.DIVISION,
+div.symbol as division_symbol,
 e.DISTRICT,
+dis.symbol as district_symbol,
 e.email,
 ol.NAME as OFFICE_LOCATION_NAME,
 eec.EMPLOYEE_EQUIPMENT_COUNT
@@ -107,7 +109,11 @@ ON e.id = eec.user_employee_id
 LEFT JOIN (${registered_users}) ur
 on ur.id = e.updated_by
 LEFT JOIN OFFICE_LOCATION ol
-on ol.id = e.office_location_id `
+on ol.id = e.office_location_id
+left join division div
+on div.id = e.division
+left join district dis
+on dis.id = e.district `
 
 const employee_registration = `SELECT
 er.ID,

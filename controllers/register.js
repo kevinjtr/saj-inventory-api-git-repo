@@ -227,7 +227,7 @@ exports.add = async function(req, res) {
 					} 
 
 					//Verify if user has a pending request
-					let pending_query = `select * from employee_registration where edipi = :0`
+					let pending_query = `select * from employee_registration where edipi = :0 and deleted != 1`
 					let pending_result = await connection.execute(pending_query,[cac_info.edipi],dbSelectOptions)
 					
 					let pending_users_rows = pending_result.rows

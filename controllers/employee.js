@@ -32,11 +32,20 @@ exports.index = async function(req, res) {
 		let result_office_symbol =  await connection.execute(`SELECT id as office_symbol,alias as office_symbol_alias FROM OFFICE_SYMBOL order by alias asc`,{},dbSelectOptions)
 		result_office_symbol.rows = propNamesToLowerCase(result_office_symbol.rows)
 
+
+		let result_districts =  await connection.execute(`select * from district`,{},dbSelectOptions)
+		result_districts.rows = propNamesToLowerCase(result_districts.rows)
+
+		let result_divisions =  await connection.execute(`select * from division`,{},dbSelectOptions)
+		result_divisions.rows = propNamesToLowerCase(result_divisions.rows)
+
 		res.status(200).json({
 			status: 200,
 			error: false,
 			message: 'Successfully get single data!',
 			data: result.rows,
+			divisions: result_divisions.rows,
+			districts: result_districts.rows,
 			district_office_locations: district_office_locations,
 			office_symbol:result_office_symbol.rows,
 			rights: {edit:true, add: AUTHORIZED_ADD_USER_LEVELS.includes(req.user_level_alias)}

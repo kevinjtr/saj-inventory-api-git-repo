@@ -69,6 +69,7 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							eq.deleted eq_deleted,
 							eq.status,
 							eq.status_date,
+							c.name as condition_name,
 							ur.UPDATED_BY_FULL_NAME,
 							ur.user_level,
 							e.id as employee_id,
@@ -87,7 +88,10 @@ const equipmentQueryForSearch = (type, user_id) => `SELECT * from (${hra_employe
 							LEFT JOIN (${registered_users}) ur
 							on ur.id = eq.updated_by 
 							LEFT JOIN OFFICE_LOCATION ol
-							on ol.id = e.office_location_id 
+							on ol.id = e.office_location_id
+							left join condition c
+							on c.id = eq.condition
+
 						) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(type, user_id)}`
 
@@ -126,6 +130,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							eq.HRA_NUM,
 							eq.STATUS,
 							eq.STATUS_DATE,
+							c.name as condition_name,
 							eq.deleted eq_deleted,
 							ur.UPDATED_BY_FULL_NAME,
 							ur.user_level,
@@ -146,6 +151,8 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							on ur.id = eq.updated_by 
 							LEFT JOIN OFFICE_LOCATION ol
 							on ol.id = e.office_location_id
+							left join condition c
+							on c.id = eq.condition
 						) eq_emp 
 						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(tab_name, user)}
 						) WHERE ID = :0`
