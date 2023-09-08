@@ -228,6 +228,15 @@ ra.alias as REQUESTED_ACTION,
 f.LOSING_HRA as losing_hra_num,
 f.updated_date,
 case when f.file_storage_id is null then 0 else 1 end as file_storage,
+CASE WHEN f.status IN (1, 3, 5, 7, 8, 9, 10, 11, 12) THEN 0 ELSE (
+	CASE WHEN f.status in (2, 6) THEN (
+		CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END
+	) ELSE (
+		CASE WHEN f.status = 4 THEN (
+			CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END
+		) ELSE 0 END
+	) END
+) END can_digitally_sign,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END originator,
 CASE WHEN f.LOSING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_losing_hra,
 CASE WHEN f.GAINING_HRA IN (${hra_num_form_all(id)}) THEN 1 ELSE 0 END is_gaining_hra,

@@ -12,6 +12,20 @@ const AUTO_COMMIT = {ADD:true,UPDATE:true,DELETE:false}
 const AUTHORIZED_ADD_USER_LEVELS = ["admin"]
 //!SELECT * FROM EMPLOYEE
 
+
+// create or replace trigger EMPLOYEE_ON_INSERT_TRIGGER  
+//    before insert on "INV_TRACKING"."EMPLOYEE" 
+//    for each row 
+// begin  
+//    if inserting then 
+//       if :NEW."ID" is null then 
+//          select SEQ_EMPLOYEE.nextval into :NEW."ID" from dual; 
+//       end if; 
+//    end if; 
+// end;
+
+
+
 exports.index = async function(req, res) {
 	const {edit_rights} = req
 	let connection
@@ -325,8 +339,9 @@ exports.add = async function(req, res) {
 				// 		delete newData.id
 				// 	}
 				// }
-
+				
 				let query = `INSERT INTO EMPLOYEE (${cols}) VALUES (${vals})`
+				console.log(query)
 				result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 			}
 		}

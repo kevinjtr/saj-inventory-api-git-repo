@@ -21,6 +21,19 @@ const ALL_ENG4900_TABS = ["my_forms", "hra_forms", "sign_forms", "completed_and_
 const { form4900EmailAlert } = require("../tools/email-notifier")
 require('dotenv').config();
 
+// create or replace trigger FORM_4900_ON_INSERT_TRIGGER  
+//    before insert on "INV_TRACKING"."FORM_4900" 
+//    for each row 
+// begin  
+//    if inserting then 
+//       if :NEW."ID" is null then 
+//          select SEQ_FORM_4900.nextval into :NEW."ID" from dual; 
+//          select SYSDATE into :NEW."DATE_CREATED" from dual; 
+//          select SYSDATE into :NEW."UPDATED_DATE" from dual; 
+//       end if; 
+//    end if; 
+// end;
+
 const DEFAULT_SEARCH_PARAMS = {
 	'fields': {},
 	'options': {
@@ -415,7 +428,7 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 		} else if (requested_action == "Excess") {
 			if (status == 1) {
 
-				if ([1, 2, 3, 4].includes(id)) {//contains a losing hra.
+				if ([1, 2, 4].includes(id)) {//contains a losing hra.
 					returnArray.push({ id: id, label: label })
 				}
 			} else if (status == 2) {//form sign. before: 3, 5
@@ -483,7 +496,7 @@ const getFormStatusOptions = (requested_action, status, is_losing_hra, is_gainin
 
 		} else if (status == 1) {
 
-			if ([1, 2, 3, 4].includes(id)) {//contains a losing hra.
+			if ([1, 2, 4].includes(id)) {//contains a losing hra.
 				returnArray.push({ id: id, label: label })
 			}
 		} else if (status == 2) {//form sign. before: 3, 5
@@ -650,7 +663,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 
 						if (!return_result.error) {
-							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
+							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
 
 							if (result.rowsAffected != bar_tags.length) {
 								return_result = { ...return_result, error: true, message: `One or more equipments could not be found. No transfer was done.` }
@@ -715,7 +728,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 
 						if (!return_result.error) {
-							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num} WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
+							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
 
 							if (result.rowsAffected != bar_tags.length) {
 								return_result = { ...return_result, error: true, message: `One or more equipments could not be transfered to FOI.` }
@@ -2046,12 +2059,12 @@ exports.sign = async function (req, res) {
 			WHERE F.FORM_ID = :0`, [id], dbSelectOptions)
 
 		result.rows = propNamesToLowerCase(result.rows)
-		const { requested_action, requested_action_alias, is_losing_hra, is_gaining_hra, form_signature_group_id, file_storage_id } = result.rows[0]
+		const { requested_action, requested_action_alias, is_losing_hra, is_gaining_hra, form_signature_group_id, file_storage_id, can_digitally_sign } = result.rows[0]
 		const old_status = result.rows[0].status
 		const status_upgrade = new_status > old_status
 		db_update_results.fs_record.status_downgrade = old_status > new_status
 
-		if (!(isNewStatusValid(requested_action, new_status, old_status, is_losing_hra, is_gaining_hra) && status_upgrade && !file_storage_id))
+		if (!(isNewStatusValid(requested_action, new_status, old_status, is_losing_hra, is_gaining_hra) && can_digitally_sign && status_upgrade && !file_storage_id && ![9,11].includes(new_status)))
 			return res.status(400).send({ msg: 'Unable to sign document!' });
 
 		if(form_signature_group_id){

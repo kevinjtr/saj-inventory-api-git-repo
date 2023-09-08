@@ -3,7 +3,7 @@ const oracledb = require('oracledb');
 const dbConfig = require('../dbconfig.js');
 const {propNamesToLowerCase, tokenHasEditPermision, FormsToMaterialTableFormat } = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
-const {eng4900_losingHra,eng4900_gainingHra,registered_users, eng4900SearchQuery} = require('../config/queries');
+const {eng4900_losingHra,eng4900_gainingHra,registered_users, eng4900SearchQuery, hra_num_form_all} = require('../config/queries');
 const {rightPermision} = require('./validation/tools/user-database')
 const ALL_CHANGE_HISTORY_TABS = ["equipment","employee","hra"]
 const groupBy = require('lodash/groupBy')
@@ -95,16 +95,8 @@ const getQueryForTab = (tab, user_id) => {
 
 		case 'employee':
 			return (`SELECT 
-            EH.ID,
-            EH.FIRST_NAME,
-            EH.LAST_NAME,
-            EH.TITLE,
-            EH.OFFICE_SYMBOL,
-            EH.WORK_PHONE,
+            EH.*,
 			O.ALIAS as OFFICE_SYMBOL_ALIAS,
-			EH.DELETED,
-			EH.UPDATED_DATE,
-			EH.UPDATED_BY,
 			ur.UPDATED_BY_FULL_NAME
 		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
 		LEFT JOIN (${registered_users}) ur
@@ -593,6 +585,98 @@ exports.eng4900 = async function(req, res) {
 			editable: edit_rights,
 		});
 		//logger.error(err)
+	} finally {
+		if (connection) {
+			try {
+				await connection.close(); // Put the connection back in the pool
+			} catch (err) {
+				console.log(err)
+			}
+		}
+	}
+};
+
+//!SELECT * FROM ANNUAL_INV
+exports.annualInventory = async function(req, res) {
+    const {edit_rights} = req
+	let connection
+
+	try{
+		const {id} = req.params
+		const pool = oracledb.getPool('ADMIN');
+		connection =  await pool.getConnection();
+
+			const annualInvHistory = `SELECT 
+			ID,
+			HRA_NUM,
+			FISCAL_YEAR,
+			FOLDER_LINK,
+			HAS_FLIPL,
+			ANNUAL_INV_EQUIPMENT_GROUP,
+			LOCKED,
+			UPDATED_BY,
+			NULL AS UPDATED_DATE,
+			1 AS CURRENT_RECORD
+		FROM ANNUAL_INV
+		UNION ALL
+			SELECT 
+			ID,
+			HRA_NUM,
+			FISCAL_YEAR,
+			FOLDER_LINK,
+			HAS_FLIPL,
+			ANNUAL_INV_EQUIPMENT_GROUP,
+			LOCKED,
+			UPDATED_BY,
+			UPDATED_DATE,
+			0 AS CURRENT_RECORD
+		FROM ANNUAL_INV_HISTORY`
+
+			let result = await connection.execute(`select AIH.*, ur.UPDATED_BY_FULL_NAME, e.first_name as hra_first_name, e.last_name as hra_last_name from (${annualInvHistory}) AIH 
+			LEFT JOIN (${registered_users}) ur
+			on ur.id = AIH.updated_by
+			left join hra h
+			on h.hra_num = AIH.hra_num
+			left join employee e
+			on e.id = h.employee_id
+			WHERE AIH.hra_num IN (${hra_num_form_all(req.user)}) AND AIH.ID = :id
+			ORDER BY aih.current_record desc, aih.UPDATED_DATE desc`,{id: id},dbSelectOptions)
+
+			if(result.rows.length > 0){
+				result.rows = propNamesToLowerCase(result.rows)         
+	
+				return res.status(200).json({
+					status: 200,
+					error: false,
+					message: 'Successfully get single data!',
+					data: getChangesWithDate(result.rows,['current_record', 'updated_by_full_name', 'updated_date']),
+				});
+			}
+	
+			return res.status(200).json({
+				status: 200,
+				error: false,
+				message: 'No data found!',
+				data: [],
+			});
+
+		return res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: [],
+		});
+
+	}catch(err){
+		console.log(err)
+		res.status(400).json({
+			status: 400,
+			error: true,
+			message: 'No data found!',
+			data: [],
+            editable: edit_rights,
+			hras:[]
+		});
 	} finally {
 		if (connection) {
 			try {

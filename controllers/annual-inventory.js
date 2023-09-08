@@ -46,11 +46,20 @@ exports.index = async function(req, res) {
 			result.rows = propNamesToLowerCase(result.rows)
 			const hras = [...result.rows]
 
-			result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
+			result = await connection.execute(`SELECT a.*, case when eg.annual_equipment_count is null then 0 else eg.annual_equipment_count end as annual_equipment_count, h.* FROM ANNUAL_INV a
 			LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
-			LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-			on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)})`,{},dbSelectOptions)
+			LEFT JOIN (SELECT COUNT(*) AS annual_equipment_count, T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID FROM ANNUAL_INV_EQUIPMENT_GROUP T1
+			LEFT JOIN ANNUAL_INV_EQUIPMENT T2
+			ON T1.ANNUAL_INV_EQUIPMENT_GROUP_ID = T2.ANNUAL_INV_EQUIPMENT_GROUP_ID
+			WHERE T1.DELETED != 1 AND T2.DELETED != 1
+			GROUP BY T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID) eg
+			on eg.ID = a.ANNUAL_INV_EQUIPMENT_GROUP WHERE h.hra_num IN (${hra_num_form_all(req.user)})`,{},dbSelectOptions)
 	
+			
+			
+
+			console.log(result.rows)
+
 			if(result.rows.length > 0){
 				result.rows = propNamesToLowerCase(result.rows)         
 	
@@ -123,7 +132,7 @@ exports.getById = async function(req, res) {
 		LEFT JOIN (SELECT * FROM ANNUAL_INV_EQUIPMENT_GROUP eg
 		left join (
 			SELECT
-				eq.ID,
+				eq.ID AS EQUIPMENT_ID,
 				eq.BAR_TAG_NUM,
 				eq.CATALOG_NUM,
 				eq.BAR_TAG_HISTORY_ID,
@@ -136,6 +145,7 @@ exports.getById = async function(req, res) {
 				eq.DOCUMENT_NUM,
 				eq.ITEM_TYPE,
 				eq.HRA_NUM,
+				EQ.ANNUAL_INV_EQUIPMENT_GROUP_ID,
 				e.id as employee_id,
 				e.first_name || ' ' || e.last_name as employee_full_name,
 				e.first_name employee_first_name,
@@ -148,10 +158,11 @@ exports.getById = async function(req, res) {
 				on eq.user_employee_id = e.id
 				LEFT JOIN (${registered_users}) ur
 				on ur.id = eq.updated_by
+				WHERE EQ.DELETED != 1
 		) e
-		on e.id = eg.ANNUAL_INV_EQUIPMENT_ID) EQ
-		ON AI.ANNUAL_INV_EQUIPMENT_GROUP_ID = EQ.ANNUAL_INV_EQUIPMENT_GROUP_ID
-		WHERE ai.id = :0 and EQ.hra_num in (${hra_num_form_all(req.user)})
+		on e.ANNUAL_INV_EQUIPMENT_GROUP_ID = eg.ANNUAL_INV_EQUIPMENT_GROUP_ID) EQ
+		ON AI.ANNUAL_INV_EQUIPMENT_GROUP = EQ.ID
+		WHERE ai.id = :0 and EQ.hra_num in (${hra_num_form_all(req.user)}) AND EQ.DELETED != 1
 		order by EQ.employee_full_name asc`,[req.params.id],dbSelectOptions)		
 
 		if (result.rows.length > 0) {
@@ -194,20 +205,39 @@ exports.getById = async function(req, res) {
 	}
 };
 
-const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_group_id=null) => {
-	let return_gorup_id = -1
+const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_group=null) => {
+	let return_group_id = -1
+	//let ids = []
+	if(annual_inv_equipment_group){
+		// ids = `SELECT AIE.ID FROM ANNUAL_INV_EQUIPMENT_GROUP AIEG
+		// left join ANNUAL_INV_EQUIPMENT AIE
+		// on AIEG.ANNUAL_INV_EQUIPMENT_ID = AIE.ID
+		// WHERE HRA_NUM = :0 AND DELETED != 1`
+		//let result = await connection.execute(`select * from ANNUAL_INV_EQUIPMENT_GROUP where ID = :0`,[annual_inv_equipment_group],{autoCommit:true})
+		const binds = {
+			annual_inv_equipment_group: annual_inv_equipment_group,
+			annual_inv_equipment_group_id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT }
+		}
 
-	if(annual_inv_equipment_group_id){
-		let result = await connection.execute(`UPDATE ANNUAL_INV_EQUIPMENT_GROUP SET DELETED = 1 WHERE ANNUAL_INV_EQUIPMENT_GROUP_ID = :0`,[annual_inv_equipment_group_id],{autoCommit:true})
-		result = await connection.execute(`UPDATE ANNUAL_INV_EQUIPMENT SET DELETED = 1 WHERE ID IN (SELECT ANNUAL_INV_EQUIPMENT_ID FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE ANNUAL_INV_EQUIPMENT_GROUP_ID = :0)`,[annual_inv_equipment_group_id],{autoCommit:true})
+		let result = await connection.execute(`UPDATE ANNUAL_INV_EQUIPMENT_GROUP SET DELETED = 1
+		WHERE id = :annual_inv_equipment_group returning annual_inv_equipment_group_id into :annual_inv_equipment_group_id`,binds,{autoCommit:true})
+		
+		if(result.outBinds.annual_inv_equipment_group_id.length > 0){
+			result = await connection.execute(`UPDATE ANNUAL_INV_EQUIPMENT SET DELETED = 1
+			WHERE ID IN (SELECT t2.id FROM ANNUAL_INV_EQUIPMENT_GROUP T1
+								LEFT JOIN ANNUAL_INV_EQUIPMENT T2
+								ON T1.ANNUAL_INV_EQUIPMENT_GROUP_ID = T2.ANNUAL_INV_EQUIPMENT_GROUP_ID
+								WHERE t1.annual_inv_equipment_group_id = :0)`,[result.outBinds.annual_inv_equipment_group_id[0]],{autoCommit:true})
+		}
 	}
 
 	let result = await connection.execute(`SELECT SEQ_ANNUAL_INV_EQG_ID.nextval from dual`,{},dbSelectOptions)
 
 	if(result.rows.length > 0){
 		const eGroupId = result.rows[0].NEXTVAL
-		result = await connection.execute(`SELECT ID FROM ANNUAL_INV_EQUIPMENT WHERE HRA_NUM = :0`,[hra_num],dbSelectOptions)		
-		const ids = result.rows.length > 0 ? result.rows.map(x=>x.ID) : [] 
+		//return_group_id = eGroupId
+		// result = await connection.execute(`SELECT AIE.ID FROM ANNUAL_INV_EQUIPMENT AIE WHERE HRA_NUM = :0 AND DELETED != 1`,[hra_num],dbSelectOptions)		
+		// ids = result.rows.length > 0 ? result.rows.map(x=>x.ID) : [] 
 
 		result = await connection.execute(`INSERT INTO ANNUAL_INV_EQUIPMENT (
 			BAR_TAG_NUM , 
@@ -223,9 +253,11 @@ const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_gr
 			INDIVIDUAL_ROR_PROP,
 			HRA_NUM,
 			USER_EMPLOYEE_ID,
-			ITEM_TYPE
-			) (
-				SELECT
+			ITEM_TYPE,
+			ANNUAL_INV_EQUIPMENT_GROUP_ID,
+			UPDATED_BY
+			)
+				(SELECT
 				BAR_TAG_NUM , 
 				CATALOG_NUM, 
 				BAR_TAG_HISTORY_ID, 
@@ -239,32 +271,48 @@ const createEquipmentGroup = async (hra_num, connection, annual_inv_equipment_gr
 				INDIVIDUAL_ROR_PROP,
 				HRA_NUM,
 				USER_EMPLOYEE_ID,
-				ITEM_TYPE
-				FROM ${EQUIPMENT} WHERE HRA_NUM = :0)`,[hra_num],{autoCommit:true})
+				ITEM_TYPE,
+				${eGroupId} AS ANNUAL_INV_EQUIPMENT_GROUP_ID,
+				UPDATED_BY
+				FROM ${EQUIPMENT} WHERE HRA_NUM = :hra_num) `,{ hra_num: hra_num },{autoCommit:true})
 
-		
+		const binds = {
+			eGroupId: eGroupId,
+			id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT }
+		};
 
-		if(result.rowsAffected > 0){
-			const ignored_equipment_ids = ids.length > 0 ? `and id not in (${printElements(ids)})` : ""
+		// if(result.rowsAffected > 0){
 
-			result = await connection.execute(`INSERT INTO ANNUAL_INV_EQUIPMENT_GROUP (ANNUAL_INV_EQUIPMENT_GROUP_ID, ANNUAL_INV_EQUIPMENT_ID)
-			(SELECT :0, ID FROM ANNUAL_INV_EQUIPMENT WHERE HRA_NUM = :1 and DELETED != 1 ${ignored_equipment_ids})`,[eGroupId,hra_num],{autoCommit:AUTO_COMMIT.ADD})
-			return_gorup_id = result.rowsAffected > 0 ? eGroupId : -1
-			
-			if(result.rowsAffected > 0){
-				result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE DELETED = 1`,{},{autoCommit:true})
-				result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT WHERE DELETED = 1`,{},{autoCommit:true})
-			}
-		}		
+		// 	result = await connection.execute(`INSERT INTO ANNUAL_INV_EQUIPMENT_GROUP (ANNUAL_INV_EQUIPMENT_GROUP_ID, ANNUAL_INV_EQUIPMENT_ID)
+		// 	values(:0, :1)`,[eGroupId,hra_num],{autoCommit:AUTO_COMMIT.ADD})
+
+		// }else{
+		result = await connection.execute(`INSERT INTO ANNUAL_INV_EQUIPMENT_GROUP (ANNUAL_INV_EQUIPMENT_GROUP_ID)
+			values (:eGroupId) returning id into :id`,binds,{autoCommit:AUTO_COMMIT.ADD})
+
+		return_group_id = result.outBinds.id[0]
+		//}	
 	}
 
-	return(return_gorup_id)
+	return(return_group_id)
 }
 
 const isHraAndFiscalYearNotDuplicated = async (connection, binds) => {
 	let result = await connection.execute(`SELECT * FROM ANNUAL_INV WHERE HRA_NUM = :hra_num and FISCAL_YEAR = :fiscal_year `,binds,dbSelectOptions)
 	return result.rows.length == 0
 }
+
+// MERGE INTO ANNUAL_INV_EQUIPMENT tt
+//     USING ( SELECT * FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE DELETED != 1) st
+//     ON (tt.ID = st.ANNUAL_INV_EQUIPMENT_ID)
+//   WHEN MATCHED THEN
+//     UPDATE SET tt.ANNUAL_INV_EQUIPMENT_GROUP_ID = st.ANNUAL_INV_EQUIPMENT_GROUP_ID;
+    
+// DELETE FROM ANNUAL_INV_EQUIPMENT_GROUP
+// WHERE rowid not in
+// (SELECT MIN(rowid)
+// FROM ANNUAL_INV_EQUIPMENT_GROUP
+// GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID);
 
 //!INSERT ANNUAL_INV
 exports.add = async function(req, res) {
@@ -302,7 +350,7 @@ exports.add = async function(req, res) {
 							const isHraNum = keys[i] == 'hra_num'
 
 							if(isHraNum){
-								const EQ_GROUP_ID_COL_NAME = "annual_inv_equipment_group_id"
+								const EQ_GROUP_COL_NAME = "annual_inv_equipment_group"
 								eGroupId = await createEquipmentGroup(newData[keys[i]],connection)
 
 								if(eGroupId == -1){
@@ -315,9 +363,9 @@ exports.add = async function(req, res) {
 								}
 
 								let comma =  i && cols ? ', ': ''
-								cols = cols + comma + EQ_GROUP_ID_COL_NAME
-								vals = vals + comma + ':' + EQ_GROUP_ID_COL_NAME
-								insert_obj[EQ_GROUP_ID_COL_NAME] = eGroupId
+								cols = cols + comma + EQ_GROUP_COL_NAME
+								vals = vals + comma + ':' + EQ_GROUP_COL_NAME
+								insert_obj[EQ_GROUP_COL_NAME] = eGroupId
 							}
 							
 							let comma =  cols ? ', ': ''
@@ -346,11 +394,16 @@ exports.add = async function(req, res) {
 						result = await connection.execute(query,insert_obj,{autoCommit:AUTO_COMMIT.ADD})
 
 						if(result.rowsAffected != 0){
-							result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
-								LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
-								LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-								on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
+							result = await connection.execute(`SELECT a.*, case when eg.annual_equipment_count is null then 0 else eg.annual_equipment_count end as annual_equipment_count, h.* FROM ANNUAL_INV a
+							LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+							LEFT JOIN (SELECT COUNT(*) AS annual_equipment_count, T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID FROM ANNUAL_INV_EQUIPMENT_GROUP T1
+							LEFT JOIN ANNUAL_INV_EQUIPMENT T2
+							ON T1.ANNUAL_INV_EQUIPMENT_GROUP_ID = T2.ANNUAL_INV_EQUIPMENT_GROUP_ID
+							WHERE T1.DELETED != 1 AND T2.DELETED != 1
+							GROUP BY T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID) eg
+							on eg.ID = a.ANNUAL_INV_EQUIPMENT_GROUP WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
 	
+							
 							if(result.rows.length > 0){
 								result.rows = propNamesToLowerCase(result.rows)
 	
@@ -393,6 +446,8 @@ exports.add = async function(req, res) {
 	} finally {
 		if (connection) {
 			try {
+				let result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE DELETED = 1`,{},{autoCommit:true})
+				result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT WHERE DELETED = 1`,{},{autoCommit:true})
 				await connection.close(); // Put the connection back in the pool
 			} catch (err) {
 				console.log(err)
@@ -422,7 +477,7 @@ exports.update = async function(req, res) {
 
 				let result = await connection.execute(`SELECT * FROM ANNUAL_INV WHERE ID = :0`,[cell_id],dbSelectOptions)
 				const isRecordNotLocked = result.rows.length > 0 ? (result.rows[0].LOCKED == 2 ? true : false) : true
-				const annual_inv_equipment_group_id = result.rows[0].ANNUAL_INV_EQUIPMENT_GROUP_ID
+				const annual_inv_equipment_group = result.rows[0].ANNUAL_INV_EQUIPMENT_GROUP
 
 				result = await connection.execute(`SELECT column_name FROM all_tab_cols WHERE table_name = 'ANNUAL_INV'`,{},dbSelectOptions)
 
@@ -432,9 +487,9 @@ exports.update = async function(req, res) {
 					const isUpdate = newData.update ? (newData.update ? true : false) : false
 
 					if(isUpdate){
-						const eGroupId = await createEquipmentGroup(cells.hra_num, connection, annual_inv_equipment_group_id)
+						const eGroupId = await createEquipmentGroup(cells.hra_num, connection, annual_inv_equipment_group)
 
-						let query = `UPDATE ANNUAL_INV SET ANNUAL_INV_EQUIPMENT_GROUP_ID = :0
+						let query = `UPDATE ANNUAL_INV SET ANNUAL_INV_EQUIPMENT_GROUP = :0
 									WHERE ID = ${cell_id}`
 
 						if(eGroupId != -1){
@@ -467,10 +522,14 @@ exports.update = async function(req, res) {
 					}
 
 					if(result.rowsAffected > 0){
-						result = await connection.execute(`SELECT a.*, eg.annual_equipment_count, h.* FROM ANNUAL_INV a
-							LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
-							LEFT JOIN (SELECT count(*) as annual_equipment_count, ANNUAL_INV_EQUIPMENT_GROUP_ID FROM ANNUAL_INV_EQUIPMENT_GROUP GROUP BY ANNUAL_INV_EQUIPMENT_GROUP_ID) eg
-							on eg.ANNUAL_INV_EQUIPMENT_GROUP_ID = a.ANNUAL_INV_EQUIPMENT_GROUP_ID WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
+						result = await connection.execute(`SELECT a.*, case when eg.annual_equipment_count is null then 0 else eg.annual_equipment_count end as annual_equipment_count, h.* FROM ANNUAL_INV a
+						LEFT JOIN (${hra_employee_no_count}) h ON h.hra_num = a.hra_num
+						LEFT JOIN (SELECT COUNT(*) AS annual_equipment_count, T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID FROM ANNUAL_INV_EQUIPMENT_GROUP T1
+						LEFT JOIN ANNUAL_INV_EQUIPMENT T2
+						ON T1.ANNUAL_INV_EQUIPMENT_GROUP_ID = T2.ANNUAL_INV_EQUIPMENT_GROUP_ID
+						WHERE T1.DELETED != 1 AND T2.DELETED != 1
+						GROUP BY T1.ANNUAL_INV_EQUIPMENT_GROUP_ID, T1.ID) eg
+						on eg.ID = a.ANNUAL_INV_EQUIPMENT_GROUP WHERE h.hra_num IN (${hra_num_form_all(req.user)}) `,{},dbSelectOptions)
 
 						if(result.rows.length > 0){
 							result.rows = propNamesToLowerCase(result.rows)
@@ -510,6 +569,8 @@ exports.update = async function(req, res) {
 	} finally {
 		if (connection) {
 			try {
+				let result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE DELETED = 1`,{},{autoCommit:true})
+				result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT WHERE DELETED = 1`,{},{autoCommit:true})
 				await connection.close(); // Put the connection back in the pool
 			} catch (err) {
 				console.log(err)
@@ -551,6 +612,8 @@ exports.destroy = async function(req, res) {
 	} finally {
 		if (connection) {
 			try {
+				let result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT_GROUP WHERE DELETED = 1`,{},{autoCommit:true})
+				result = await connection.execute(`DELETE FROM ANNUAL_INV_EQUIPMENT WHERE DELETED = 1`,{},{autoCommit:true})
 				await connection.close(); // Put the connection back in the pool
 			} catch (err) {
 				console.log(err)
