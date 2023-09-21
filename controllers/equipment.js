@@ -33,14 +33,14 @@ const andOR_multiple = {
 	'notEquals':and_
 }
 
-const equipment_fetch_type = (type, user_id) => {
+const equipment_fetch_type = (type, user_id, look_for_changes=false) => {
 	switch(type) {
 		case 'my_equipment':
 			return `WHERE eq_emp.employee_id in (SELECT EMPLOYEE_ID FROM REGISTERED_USERS ru WHERE ru.ID = ${user_id}) `;
 		case 'my_hra_equipment':
-			return `WHERE eq_emp.hra_num in (${hra_num_form_self(user_id)}) `;
+			return `WHERE eq_emp.hra_num in (${hra_num_form_self(user_id)}) ${look_for_changes ? 'OR eq_emp.hra_num is NULL' : ''}`;
 		case 'hra_equipment':
-			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) `;
+			return `WHERE eq_emp.hra_num in (${hra_num_form_auth(user_id)}) ${look_for_changes ? 'OR eq_emp.hra_num is NULL' : ''}`;
 		case 'all_equipments':
 			return ` `;
 		case 'excess_equipment':
@@ -154,7 +154,7 @@ const searchEquipmentUpdatedData = async (id, connection, user) => {
 							left join condition c
 							on c.id = eq.condition
 						) eq_emp 
-						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(tab_name, user)}
+						on eq_emp.hra_num = hra_emp.hra_num ${equipment_fetch_type(tab_name, user, true)}
 						) WHERE ID = :0`
 
 		let result =  await connection.execute(`${query}`,[id],dbSelectOptions)
@@ -467,6 +467,7 @@ exports.search2 = async function(req, res) {
 		const {fields,options, tab, init} = req.body;
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 
+		console.log(fields,options, tab, init, searchCriteria )
 		for(const parameter of searchCriteria){
 
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
@@ -583,6 +584,7 @@ exports.search2 = async function(req, res) {
 		}else if(tab_views[ALL_EQUIPMENT_TABS.indexOf(tab)]){
 			let query = getQueryForTab(tab, req.user)
 
+			console.log(query_search)
 			switch(tab) {
 				case 'my_equipment':
 					query = ` ${query} AND ${query_search}`
@@ -714,7 +716,7 @@ exports.add = async function(req, res) {
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name
 									vals = vals + comma + ':' + keys[i]
-									insert_obj[keys[i]] = isValidDate(newData[keys[i]]) && keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+									insert_obj[keys[i]] = isValidDate(newData[keys[i]]) && keys[i].toLowerCase().includes('date') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
 									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 
 									if(i == keys.length - 1 && !keys.includes('updated_by')){
@@ -782,6 +784,8 @@ exports.update = async function(req, res) {
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
 		const {changes,undo} = req.body.params
+
+		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
@@ -789,13 +793,13 @@ exports.update = async function(req, res) {
 				let oldData
 
 				if(!newData.hasOwnProperty('id'))
-					break;
+					throw new Error('object sent has no ID.');
 
 				const query_old_data = equipment_employee
 				let result_old_data = await connection.execute(`${query_old_data} where eq.id = :id`,{id: newData.id},dbSelectOptions)
 
 				if(result_old_data.rows.length === 0)
-					break
+					throw new Error('No record was found with the provided ID.');
 				
 				oldData = propNamesToLowerCase(result_old_data.rows)[0]
 
@@ -820,7 +824,7 @@ exports.update = async function(req, res) {
 									const col_name = (keys[i] == "employee_id" ? 'user_'+keys[i] : keys[i])
 									let comma =  i && cols ? ', ': ''
 									cols = cols + comma + col_name + ' = :' + keys[i]
-									cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+									cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? cells.new[keys[i]] !== null ? new Date(cells.new[keys[i]]) : null :
 									(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
 								}
 
@@ -835,6 +839,7 @@ exports.update = async function(req, res) {
 										WHERE ID = ${cells.old.id}`
 						
 
+										console.log(query, cells.update)
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 
 							if(result.rowsAffected > 0){
@@ -847,6 +852,7 @@ exports.update = async function(req, res) {
 			}
 		}
 		
+		console.log(tabsReturnObject)
 		res.status(200).json({
 			status: 200,
 			error: false,

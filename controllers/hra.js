@@ -5,7 +5,8 @@ const filter = require('lodash/filter');
 const {propNamesToLowerCase, objectDifference} = require('../tools/tools');
 const {dbSelectOptions} = require('../config/db-options');
 const {employee_officeSymbol, hra_employee, hra_employee_edit_rights, hra_employee_form_all, hra_employee_form_self,EQUIPMENT} = require('../config/queries')
-const {rightPermision} = require('./validation/tools/user-database')
+const {rightPermision} = require('./validation/tools/user-database');
+const { Console } = require('winston/lib/winston/transports');
 const noReplaceCols = ['hra_num']
 
 const BANNED_COLS_HRA = ['HRA_NUM','NAME','OFFICE_SYMBOL_ALIAS','SYS_NC00004$']
@@ -301,7 +302,7 @@ exports.add = async function(req, res) {
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key
 							vals = vals + comma + ' :'+ keys[i]
-							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
 							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 						}
 
@@ -357,6 +358,7 @@ exports.update = async function(req, res) {
 		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
+		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {newData} = changes[row];
@@ -387,7 +389,7 @@ exports.update = async function(req, res) {
 						if(col_names.includes(key)){
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key + ' = :' + key
-							cells.update[key] = key.toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+							cells.update[key] = key.toLowerCase().includes('date') ? cells.new[keys[i]] !== null ? new Date(cells.new[keys[i]]) : null :
 							(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
 						}
 

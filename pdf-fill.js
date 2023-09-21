@@ -162,7 +162,6 @@ var fillEng4900PDF = async function(user, data, signatures){
     let pdfDoc = await PDFDocument.load(file)
     let form = pdfDoc.getForm()
     
-    console.log(signatures)
     for(let i=0; i< signatures.length; i++){
         let s = signatures[i]
         const form_label = signature_fields_type_to_name[s.form_signature_type]

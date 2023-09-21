@@ -879,7 +879,7 @@ const formUpdate = async (connection, edipi, changes, auto_commit = true) => {
 									if (col_names.includes(keys[i])) {
 										let comma = i && cols ? ', ' : ''
 										cols = cols + comma + keys[i] + ' = :' + keys[i]
-										cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+										cells.update[keys[i]] = isValidDate(cells.new[keys[i]]) && keys[i].toLowerCase().includes('date') ? cells.new[keys[i]] !== null ? new Date(cells.new[keys[i]]) : null :
 											(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
 									}
 
@@ -980,8 +980,7 @@ exports.getById = async function (req, res) {
 				result.rows[0].equipment_group = eg_result.rows
 
 				let form_signatures_array = []
-
-				console.log(result.rows[0])
+				
 				if(result.rows[0].form_signature_group_id){
 					let form_signature_result = await connection.execute(`SELECT * FROM FORM_SIGNATURE_GROUP FSG
 						LEFT JOIN FORM_SIGNATURE FS
@@ -1459,7 +1458,7 @@ const formEquipmentAdd = async (connection, equipments, edipi) => {
 								let comma = i && cols ? ', ' : ''
 								cols = cols + comma + col_name
 								vals = vals + comma + ':' + keys[i]
-								insert_obj[keys[i]] = isValidDate(newData[keys[i]]) && keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+								insert_obj[keys[i]] = isValidDate(newData[keys[i]]) && keys[i].toLowerCase().includes('date') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
 									(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) : newData[keys[i]]
 							}
 						}
@@ -1529,10 +1528,10 @@ exports.add = async function (req, res) {
 						let comma = i && cols ? ', ' : ''
 						cols = cols + comma + keys[i]
 						vals = vals + comma + ':' + keys[i]
-						cells[keys[i]] = (isValidDate(form[keys[i]]) && keys[i].toLowerCase().includes('date')) && !keys[i].toLowerCase().includes('updated_') ? new Date(form[keys[i]]) :
+						cells[keys[i]] = (isValidDate(form[keys[i]]) && keys[i].toLowerCase().includes('date')) && !keys[i].toLowerCase().includes('updated_') ? form[keys[i]] !== null ? new Date(form[keys[i]]) : null :
 							(typeof form[keys[i]] == 'boolean') ? (form[keys[i]] ? 1 : 2) : form[keys[i]]
 					}
-
+					
 					if (i == keys.length - 1 && typeof edipi != 'undefined' && !keys.includes('updated_by')) {
 						result = await connection.execute('SELECT * FROM registered_users WHERE EDIPI = :0', [edipi], dbSelectOptions)
 						if (result.rows.length > 0) {

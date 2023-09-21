@@ -371,8 +371,11 @@ exports.add = async function(req, res) {
 							let comma =  cols ? ', ': ''
 							cols = cols + comma + keys[i]
 							vals = vals + comma + ':' + keys[i]
-							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
 							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
+
+
+							
 
 							if(i == keys.length - 1){
 								comma = cols ? ', ': ''
@@ -504,7 +507,7 @@ exports.update = async function(req, res) {
                             if(col_names.includes(keys[i])){
                                 let comma =  i && cols ? ', ': ''
                                 cols = cols + comma + keys[i] + ' = :' + keys[i]
-								cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(cells.new[keys[i]]) :
+								cells.update[keys[i]] = keys[i].toLowerCase().includes('date') ? cells.new[keys[i]] !== null ? new Date(cells.new[keys[i]]) : null :
 								(typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) :  cells.new[keys[i]]
                             }
 

@@ -83,7 +83,7 @@ const DateTimePrint = (obj) => `${obj.updated_date ? `Date/Time: ${moment(obj.up
 
 const html_body = {
 
-  form_4900_issue_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_issue_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) has been completed.<br/><br/>
 
@@ -95,7 +95,7 @@ const html_body = {
 
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
-  form_4900_issue_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_issue_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) ${obj.notify_is_hra ? `needs your ${HraIssueSignatureTypeLabel(obj)}`: `requires ${HraIssueSignatureTypeLabel(obj)}`} signature.<br/><br/>
 
@@ -108,7 +108,7 @@ const html_body = {
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>
   ${sign_my_form}`,
-  form_4900_issue_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_issue_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected.<br/><br/>
 
@@ -123,7 +123,7 @@ const html_body = {
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
 
-  form_4900_trf_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_trf_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) has been completed.<br/><br/>
 
@@ -136,7 +136,7 @@ const html_body = {
 
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
-  form_4900_trf_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_trf_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
     `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) ${obj.notify_is_hra ? `needs your ${ACTION_BY_STATUS[obj.status].label} signature`: `requires ${ACTION_BY_STATUS[obj.status].label} signature`}.<br/><br/>`
@@ -154,7 +154,7 @@ const html_body = {
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>
   ${sign_my_form}`,
-  form_4900_trf_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_trf_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
     `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was signed ${obj.notify_is_hra ? "on your behalf": ""}.<br/><br/>`
@@ -173,10 +173,10 @@ const html_body = {
 
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
-  form_4900_trf_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_trf_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
-    `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected${obj.notify_is_hra ? "on your behalf": ""}.<br/><br/>`
+    `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected${obj.notify_is_hra ? " on your behalf": ""}.<br/><br/>`
   ) : (
     `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected.<br/><br/>`
   )}
@@ -193,7 +193,7 @@ const html_body = {
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
 
-  form_4900_excess_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_excess_complete: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) has been completed.<br/><br/>
 
@@ -206,7 +206,7 @@ const html_body = {
 
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
-  form_4900_excess_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_excess_signature_required_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
   
   ENG4900 "${obj.requested_action_alias}" form (${obj.id}) needs${obj.hra_type == obj.action && ACTION_BY_STATUS[obj.status].type == obj.action && obj.notify_is_hra ? " your": ""} ${ACTION_BY_STATUS[obj.status].label} signature.<br/><br/>
 
@@ -220,7 +220,7 @@ const html_body = {
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>
   ${sign_my_form}`,
-  form_4900_excess_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_excess_signature_completed_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
     `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was signed ${obj.notify_is_hra ? "on your behalf": ""}.<br/><br/>`
@@ -239,10 +239,10 @@ const html_body = {
 
   Equipment list:<br/>
   ${printEquipmentsWithBreaks(obj.equipments)}<br/>`,
-  form_4900_excess_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name}
+  form_4900_excess_signature_rejected_notification: (obj) => `Att: ${obj.notify_first_name ? obj.notify_first_name : ""} ${obj.notify_last_name},<br/><br/>
 
   ${obj.action == obj.hra_type ? (
-    `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected${obj.notify_is_hra ? "on your behalf": ""}.<br/><br/>`
+    `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected${obj.notify_is_hra ? " on your behalf": ""}.<br/><br/>`
   ) : (
     `ENG4900 "${obj.requested_action_alias}" form (${obj.id}) was rejected.<br/><br/>`
   )}

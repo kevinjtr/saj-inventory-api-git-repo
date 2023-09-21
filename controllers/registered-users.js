@@ -81,7 +81,7 @@ exports.add = async function(req, res) {
 							const comma = i && cols ? ', ': ''
 							cols = cols + comma + key
 							vals = vals + comma + ' :'+ keys[i]
-							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(newData[keys[i]]) :
+							insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
 							(typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
 						}
 					}

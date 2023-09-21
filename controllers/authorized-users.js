@@ -94,7 +94,9 @@ const getNames = async function(connection) {
     }
 };
 
-const registered_users_sql = `SELECT "ID" as REGISTERED_USERS_ID,EDIPI,FULL_NAME,EMPLOYEE_ID,USER_LEVEL FROM REGISTERED_USERS `
+const registered_users_sql = `SELECT RU.ID as REGISTERED_USERS_ID,RU.EDIPI, e.first_name||' '||e.last_name as full_name ,RU.EMPLOYEE_ID,RU.USER_LEVEL FROM REGISTERED_USERS RU
+LEFT JOIN EMPLOYEE E
+ON E.ID = RU.EMPLOYEE_ID`
 
 //SELECT * FROM HRA_AUTHORIZED_USERS that are authorized for a specific HRA
 const getAuthorizedUsers = async function(connection, edipi)  {
@@ -228,10 +230,12 @@ exports.add = async function(req, res) {
     
                     for(let i=0; i<keys.length; i++){
                         if(col_names.includes(keys[i])){
-                            insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? new Date(newData[keys[i]]) :
+                            insert_obj[keys[i]] = keys[i].toLowerCase().includes('date') ? newData[keys[i]] !== null ? new Date(newData[keys[i]]) : null :
                             (typeof newData[keys[i]] == 'boolean') ? (newData[keys[i]] ? 1 : 2) :  newData[keys[i]]
                         }
                     }
+
+                    
 
                 }
 

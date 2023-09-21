@@ -64,6 +64,7 @@ eh.BAR_TAG_HISTORY_ID,
 eh.MANUFACTURER,
 eh.MODEL,
 eh.CONDITION,
+c.name as condition_name,
 eh.SERIAL_NUM,
 eh.ACQUISITION_DATE,
 eh.ACQUISITION_PRICE,
@@ -84,7 +85,9 @@ FROM equipment_history eh
 LEFT JOIN employee e
 on eh.user_employee_id = e.id
 LEFT JOIN (${registered_users}) ur
-on ur.id = eh.updated_by`
+on ur.id = eh.updated_by
+left join condition c
+on c.id = eh.condition`
 
 const getQueryForTab = (tab, user_id) => {
 	switch(tab) {
@@ -97,15 +100,25 @@ const getQueryForTab = (tab, user_id) => {
 			return (`SELECT 
             EH.*,
 			O.ALIAS as OFFICE_SYMBOL_ALIAS,
-			ur.UPDATED_BY_FULL_NAME
+			ur.UPDATED_BY_FULL_NAME,
+			ol.name as office_location_name,
+			div.symbol as division_symbol,
+			dis.symbol as district_symbol
 		FROM EMPLOYEE_HISTORY EH LEFT JOIN OFFICE_SYMBOL O ON EH.OFFICE_SYMBOL = O.ID
 		LEFT JOIN (${registered_users}) ur
 		on ur.id = eh.updated_by
+		left join office_location ol
+		on ol.id = eh.office_location_id
+		left join division div
+		on div.id = eh.division
+		left join district dis
+		on dis.id = eh.district
         ORDER BY EH.UPDATED_DATE desc `);
 
 		case 'hra':
 			return (`SELECT
             hh.hra_num,
+			hh.certification_date,
             e.id as hra_employee_id,
             e.first_name || ' ' || e.last_name as hra_full_name,
             e.first_name hra_first_name,
@@ -378,9 +391,9 @@ exports.hra = async function(req, res) {
 	const {edit_rights} = req
 	let connection
 	
-	const HraUnion = `(SELECT HRA_NUM, EMPLOYEE_ID, DELETED, UPDATED_BY, NULL AS UPDATED_DATE, 1 as CURRENT_RECORD  FROM HRA H
+	const HraUnion = `(SELECT HRA_NUM, CERTIFICATION_DATE, EMPLOYEE_ID, DELETED, UPDATED_BY, NULL AS UPDATED_DATE, 1 as CURRENT_RECORD  FROM HRA H
 	UNION ALL
-	SELECT HRA_NUM, EMPLOYEE_ID, DELETED, UPDATED_BY, UPDATED_DATE, 0 as CURRENT_RECORD FROM HRA_HISTORY HH)`
+	SELECT HRA_NUM, CERTIFICATION_DATE, EMPLOYEE_ID, DELETED, UPDATED_BY, UPDATED_DATE, 0 as CURRENT_RECORD FROM HRA_HISTORY HH)`
 
 	try{
 		const { hra_num } = req.params
@@ -388,6 +401,7 @@ exports.hra = async function(req, res) {
 		connection =  await pool.getConnection();
         let result =  await connection.execute(`SELECT
             hh.hra_num,
+			hh.certification_date,
             e.first_name || ' ' || e.last_name as hra_full_name,
 			hh.deleted,
 			hh.updated_date,

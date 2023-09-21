@@ -96,7 +96,7 @@ exports.update = async function (req, res) {
                             if (col_names.includes(keys[i])) {
                                 const comma = i && cols ? ', ' : ''
                                 cols = cols + comma + keys[i] + ' = :' + keys[i]
-                                cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? new Date(cells.new[keys[i]]) :
+                                cells.update[keys[i]] = keys[i].toLowerCase().includes('date') && !keys[i].toLowerCase().includes('updated_') ? cells.new[keys[i]] !== null ? new Date(cells.new[keys[i]]) : null :
                                     (typeof cells.new[keys[i]] == 'boolean') ? (cells.new[keys[i]] ? 1 : 2) : cells.new[keys[i]]
                             }
 

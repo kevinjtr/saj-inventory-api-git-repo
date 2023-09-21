@@ -10,6 +10,9 @@ const csv = require('./tools/csv-parser/csv-to-json')
 const fileUpload = require('express-fileupload');
 const dbConfig = require('./dbconfig.js');
 const oracledb = require('oracledb');
+const crypto = require("crypto");
+const crypto_orig_createHash = crypto.createHash;
+crypto.createHash = algorithm => crypto_orig_createHash(algorithm == "md4" ? "sha256" : algorithm);
 
 let usaceCertMiddleware;
 
@@ -111,6 +114,7 @@ Promise.all([adminPool]).then(function(pools){
 		console.info(`Server is listening on https://localhost:${port}`);
 		//csv.run()
 	} else {
+		
 		const http = require('http');
 		const httpServer = http.createServer(app);
 		httpServer.timeout = 240000;
