@@ -663,7 +663,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 
 						if (!return_result.error) {
-							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
+							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null, STATUS = NULL, STATUS_DATE = NULL WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
 
 							if (result.rowsAffected != bar_tags.length) {
 								return_result = { ...return_result, error: true, message: `One or more equipments could not be found. No transfer was done.` }
@@ -694,7 +694,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 
 						if (!return_result.error) {
-							result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
+							result = await connection.execute(`UPDATE ${EQUIPMENT} SET DELETED = 1, USER_EMPLOYEE_ID = NULL, HRA_NUM = NULL, STATUS = NULL, STATUS_DATE = NULL WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
 
 							if (result.rowsAffected == bar_tags.length) {
 								return_result = { ...return_result, message: `all equipments were discarted.` }
@@ -728,7 +728,7 @@ const doTransaction = async (connection, user_id, rowData) => {
 						})
 
 						if (!return_result.error) {
-							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
+							result = await connection.execute(`UPDATE ${EQUIPMENT} SET HRA_NUM = ${gaining_hra_num}, USER_EMPLOYEE_ID = null, STATUS = NULL, STATUS_DATE = NULL WHERE bar_tag_num IN (${bar_tags_print})`, {}, { autoCommit: false })
 
 							if (result.rowsAffected != bar_tags.length) {
 								return_result = { ...return_result, error: true, message: `One or more equipments could not be transfered to FOI.` }
