@@ -980,7 +980,7 @@ exports.getById = async function (req, res) {
 				result.rows[0].equipment_group = eg_result.rows
 
 				let form_signatures_array = []
-				
+
 				if(result.rows[0].form_signature_group_id){
 					let form_signature_result = await connection.execute(`SELECT * FROM FORM_SIGNATURE_GROUP FSG
 						LEFT JOIN FORM_SIGNATURE FS
@@ -1714,14 +1714,16 @@ exports.update = async function (req, res) {
 								if (db_update_results.fs_record.deleted && db_update_results.fs_record.file_name) {
 									const pdf_path = path.join(__dirname, `../file_storage/pdf/${db_update_results.fs_record.file_name}`)
 
-									await fs.promises.unlink(pdf_path, (err) => {
-										if (err) {
-											console.error(err)
-											return
-										}
-
-										console.log("file removed.")
-									})
+									if(fs.existsSync(pdf_path)){
+										await fs.promises.unlink(pdf_path, (err) => {
+											if (err) {
+												console.error(err)
+												return
+											}
+	
+											console.log("file removed.")
+										})
+									}
 								}
 
 								const tabsReturnObject = await getTabData(connection, req.user)
@@ -1819,14 +1821,16 @@ exports.destroy = async function (req, res) {
 							//await connection.rollback()
 							tabsReturnObject = await getTabData(connection, req.user)
 
-							await fs.promises.unlink(pdf_path, (err) => {
-								if (err) {
-									console.error(err)
-									return
-								}
-
-								console.log("file removed.")
-							})
+							if(fs.existsSync(pdf_path)){
+								await fs.promises.unlink(pdf_path, (err) => {
+									if (err) {
+										console.error(err)
+										return
+									}
+	
+									console.log("file removed.")
+								})
+							}
 
 							return res.status(200).json({
 								status: 200,
