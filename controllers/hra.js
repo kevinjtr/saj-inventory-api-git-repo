@@ -358,7 +358,6 @@ exports.update = async function(req, res) {
 		connection =  await pool.getConnection();
 		const {changes} = req.body.params
 
-		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				const {newData} = changes[row];
@@ -403,10 +402,22 @@ exports.update = async function(req, res) {
 							}
 						}
                     }
+
+					if(Object.keys(cells.update).includes('employee_id')){
+						let comma =  cols ? ', ': ''
+
+						if(!cols.includes(':certification_date,'))
+							cols = cols + comma + 'certification_date = :certification_date'
+
+						cells.update['certification_date'] = null
+					}
+
+					
         
                     let query = `UPDATE HRA SET ${cols}
                                 WHERE hra_num = ${cells.old.hra_num}`
-								
+						
+								console.log(cells.update, query)
                     result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 					
 					return res.status(200).json({

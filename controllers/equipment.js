@@ -467,7 +467,6 @@ exports.search2 = async function(req, res) {
 		const {fields,options, tab, init} = req.body;
 		const searchCriteria = filter(Object.keys(fields),function(k){ return fields[k] != ''});
 
-		console.log(fields,options, tab, init, searchCriteria )
 		for(const parameter of searchCriteria){
 
 			const isStringColumn = eqDatabaseColNames[parameter].type == "string"
@@ -584,7 +583,6 @@ exports.search2 = async function(req, res) {
 		}else if(tab_views[ALL_EQUIPMENT_TABS.indexOf(tab)]){
 			let query = getQueryForTab(tab, req.user)
 
-			console.log(query_search)
 			switch(tab) {
 				case 'my_equipment':
 					query = ` ${query} AND ${query_search}`
@@ -785,7 +783,6 @@ exports.update = async function(req, res) {
 		connection =  await pool.getConnection();
 		const {changes,undo} = req.body.params
 
-		console.log(changes)
 		for(const row in changes){
 			if(changes.hasOwnProperty(row)) {
 				columnErrors.rows[row] = {}
@@ -834,12 +831,25 @@ exports.update = async function(req, res) {
 									cells.update['updated_by'] = req.user
 								}
 							}
+
+							if(Object.keys(cells.update).includes('employee_id') && !Object.keys(cells.update).includes('status')){
+								let comma =  cols ? ', ': ''
+
+								if(!cols.includes(':status,'))
+									cols = cols + comma + 'status = :status'
+
+								comma =  cols ? ', ': ''
+
+								if(!cols.includes(':status_date,'))
+									cols = cols + comma + 'status_date = :status_date'
+
+								cells.update['status'] = null
+								cells.update['status_date'] = null
+							}
 				
 							let query = `UPDATE EQUIPMENT SET ${cols}
 										WHERE ID = ${cells.old.id}`
-						
 
-										console.log(query, cells.update)
 							result = await connection.execute(query,cells.update,{autoCommit:AUTO_COMMIT.UPDATE})
 
 							if(result.rowsAffected > 0){
@@ -852,7 +862,6 @@ exports.update = async function(req, res) {
 			}
 		}
 		
-		console.log(tabsReturnObject)
 		res.status(200).json({
 			status: 200,
 			error: false,
