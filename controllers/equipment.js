@@ -534,7 +534,7 @@ exports.search2 = async function(req, res) {
 				let query = getQueryForTab(tab_name, req.user, eq_search)
 				
 				if(query){
-					let result =  await connection.execute(`${query}`,{},dbSelectOptions)
+					let result =  await connection.execute(`${query} ORDER BY eq_emp.employee_first_name, eq_emp.employee_last_name `,{},dbSelectOptions)
 					let {rows} = result
 					rows = propNamesToLowerCase(rows)
 
