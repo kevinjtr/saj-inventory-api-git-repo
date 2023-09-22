@@ -585,13 +585,13 @@ exports.search2 = async function(req, res) {
 
 			switch(tab) {
 				case 'my_equipment':
-					query = ` ${query} AND ${query_search}`
+					query += ` ${query_search != '' ? ` AND ${query_search} `: ''} `
 					break;
 				case 'my_hra_equipment':
-					query = ` ${query} AND ${query_search}`
+					query += ` ${query_search != '' ? ` AND ${query_search} `: ''} `
 					break;
 				case 'hra_equipment':
-					query = ` ${query} AND ${query_search}`
+					query += ` ${query_search != '' ? ` AND ${query_search} `: ''} `
 					break;
 				case 'all_equipments':
 					query += ` ${query_search != '' ? `WHERE ${query_search} `: ''} `
