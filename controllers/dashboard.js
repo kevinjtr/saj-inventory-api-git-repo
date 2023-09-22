@@ -13,8 +13,7 @@ const moment = require('moment');
 const {propNamesToLowerCase,objectDifference,containsAll,isValidDate} = require('../tools/tools');
 
 
-const {eng4900SearchQuery, whereEng4900SignFormAuthNotInSelf, whereEng4900SignFormSelf, whereEng4900SignFormWithHraNum,
-	 hra_num_form_auth_not_in_self, hra_num_form_self, hra_num_form_all,hra_total_employees, hra_total_equipments,
+const {hra_num_form_auth_not_in_self, hra_num_form_self, hra_num_form_all,hra_total_employees, hra_total_equipments,
 	  hra_total_employees_cert_current_fy, last_login, my_total_equipments, my_equipments_cert_current_fy,
 	   getUserDashboardEquipment, getHraUserDashboardEquipment, system_annoucements} = require('../config/queries');
 const {dbSelectOptions,eng4900DatabaseColNames} = require('../config/db-options');

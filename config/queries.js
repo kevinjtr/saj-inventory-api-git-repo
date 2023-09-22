@@ -294,42 +294,7 @@ const eng4900SearchQueryHraNum = () => `SELECT f.id as form_id
 	LEFT JOIN (${hra_type("gaining")}) g_hra on f.gaining_hra = g_hra.gaining_hra_num 
 	LEFT JOIN ( ${hra_type("losing")}) l_hra on f.losing_hra = l_hra.losing_hra_num
 	LEFT JOIN FORM_4900_STATUS fs on f.status = fs.id `	
-
-const whereEng4900SignFormAuth = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
-
-const whereEng4900SignFormSelf = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_self(id)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
-
-const whereEng4900SignFormAuthNotInSelf = (id) => `WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)}) AND NOT f.GAINING_HRA IN (${hra_num_form_self(id)}) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.GAINING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA IN (${hra_num_form_auth(id)} ) AND NOT f.LOSING_HRA IN (${hra_num_form_self(id)} ) AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
-
-const whereEng4900SignFormWithHraNum = (id, hra_num) => `WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-UNION (${eng4900SearchQuery(id)} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
-
-const whereEng4900SignFormWithHraNumNoId = (hra_num) => `WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2)) 
-UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (2) AND g_hra.gaining_hra_is_registered = 0 AND f.GAINING_HRA NOT IN (SELECT hra_num from hra_authorized_users where hra_num = f.GAINING_HRA))) 
-UNION (${eng4900SearchQueryHraNum()} WHERE (f.GAINING_HRA = ${hra_num} AND F.STATUS IN (2) AND F.REQUESTED_ACTION in (1, 2, 3, 4, 5))) 
-UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (2, 4) AND F.REQUESTED_ACTION in (2, 3, 4, 5))) 
-UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (6) AND F.REQUESTED_ACTION in (3, 4, 5))) 
-UNION (${eng4900SearchQueryHraNum()} WHERE (f.LOSING_HRA = ${hra_num} AND F.STATUS IN (8) AND F.REQUESTED_ACTION in (4))) `
-
+	
 const hra_total_employees = (hra_num) => `select count(unique(eq.user_employee_id)) as total_employees, ${hra_num} as hra_num from hra h
 left join employee e
 on e.id = h.hra_num
@@ -731,10 +696,6 @@ module.exports = {
 	// 	left join registered_users ru
 	// 	on ru.employee_id = e.id `,
 	eng4900SearchQuery: eng4900SearchQuery,
-	whereEng4900SignFormAuth: whereEng4900SignFormAuth,
-	whereEng4900SignFormSelf: whereEng4900SignFormSelf,
-	whereEng4900SignFormAuthNotInSelf: whereEng4900SignFormAuthNotInSelf,
-	whereEng4900SignFormWithHraNum: whereEng4900SignFormWithHraNum,
 	hra_total_employees: hra_total_employees,
  	hra_total_equipments: hra_total_equipments,
 	hra_total_employees_cert_current_fy: hra_total_employees_cert_current_fy,
