@@ -69,6 +69,9 @@ const html_body = {
 async function massEmailAlert() {
   let connection
 	try{
+    if(process.env.NODE_ENV === "aws"){
+      return "done"
+    }
 		const pool = oracledb.getPool('ADMIN');
 		connection =  await pool.getConnection();
 

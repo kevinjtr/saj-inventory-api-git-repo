@@ -8,5 +8,5 @@ module.exports = {
     queueTimeout:60000,
     poolMin: 10,
     poolMax: 10,
-    connectString: "saj-ora-db05.saj.usace.army.mil:1521/K3CMAPP1.saj.usace.army.mil",
+    connectString: process.env.DB_CONNECT_STRING,
   };

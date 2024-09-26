@@ -8,7 +8,7 @@ const {dbSelectOptions} = require('../config/db-options');
 const AUTH_DB_POPULATE_USERS = [1544978469]
 
 exports.index = async function(req, res) {
-    const edipi = req.headers.cert.edipi
+    let edipi = req.headers && req.headers.cert && req.headers.cert.edipi
     let connection
     try{
 		const pool = oracledb.getPool('ADMIN');

@@ -9,7 +9,7 @@ const moment = require('moment')
 
 //INSERT PROBLEM
 exports.add = async function(req, res) { 
-	const edipi = req.headers.cert.edipi
+	const edipi = req.headers && req.headers.cert && req.headers.cert.edipi
 	const today = moment(new Date()).format('MM-DD-yyyy').toString()
 	let connection
 	try{

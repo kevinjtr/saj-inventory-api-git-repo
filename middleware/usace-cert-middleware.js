@@ -1,6 +1,17 @@
 const certUtils = require('./utils/certUtils');
+//const TEST = process.env.CYPRESS_TEST
 
 const usaceCertMiddleware = function (req, res, next) {
+  // if(TEST){
+  //   req.headers.cert = {
+  //     cn: 'ALEMANY.KEVIN.LUIS.1544978469',
+  //     edipi: 1544978469,
+  
+  //   }
+  //   next()
+  //   return;
+  // }
+
   if(typeof req.connection.getPeerCertificate ==='function') {
     if (req.connection.getPeerCertificate()!=='(null)' &&  typeof req.connection.getPeerCertificate()!=='undefined') {
       const cert=  req.connection.getPeerCertificate();

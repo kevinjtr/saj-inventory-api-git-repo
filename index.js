@@ -1,14 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-//const serverless = require('serverless-http')
+const serverless = require('serverless-http')
 const app = express();
-const httpPort = process.env.HTTP_SERVER_PORT;
-const httpsPort = process.env.HTTPS_SERVER_PORT;
-
+//const port = process.env.SERVER_PORT;
 const bodyParser = require('body-parser');
 const morgan = require('morgan');
 const cors = require('cors');
-const path = require('path');
+//const path = require('path');
 //const csv = require('./tools/csv-parser/csv-to-json')
 const fileUpload = require('express-fileupload');
 const dbConfig = require('./dbconfig.js');
@@ -22,8 +20,7 @@ let certMiddleware;
 if (process.env.NODE_ENV === 'development') {
 	app.use(cors());
 	certMiddleware = require('./middleware/usace-cert-middleware');
-} else if (process.env.NODE_ENV === 'awslambda' || process.env.NODE_ENV === 'aws') {
-	app.use(cors());
+} if (process.env.NODE_ENV === 'awslambda') {
 	certMiddleware = require('./middleware/aws-cert-middleware');
 } else {
 	//var methods = ["log", "debug"];
@@ -100,42 +97,12 @@ registeredUsers(app)
 dashboard(app)
 account(app)
 
-//app.get('/.well-known/pki-validation/74F13B2918751014FCE3C1A3E20958C9.txt', (req, res) => {
-//	res.sendFile(path.join(__dirname, 'private/74F13B2918751014FCE3C1A3E20958C9.txt'))
-//})
-
 const adminPool = oracledb.createPool(dbConfig);
 
-Promise.all([adminPool]).then(function(pools){
-	console.info(`Created ${pools[0].poolAlias} Pool`);
-
-	// if(process.env.NODE_ENV == "awslambda"){
-	// 	module.exports.handler = serverless(app)
-	// } else 
-	if (process.env.HTTPS === 'true') {
-		const fs = require('fs');
-		const https = require('https');
-		const httpsOptions = {
-			key: process.env.NODE_ENV === 'aws' ? fs.readFileSync('/etc/letsencrypt/live/iven-api.kevinalemany.com/privkey.pem') : 
-			fs.readFileSync(path.join(__dirname, 'private/server.key')),
-			
-			cert: process.env.NODE_ENV === 'aws' ? fs.readFileSync('/etc/letsencrypt/live/iven-api.kevinalemany.com/cert.pem') : 
-			fs.readFileSync(path.join(__dirname, 'private/server.cert')),
-			...(process.env.NODE_ENV === 'aws' && { ca: fs.readFileSync('/etc/letsencrypt/live/iven-api.kevinalemany.com/chain.pem') }),
-			...(process.env.NODE_ENV === 'development' && { requestCert: true, rejectUnauthorized: false })
-		};
-		
-		const httpsServer = https.createServer(httpsOptions, app);
-		httpsServer.timeout = 240000;
-		httpsServer.listen(httpsPort);
-		console.info(`Server is listening on https://localhost:${httpsPort}`);
-		//csv.run()
-	} else {
-		
-		const http = require('http');
-		const httpServer = http.createServer(app);
-		httpServer.timeout = 240000;
-		httpServer.listen(httpPort);
-		console.info(`Server is listening on http://localhost:${httpPort}`);
-	}
-})
+exports.handler = async () => {
+    Promise.all([adminPool]).then(function(pools){
+        console.info(`Created ${pools[0].poolAlias} Pool`);
+        serverless(app)
+        console.info(`Server is listening`);
+    })
+};

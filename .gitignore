@@ -21,3 +21,6 @@ file_storage/pdf/*
 !file_storage/pdf/.gitkeep
 output/*
 !output/.gitkeep
+/awscert
+/private
+aws instructions.txt

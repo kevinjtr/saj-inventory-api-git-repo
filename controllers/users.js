@@ -10,7 +10,7 @@ const certTools = require('../middleware/utils/cert-tools');
 const path = require('path')
 const multer  = require('multer')
 const upload = multer({ dest: path.join(__dirname,'../public/') })
-const DB_OFF = false
+const DB_NOT_READ = false
 const jwt = require('jsonwebtoken');
 const {REGISTERED_USERS_VIEW} = require('../config/constants');
 
@@ -58,7 +58,7 @@ const tokenIsAuthorized = (decoded_token, path) => {
 
 //!LOGIN USERS
 exports.login = async (req, res) => {
-	const edipi = req.headers.cert.edipi
+	const edipi = req.headers && req.headers.cert && req.headers.cert.edipi
 	let connection
 	try{
 		const pool = oracledb.getPool('ADMIN');
@@ -74,7 +74,7 @@ exports.login = async (req, res) => {
 				await certTools.UpdateUserAccessHistory(req.headers.cert)
 			}
 
-			if(DB_OFF){
+			if(DB_NOT_READ){
 				user = {
 					id: 1,
 					name: "Kevin Alemany",
